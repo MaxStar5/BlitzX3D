@@ -56,72 +56,14 @@ static void bbFree(void* q) {
 	free(q);
 }
 
-static void removeStr(BBStr* str) {
-	str->next->prev = str->prev;
-	str->prev->next = str->next;
-}
-
-static void insertStr(BBStr* str, BBStr* next) {
-	str->next = next;
-	str->prev = next->prev;
-	str->prev->next = str;
-	next->prev = str;
-}
-
-void* BBStr::operator new(size_t size) {
-	if (freeStrs.next == &freeStrs) {
-		BBStr* t = (BBStr*)bbMalloc(sizeof(BBStr) * STR_NEW_INC);
-		for (int k = 0; k < STR_NEW_INC; ++k) insertStr(t++, &freeStrs);
-	}
-	BBStr* t = freeStrs.next;
-	removeStr(t); insertStr(t, &usedStrs);
-	return t;
-}
-
-void BBStr::operator delete(void* q) {
-	if (!q) return;
-	BBStr* t = (BBStr*)q;
-	removeStr(t); insertStr(t, &freeStrs);
-}
-
-BBStr::BBStr() {
-	++stringCnt;
-}
-
-BBStr::BBStr(const char* s) : std::string(s) {
-	++stringCnt;
-}
-
-BBStr::BBStr(const char* s, int n) : std::string(s, n) {
-	++stringCnt;
-}
-
-BBStr::BBStr(const BBStr& s) : std::string(s) {
-	++stringCnt;
-}
-
-BBStr::BBStr(const std::string& s) : std::string(s) {
-	++stringCnt;
-}
-
-BBStr& BBStr::operator=(const char* s) {
-	std::string::operator=(s); return *this;
-}
-
-BBStr& BBStr::operator=(const BBStr& s) {
-	std::string::operator=(s); return *this;
-}
-
-BBStr& BBStr::operator=(const std::string& s) {
-	std::string::operator=(s); return *this;
-}
-
-BBStr::~BBStr() {
-	--stringCnt;
+static std::string ftoa_s(float n) {
+	char buf[64];
+	std::snprintf(buf, sizeof(buf), "%.7g", static_cast<double>(n));
+	return buf;
 }
 
 BBStr* _bbStrLoad(BBStr** var) {
-	return *var ? new BBStr(**var) : new BBStr();
+	return var && *var ? new BBStr(**var) : new BBStr();
 }
 
 void _bbStrRelease(BBStr* str) {
@@ -129,34 +71,45 @@ void _bbStrRelease(BBStr* str) {
 }
 
 void _bbStrStore(BBStr** var, BBStr* str) {
-	_bbStrRelease(*var); *var = str;
+	_bbStrRelease(*var);
+	*var = str;
 }
 
 BBStr* _bbStrConcat(BBStr* s1, BBStr* s2) {
-	*s1 += *s2; delete s2; return s1;
+	*s1 += *s2;
+	delete s2;
+	return s1;
 }
 
 int _bbStrCompare(BBStr* lhs, BBStr* rhs) {
 	int n = lhs->compare(*rhs);
-	delete lhs; delete rhs; return n;
+	delete lhs;
+	delete rhs;
+	return n;
 }
 
 int _bbStrToInt(BBStr* s) {
-	int n = atoi(*s);
-	delete s; return n;
+	int n = 0;
+	try { n = std::stoi(*s); }
+	catch (...) { /* bad data to 0 */ }
+	delete s;
+	return n;
 }
 
 BBStr* _bbStrFromInt(int n) {
-	return new BBStr(itoa(n));
+	return new BBStr(std::to_string(n));
 }
 
 float _bbStrToFloat(BBStr* s) {
-	float n = (float)atof(*s);
-	delete s; return n;
+	float n = 0.f;
+	try { n = std::stof(*s); }
+	catch (...) { /* bad data to 0.f */ }
+	delete s;
+	return n;
 }
 
 BBStr* _bbStrFromFloat(float n) {
-	return new BBStr(ftoa(n));
+	return new BBStr(ftoa_s(n));
 }
 
 BBStr* _bbStrConst(const char* s) {
@@ -427,10 +380,10 @@ BBStr* _bbObjToStr(BBObj* obj) {
 	if (!obj || !obj->fields) return new BBStr("[NULL]");
 
 	static BBObj* root;
-	static int recurs_cnt;
+	static int    recurs_cnt;
 
-	if (obj == root) return new BBStr("[ROOT]");
-	if (recurs_cnt == 8) return new BBStr("....");
+	if (obj == root)        return new BBStr("[ROOT]");
+	if (recurs_cnt == 8)    return new BBStr("....");
 
 	++recurs_cnt;
 	BBObj* oldRoot = root;
@@ -438,25 +391,22 @@ BBStr* _bbObjToStr(BBObj* obj) {
 
 	BBObjType* type = obj->type;
 	BBField* fields = obj->fields;
-	BBStr* s = new BBStr("["), * t;
+	BBStr* s = new BBStr("[");
+
 	for (int k = 0; k < type->fieldCnt; ++k) {
 		if (k) *s += ',';
 		switch (type->fieldTypes[k]->type) {
-		case BBTYPE_INT:
-			t = _bbStrFromInt(fields[k].INT); *s += *t; delete t;
-			break;
-		case BBTYPE_FLT:
-			t = _bbStrFromFloat(fields[k].FLT); *s += *t; delete t;
-			break;
+		case BBTYPE_INT: *s += std::to_string(fields[k].INT);  break;
+		case BBTYPE_FLT: *s += ftoa_s(fields[k].FLT);          break;
 		case BBTYPE_STR:
-			if (fields[k].STR) *s += '\"' + *fields[k].STR + '\"';
-			else *s += "\"\"";
+			if (fields[k].STR) *s += '"' + *fields[k].STR + '"';
+			else               *s += "\"\"";
 			break;
-		case BBTYPE_OBJ:
-			t = _bbObjToStr(fields[k].OBJ); *s += *t; delete t;
-			break;
-		default:
-			*s += "???";
+		case BBTYPE_OBJ: {
+			BBStr* t = _bbObjToStr(fields[k].OBJ);
+			*s += *t; delete t; break;
+		}
+		default: *s += "???";
 		}
 	}
 	*s += ']';
@@ -477,9 +427,9 @@ int _bbObjToHandle(BBObj* obj) {
 
 BBObj* _bbObjFromHandle(int handle, BBObjType* type) {
 	auto it = handle_map.find(handle);
-	if (it == handle_map.end()) return 0;
+	if (it == handle_map.end()) return nullptr;
 	BBObj* obj = it->second;
-	return obj->type == type ? obj : 0;
+	return obj->type == type ? obj : nullptr;
 }
 
 void _bbNullObjEx(const char* function) {
@@ -492,9 +442,9 @@ void _bbRestore(BBData* data) {
 
 int _bbReadInt() {
 	switch (dataPtr->fieldType) {
-	case BBTYPE_END: ErrorLog("ReadInt", MultiLang::out_of_data); return 0;
-	case BBTYPE_INT: return dataPtr++->field.INT;
-	case BBTYPE_FLT: return (int)dataPtr++->field.FLT;
+	case BBTYPE_END:  ErrorLog("ReadInt", MultiLang::out_of_data); return 0;
+	case BBTYPE_INT:  return dataPtr++->field.INT;
+	case BBTYPE_FLT:  return static_cast<int>(dataPtr++->field.FLT);
 	case BBTYPE_CSTR: {
 		const char* str = dataPtr++->field.CSTR;
 		int value;
@@ -509,16 +459,16 @@ int _bbReadInt() {
 
 float _bbReadFloat() {
 	switch (dataPtr->fieldType) {
-	case BBTYPE_END: ErrorLog("ReadFloat", MultiLang::out_of_data); return 0;
-	case BBTYPE_INT: return (float)dataPtr++->field.INT;
-	case BBTYPE_FLT: return dataPtr++->field.FLT;
+	case BBTYPE_END:  ErrorLog("ReadFloat", MultiLang::out_of_data); return 0;
+	case BBTYPE_INT:  return static_cast<float>(dataPtr++->field.INT);
+	case BBTYPE_FLT:  return dataPtr++->field.FLT;
 	case BBTYPE_CSTR: {
 		const char* str = dataPtr++->field.CSTR;
 		float value;
 		auto [ptr, ec] = std::from_chars(str, str + strlen(str), value);
 		if (ec == std::errc()) return value;
 		ErrorLog("ReadFloat", MultiLang::bad_data_type);
-		return 0.0f;
+		return 0.f;
 	}
 	default: ErrorLog("ReadFloat", MultiLang::bad_data_type); return 0;
 	}
@@ -526,11 +476,11 @@ float _bbReadFloat() {
 
 BBStr* _bbReadStr() {
 	switch (dataPtr->fieldType) {
-	case BBTYPE_END:ErrorLog("ReadStr", MultiLang::out_of_data); return 0;
-	case BBTYPE_INT:return new BBStr(itoa(dataPtr++->field.INT));
-	case BBTYPE_FLT:return new BBStr(ftoa(dataPtr++->field.FLT));
-	case BBTYPE_CSTR:return new BBStr(dataPtr++->field.CSTR);
-	default:ErrorLog("ReadStr", MultiLang::bad_data_type); return 0;
+	case BBTYPE_END:  ErrorLog("ReadStr", MultiLang::out_of_data);  return nullptr;
+	case BBTYPE_INT:  return new BBStr(std::to_string(dataPtr++->field.INT));
+	case BBTYPE_FLT:  return new BBStr(ftoa_s(dataPtr++->field.FLT));
+	case BBTYPE_CSTR: return new BBStr(dataPtr++->field.CSTR);
+	default:          ErrorLog("ReadStr", MultiLang::bad_data_type); return nullptr;
 	}
 }
 
@@ -543,7 +493,7 @@ float _bbFPow(float x, float y) {
 }
 
 void bbRuntimeStats() {
-	gx_runtime->debugLog(std::format(MultiLang::stats_strings, stringCnt).c_str());
+	// gx_runtime->debugLog(std::format(MultiLang::stats_strings, stringCnt).c_str());
 	gx_runtime->debugLog(std::format(MultiLang::stats_objects, objCnt).c_str());
 	gx_runtime->debugLog(std::format(MultiLang::stats_unreleased, unrelObjCnt).c_str());
 }
@@ -552,14 +502,11 @@ bool basic_create() {
 	next_handle = 0;
 	handle_map.clear();
 	object_map.clear();
-	stringCnt = objCnt = unrelObjCnt = 0;
-	usedStrs.next = usedStrs.prev = &usedStrs;
-	freeStrs.next = freeStrs.prev = &freeStrs;
+	objCnt = unrelObjCnt = 0;
 	return true;
 }
 
 bool basic_destroy() {
-	while (usedStrs.next != &usedStrs) delete usedStrs.next;
 	handle_map.clear();
 	object_map.clear();
 	return true;
