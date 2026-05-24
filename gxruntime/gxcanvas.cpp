@@ -521,21 +521,7 @@ void gxCanvas::blit(int x, int y, gxCanvas* src, int src_x, int src_y,
 
     unsigned maskRGB = solid ? ~0u : (src->format.toARGB(src->mask_surf) & 0x00ffffffu);
 
-    IDirect3DTexture8* blitTex = nullptr;
-    IDirect3DBaseTexture8* srcTex = src->getTexture();
-    bool ownTexture = false;
-
-    if (srcTex && srcTex->GetType() == D3DRTYPE_TEXTURE) {
-        blitTex = static_cast<IDirect3DTexture8*>(srcTex);
-        blitTex->AddRef();
-    }
-    else {
-        //build temp texture (slow)
-        unsigned maskRGB = solid ? ~0u : (src->format.toARGB(src->mask_surf) & 0x00ffffffu);
-        blitTex = buildBlitTexture(dev, src->surf, src_r, src->format, maskRGB);
-        ownTexture = true;
-    }
-
+    IDirect3DTexture8* blitTex = buildBlitTexture(dev, src->surf, src_r, src->format, maskRGB);
     if (!blitTex) return;
 
     IDirect3DSurface8* oldRT = nullptr;
@@ -590,8 +576,7 @@ void gxCanvas::blit(int x, int y, gxCanvas* src, int src_x, int src_y,
     drawBlitQuad(dev, blitTex, dest_r);
     dev->EndScene();
 
-    if (ownTexture) blitTex->Release();
-    else blitTex->Release();
+    blitTex->Release();
 
     dev->SetRenderTarget(oldRT, oldDS);
     if (oldRT) oldRT->Release();
