@@ -2,6 +2,7 @@
 #include "ddutil.h"
 #include "asmcoder.h"
 #include "gxcanvas.h"
+#include "gxgraphics.h"
 #include "gxruntime.h"
 
 extern gxRuntime* gx_runtime;
@@ -10,506 +11,309 @@ extern gxRuntime* gx_runtime;
 
 static AsmCoder asm_coder;
 
-static void calcShifts(unsigned mask, unsigned char* shr, unsigned char* shl) {
-	if(mask) {
-		for(*shl = 0; !(mask & 1); ++ * shl, mask >>= 1) {}
-		for(*shr = 8; mask & 1; -- * shr, mask >>= 1) {}
-	}
-	else *shr = *shl = 0;
+static void DebugMsg(const char* msg) {
+    MessageBoxA(NULL, msg, "Graphics Debug", MB_OK);
+}
+
+static void DebugMsg(const std::string& msg) {
+    MessageBoxA(NULL, msg.c_str(), "Graphics Debug", MB_OK);
 }
 
 PixelFormat::~PixelFormat() {
-	if(plot_code) {
-		VirtualFree(plot_code, 0, MEM_RELEASE);
-	}
+    if (plot_code) VirtualFree(plot_code, 0, MEM_RELEASE);
 }
 
-void PixelFormat::setFormat(const DDPIXELFORMAT& pf) {
-	if(plot_code) {
-		VirtualFree(plot_code, 0, MEM_RELEASE);
-	}
+void PixelFormat::setFormat(D3DFORMAT fmt) {
+    if (plot_code) VirtualFree(plot_code, 0, MEM_RELEASE);
+    plot_code = (char*)VirtualAlloc(0, 128, MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE);
+    point_code = plot_code + 64;
 
-	plot_code = (char*)VirtualAlloc(0, 128, MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE);
-	point_code = plot_code + 64;
+    switch (fmt) {
+    case D3DFMT_A8R8G8B8:
+        depth = 32; amask = 0xff000000; rmask = 0x00ff0000; gmask = 0x0000ff00; bmask = 0x000000ff; break;
+    case D3DFMT_X8R8G8B8:
+        depth = 32; amask = 0;          rmask = 0x00ff0000; gmask = 0x0000ff00; bmask = 0x000000ff; break;
+    case D3DFMT_R5G6B5:
+        depth = 16; amask = 0;          rmask = 0xf800;     gmask = 0x07e0;     bmask = 0x001f;     break;
+    case D3DFMT_A1R5G5B5:
+        depth = 16; amask = 0x8000;     rmask = 0x7c00;     gmask = 0x03e0;     bmask = 0x001f;     break;
+    case D3DFMT_A4R4G4B4:
+        depth = 16; amask = 0xf000;     rmask = 0x0f00;     gmask = 0x00f0;     bmask = 0x000f;     break;
+    default:
+        depth = 32; amask = 0xff000000; rmask = 0x00ff0000; gmask = 0x0000ff00; bmask = 0x000000ff; break;
+    }
 
-	depth = pf.dwRGBBitCount;
-	amask = pf.dwRGBAlphaBitMask;
-	rmask = pf.dwRBitMask;
-	gmask = pf.dwGBitMask;
-	bmask = pf.dwBBitMask;
-	pitch = depth / 8; argbfill = 0;
-	if(!amask) argbfill |= 0xff000000;
-	if(!rmask) argbfill |= 0x00ff0000;
-	if(!gmask) argbfill |= 0x0000ff00;
-	if(!bmask) argbfill |= 0x000000ff;
-	calcShifts(amask, &ashr, &ashl); ashr += 24;
-	calcShifts(rmask, &rshr, &rshl); rshr += 16;
-	calcShifts(gmask, &gshr, &gshl); gshr += 8;
-	calcShifts(bmask, &bshr, &bshl);
-	plot = (Plot)(void*)plot_code;
-	point = (Point)(void*)point_code;
-	asm_coder.CodePlot(plot_code, depth, amask, rmask, gmask, bmask);
-	asm_coder.CodePoint(point_code, depth, amask, rmask, gmask, bmask);
+    pitch = depth / 8;
+    argbfill = 0;
+    if (!amask) argbfill |= 0xff000000;
+    if (!rmask) argbfill |= 0x00ff0000;
+    if (!gmask) argbfill |= 0x0000ff00;
+    if (!bmask) argbfill |= 0x000000ff;
+
+    calcShifts(amask, &ashr, &ashl); ashr += 24;
+    calcShifts(rmask, &rshr, &rshl); rshr += 16;
+    calcShifts(gmask, &gshr, &gshl); gshr += 8;
+    calcShifts(bmask, &bshr, &bshl);
+    plot = (Plot)(void*)plot_code;
+    point = (Point)(void*)point_code;
+    asm_coder.CodePlot(plot_code, depth, amask, rmask, gmask, bmask);
+    asm_coder.CodePoint(point_code, depth, amask, rmask, gmask, bmask);
 }
 
-static void adjustTexSize(int* width, int* height, IDirect3DDevice7* dir3dDev) {
-	D3DDEVICEDESC7 ddDesc = { 0 };
-	if(dir3dDev->GetCaps(&ddDesc) < 0) {
-		*width = *height = 256;
-		return;
-	}
-	int w = *width, h = *height, min, max;
-	//make power of 2
-	//Try *always* making POW2 size to fix GF6800 non-pow2 tex issue
-	for(w = 1; w < *width; w <<= 1) {}
-	for(h = 1; h < *height; h <<= 1) {}
-	//make square
-	if(ddDesc.dpcTriCaps.dwTextureCaps & D3DPTEXTURECAPS_SQUAREONLY) {
-		if(w > h) h = w;
-		else w = h;
-	}
-	//check aspect ratio
-	if(max = ddDesc.dwMaxTextureAspectRatio) {
-		int asp = w > h ? w / h : h / w;
-		if(asp > max) {
-			if(w > h) h = w / max;
-			else w = h / max;
-		}
-	}
-	//clamp size
-	if((min = ddDesc.dwMinTextureWidth) && w < min) w = min;
-	if((min = ddDesc.dwMinTextureHeight) && h < min) h = min;
-	if((max = ddDesc.dwMaxTextureWidth) && w > max) w = max;
-	if((max = ddDesc.dwMaxTextureHeight) && h > max) h = max;
+static void adjustTexSize(int* width, int* height, IDirect3DDevice8* dev) {
+    D3DCAPS8 caps;
+    if (FAILED(dev->GetDeviceCaps(&caps))) { *width = *height = 256; return; }
 
-	*width = w; *height = h;
+    int w = *width, h = *height;
+
+    for (w = 1; w < *width; w <<= 1) {}
+    for (h = 1; h < *height; h <<= 1) {}
+
+    if (caps.TextureCaps & D3DPTEXTURECAPS_SQUAREONLY) {
+        if (w > h) h = w; else w = h;
+    }
+
+    if (int maxAsp = caps.MaxTextureAspectRatio) {
+        int asp = w > h ? w / h : h / w;
+        if (asp > maxAsp) { if (w > h) h = w / maxAsp; else w = h / maxAsp; }
+    }
+
+    if (caps.MaxTextureWidth && w > (int)caps.MaxTextureWidth)  w = caps.MaxTextureWidth;
+    if (caps.MaxTextureHeight && h > (int)caps.MaxTextureHeight) h = caps.MaxTextureHeight;
+    *width = w; *height = h;
 }
 
-static ddSurf* createSurface(int width, int height, int pitch, void* bits, IDirectDraw7* dirDraw) {
-	DDSURFACEDESC2 desc = { sizeof(desc) };
-	desc.dwFlags = DDSD_WIDTH | DDSD_HEIGHT | DDSD_LPSURFACE | DDSD_PITCH | DDSD_PIXELFORMAT | DDSD_CAPS;
-	desc.ddsCaps.dwCaps = DDSCAPS_OFFSCREENPLAIN | DDSCAPS_SYSTEMMEMORY;
-	desc.dwWidth = width; desc.dwHeight = height;
-	desc.lPitch = pitch; desc.lpSurface = bits;
-	desc.ddpfPixelFormat.dwSize = sizeof(DDPIXELFORMAT);
-	desc.ddpfPixelFormat.dwFlags = DDPF_RGB | DDPF_ALPHAPIXELS;
-	desc.ddpfPixelFormat.dwRGBBitCount = 32;
-	desc.ddpfPixelFormat.dwRBitMask = 0xff0000;
-	desc.ddpfPixelFormat.dwGBitMask = 0x00ff00;
-	desc.ddpfPixelFormat.dwBBitMask = 0x0000ff;
-	desc.ddpfPixelFormat.dwRGBAlphaBitMask = 0xff000000;
-	ddSurf* surf;
-	if(dirDraw->CreateSurface(&desc, &surf, 0) >= 0) return surf;
-	return 0;
+void ddUtil::buildMipMaps(IDirect3DTexture8* tex) {
+    if (!tex) return;
+    DWORD levels = tex->GetLevelCount();
+    if (levels <= 1) return;
+
+    for (DWORD mip = 0; mip + 1 < levels; ++mip) {
+        D3DLOCKED_RECT src_lr, dst_lr;
+        D3DSURFACE_DESC src_desc, dst_desc;
+        tex->GetLevelDesc(mip, &src_desc);
+        tex->GetLevelDesc(mip + 1, &dst_desc);
+
+        if (FAILED(tex->LockRect(mip, &src_lr, nullptr, D3DLOCK_READONLY))) break;
+        if (FAILED(tex->LockRect(mip + 1, &dst_lr, nullptr, 0))) { tex->UnlockRect(mip); break; }
+
+        PixelFormat src_fmt(src_desc.Format);
+        PixelFormat dst_fmt(dst_desc.Format);
+
+        unsigned char* src_p = (unsigned char*)src_lr.pBits;
+        unsigned char* dst_p = (unsigned char*)dst_lr.pBits;
+
+        for (UINT y = 0; y < dst_desc.Height; ++y) {
+            unsigned char* src_t = src_p + (y * 2) * src_lr.Pitch;
+            unsigned char* dst_t = dst_p + y * dst_lr.Pitch;
+            for (UINT x = 0; x < dst_desc.Width; ++x) {
+                unsigned char* p0 = src_t + x * 2 * src_fmt.getPitch();
+                unsigned char* p1 = p0 + src_fmt.getPitch();
+                unsigned char* p2 = p0 + src_lr.Pitch;
+                unsigned char* p3 = p2 + src_fmt.getPitch();
+                unsigned c0 = src_fmt.getPixel(p0), c1 = src_fmt.getPixel(p1);
+                unsigned c2 = src_fmt.getPixel(p2), c3 = src_fmt.getPixel(p3);
+                unsigned argb =
+                    ((c0 & 0xfcfcfcfc) >> 2) + ((c1 & 0xfcfcfcfc) >> 2) +
+                    ((c2 & 0xfcfcfcfc) >> 2) + ((c3 & 0xfcfcfcfc) >> 2);
+                argb += (((c0 & 0x03030303) + (c1 & 0x03030303) +
+                    (c2 & 0x03030303) + (c3 & 0x03030303)) >> 2) & 0x03030303;
+                dst_fmt.setPixel(dst_t + x * dst_fmt.getPitch(), argb);
+            }
+        }
+        tex->UnlockRect(mip + 1);
+        tex->UnlockRect(mip);
+    }
 }
 
-static void buildMask(ddSurf* surf) {
-	DDSURFACEDESC2 desc = { sizeof(desc) };
-	surf->Lock(0, &desc, DDLOCK_WAIT, 0);
-	unsigned char* surf_p = (unsigned char*)desc.lpSurface;
-	PixelFormat fmt(desc.ddpfPixelFormat);
+void ddUtil::copy(IDirect3DSurface8* dest_surf, int dx, int dy, int dw, int dh,
+    IDirect3DSurface8* src_surf, int sx, int sy, int sw, int sh) {
+    D3DLOCKED_RECT src_lr, dst_lr;
+    D3DSURFACE_DESC src_desc, dst_desc;
+    src_surf->GetDesc(&src_desc);
+    dest_surf->GetDesc(&dst_desc);
 
-	for(int y = 0; y < desc.dwHeight; ++y) {
-		unsigned char* p = surf_p;
-		for(int x = 0; x < desc.dwWidth; ++x) {
-			unsigned argb = fmt.getPixel(p);
-			unsigned rgb = argb & 0xffffff;
-			unsigned a = rgb ? 0xff000000 : 0;
-			fmt.setPixel(p, a | rgb);
-			p += fmt.getPitch();
-		}
-		surf_p += desc.lPitch;
-	}
-	surf->Unlock(0);
+    if (FAILED(src_surf->LockRect(&src_lr, nullptr, D3DLOCK_READONLY))) return;
+    if (FAILED(dest_surf->LockRect(&dst_lr, nullptr, 0))) { src_surf->UnlockRect(); return; }
+
+    PixelFormat src_fmt(src_desc.Format);
+    PixelFormat dst_fmt(dst_desc.Format);
+
+    unsigned char* src_p = (unsigned char*)src_lr.pBits + sy * src_lr.Pitch + sx * src_fmt.getPitch();
+    unsigned char* dst_p = (unsigned char*)dst_lr.pBits + dy * dst_lr.Pitch + dx * dst_fmt.getPitch();
+
+    for (int y = 0; y < dh; ++y) {
+        unsigned char* src_row = src_p + src_lr.Pitch * (y * sh / dh);
+        unsigned char* dst_row = dst_p + dst_lr.Pitch * y;
+        for (int x = 0; x < dw; ++x) {
+            dst_fmt.setPixel(dst_row + x * dst_fmt.getPitch(),
+                src_fmt.getPixel(src_row + src_fmt.getPitch() * (x * sw / dw)));
+        }
+    }
+
+    dest_surf->UnlockRect();
+    src_surf->UnlockRect();
 }
 
-static void buildAlpha(ddSurf* surf, bool whiten) {
-
-	DDSURFACEDESC2 desc = { sizeof(desc) };
-	surf->Lock(0, &desc, DDLOCK_WAIT, 0);
-	unsigned char* surf_p = (unsigned char*)desc.lpSurface;
-	PixelFormat fmt(desc.ddpfPixelFormat);
-
-	for(int y = 0; y < desc.dwHeight; ++y) {
-		unsigned char* p = surf_p;
-		for(int x = 0; x < desc.dwWidth; ++x) {
-			unsigned argb = fmt.getPixel(p);
-			unsigned alpha = (((argb >> 16) & 0xff) + ((argb >> 8) & 0xff) + (argb & 0xff)) / 3;
-			argb = (alpha << 24) | (argb & 0xffffff);
-			if(whiten) argb |= 0xffffff;
-			fmt.setPixel(p, argb);
-			p += fmt.getPitch();
-		}
-		surf_p += desc.lPitch;
-	}
-	surf->Unlock(0);
+static void buildMask(FIBITMAP* fib, BYTE* bits, int pitch, int w, int h) {
+    for (int y = 0; y < h; ++y) {
+        BYTE* src = FreeImage_GetScanLine(fib, h - 1 - y);
+        DWORD* dst = (DWORD*)(bits + y * pitch);
+        for (int x = 0; x < w; ++x) {
+            RGBQUAD* p = (RGBQUAD*)(src + x * 4);
+            unsigned rgb = ((unsigned)p->rgbRed << 16) | ((unsigned)p->rgbGreen << 8) | p->rgbBlue;
+            dst[x] = rgb ? (0xff000000 | rgb) : 0;
+        }
+    }
 }
 
-void ddUtil::buildMipMaps(ddSurf* surf) {
-
-	DDSURFACEDESC2 desc = { sizeof(desc) };
-	surf->GetSurfaceDesc(&desc);
-	if(!(desc.ddsCaps.dwCaps & DDSCAPS_TEXTURE)) return;
-	if(!(desc.ddpfPixelFormat.dwFlags & DDPF_RGB)) return;
-
-	DDSCAPS2 caps = { 0 };
-	caps.dwCaps = DDSCAPS_TEXTURE;
-	caps.dwCaps2 = DDSCAPS2_MIPMAPSUBLEVEL;
-
-	IDirectDrawSurface7* src = surf, * dest;
-
-	while(src->GetAttachedSurface(&caps, &dest) >= 0) {
-
-		DDSURFACEDESC2 src_desc = { sizeof(src_desc) };
-		if(src->Lock(0, &src_desc, DDLOCK_WAIT, 0) < 0) abort();
-		unsigned char* src_p = (unsigned char*)src_desc.lpSurface;
-		PixelFormat src_fmt(src_desc.ddpfPixelFormat);
-
-		DDSURFACEDESC2 dest_desc = { sizeof(dest_desc) };
-		if(dest->Lock(0, &dest_desc, DDLOCK_WAIT, 0) < 0) abort();
-		unsigned char* dest_p = (unsigned char*)dest_desc.lpSurface;
-		PixelFormat dest_fmt(dest_desc.ddpfPixelFormat);
-
-		if(src_desc.dwWidth == 1) {
-			for(int y = 0; y < dest_desc.dwHeight; ++y) {
-				unsigned p1 = src_fmt.getPixel(src_p);
-				unsigned p2 = src_fmt.getPixel(src_p + src_desc.lPitch);
-				unsigned argb =
-					((p1 & 0xfefefefe) >> 1) + ((p2 & 0xfefefefe) >> 1);
-				argb += ((
-					(p1 & 0x01010101) + (p2 & 0x01010101)) >> 1) & 0x01010101;
-				dest_fmt.setPixel(dest_p, argb);
-				src_p += src_desc.lPitch * 2;
-				dest_p += dest_desc.lPitch;
-			}
-		}
-		else if(src_desc.dwHeight == 1) {
-			for(int x = 0; x < dest_desc.dwWidth; ++x) {
-				unsigned p1 = src_fmt.getPixel(src_p);
-				unsigned p2 = src_fmt.getPixel(src_p + src_fmt.getPitch());
-				unsigned argb =
-					((p1 & 0xfefefefe) >> 1) + ((p2 & 0xfefefefe) >> 1);
-				argb += ((
-					(p1 & 0x01010101) + (p2 & 0x01010101)) >> 1) & 0x01010101;
-				dest_fmt.setPixel(dest_p, argb);
-				src_p += src_fmt.getPitch() * 2;
-				dest_p += dest_fmt.getPitch();
-			}
-		}
-		else {
-			for(int y = 0; y < dest_desc.dwHeight; ++y) {
-				unsigned char* src_t = src_p;
-				unsigned char* dest_t = dest_p;
-				for(int x = 0; x < dest_desc.dwWidth; ++x) {
-
-					unsigned p1 = src_fmt.getPixel(src_t);
-					unsigned p2 = src_fmt.getPixel(src_t + src_fmt.getPitch());
-					unsigned p3 = src_fmt.getPixel(src_t + src_desc.lPitch + src_fmt.getPitch());
-					unsigned p4 = src_fmt.getPixel(src_t + src_desc.lPitch);
-
-					unsigned argb =
-						((p1 & 0xfcfcfcfc) >> 2) + ((p2 & 0xfcfcfcfc) >> 2) +
-						((p3 & 0xfcfcfcfc) >> 2) + ((p4 & 0xfcfcfcfc) >> 2);
-					argb += ((
-						(p1 & 0x03030303) + (p2 & 0x03030303) +
-						(p3 & 0x03030303) + (p4 & 0x03030303)) >> 2) & 0x03030303;
-
-					dest_fmt.setPixel(dest_t, argb);
-					src_t += src_fmt.getPitch() * 2;
-					dest_t += dest_fmt.getPitch();
-				}
-				src_p += src_desc.lPitch * 2;
-				dest_p += dest_desc.lPitch;
-			}
-		}
-		src->Unlock(0);
-		dest->Unlock(0);
-		dest->Release();
-		src = dest;
-	}
+static void buildAlpha(FIBITMAP* fib, BYTE* bits, int pitch, int w, int h, bool whiten) {
+    for (int y = 0; y < h; ++y) {
+        BYTE* src = FreeImage_GetScanLine(fib, h - 1 - y);
+        DWORD* dst = (DWORD*)(bits + y * pitch);
+        for (int x = 0; x < w; ++x) {
+            RGBQUAD* p = (RGBQUAD*)(src + x * 4);
+            unsigned alpha = ((unsigned)p->rgbRed + p->rgbGreen + p->rgbBlue) / 3;
+            unsigned argb = (alpha << 24) | ((unsigned)p->rgbRed << 16) | ((unsigned)p->rgbGreen << 8) | p->rgbBlue;
+            if (whiten) argb |= 0xffffff;
+            dst[x] = argb;
+        }
+    }
 }
 
-void ddUtil::copy(ddSurf* dest, int dx, int dy, int dw, int dh, ddSurf* src, int sx, int sy, int sw, int sh) {
+IDirect3DTexture8* ddUtil::createSurface(int width, int height, int flags, gxGraphics* gfx) {
+    IDirect3DDevice8* dev = gfx->dir3dDev;
 
-	DDSURFACEDESC2 src_desc = { sizeof(src_desc) };
-	src->Lock(0, &src_desc, DDLOCK_WAIT, 0);
-	PixelFormat src_fmt(src_desc.ddpfPixelFormat);
-	unsigned char* src_p = (unsigned char*)src_desc.lpSurface;
-	src_p += src_desc.lPitch * sy + src_fmt.getPitch() * sx;
+    bool isTexture = (flags & gxCanvas::CANVAS_TEXTURE) != 0;
+    bool hasMips = (flags & gxCanvas::CANVAS_TEX_MIPMAP) != 0 && isTexture;
+    bool isAlpha = (flags & gxCanvas::CANVAS_TEX_ALPHA) != 0;
+    bool isCube = (flags & gxCanvas::CANVAS_TEX_CUBE) != 0;
 
-	DDSURFACEDESC2 dest_desc = { sizeof(dest_desc) };
-	dest->Lock(0, &dest_desc, DDLOCK_WAIT, 0);
-	PixelFormat dest_fmt(dest_desc.ddpfPixelFormat);
-	unsigned char* dest_p = (unsigned char*)dest_desc.lpSurface;
-	dest_p += dest_desc.lPitch * dy + dest_fmt.getPitch() * dx;
+    if (isTexture) adjustTexSize(&width, &height, dev);
 
-	for(int y = 0; y < dh; ++y) {
-		unsigned char* dest = dest_p;
-		unsigned char* src = src_p + src_desc.lPitch * (y * sh / dh);
-		for(int x = 0; x < dw; ++x) {
-			dest_fmt.setPixel(dest, src_fmt.getPixel(src + src_fmt.getPitch() * (x * sw / dw)));
-			dest += dest_fmt.getPitch();
-		}
-		dest_p += dest_desc.lPitch;
-	}
+    D3DFORMAT fmt = (isAlpha || (flags & gxCanvas::CANVAS_TEX_MASK)) ? D3DFMT_A8R8G8B8 : D3DFMT_X8R8G8B8;
+    if (flags & gxCanvas::CANVAS_TEX_HICOLOR) fmt = D3DFMT_A4R4G4B4;
 
-	src->Unlock(0);
-	dest->Unlock(0);
+    DWORD usage = 0;
+    D3DPOOL pool = D3DPOOL_MANAGED;
+
+    if (!isTexture) {
+        // off screen render target / canvas
+        usage = D3DUSAGE_DYNAMIC;
+        pool = D3DPOOL_DEFAULT;
+        fmt = D3DFMT_A8R8G8B8;
+    }
+
+    UINT mipLevels = hasMips ? 0 : 1;  // 0 = full mip chain
+
+    IDirect3DTexture8* tex = nullptr;
+    if (FAILED(dev->CreateTexture(width, height, mipLevels, usage, fmt, pool, &tex))) return nullptr;
+
+    return tex;
 }
 
-ddSurf* ddUtil::createSurface(int w, int h, int flags, gxGraphics* gfx) {
+IDirect3DTexture8* ddUtil::loadSurface(const std::string& file, int flags, gxGraphics* gfx) {
+    FREE_IMAGE_FORMAT fif = FreeImage_GetFileType(file.c_str(), 0);
+    if (fif == FIF_UNKNOWN) fif = FreeImage_GetFIFFromFilename(file.c_str());
+    if (fif == FIF_UNKNOWN) return nullptr;
 
-	DDSURFACEDESC2 desc = { sizeof(desc) };
+    FIBITMAP* fib = FreeImage_Load(fif, file.c_str(), 0);
+    if (!fib) {
+        DebugMsg(("loadSurface: FreeImage_Load failed for: " + file).c_str());
+        return nullptr;
+    }
 
-	desc.dwFlags = DDSD_CAPS;
+    int bpp = FreeImage_GetBPP(fib);
+    FIBITMAP* fib32 = nullptr;
 
-	int hi = flags & gxCanvas::CANVAS_TEX_HICOLOR ? 1 : 0;
+    if (bpp == 32) {
+        // manually create a copy since FreeImage_Clone is unavailable in this ver
+        int width = FreeImage_GetWidth(fib);
+        int height = FreeImage_GetHeight(fib);
 
-	if(w) { desc.dwWidth = w; desc.dwFlags |= DDSD_WIDTH; }
-	if(h) { desc.dwHeight = h; desc.dwFlags |= DDSD_HEIGHT; }
+        fib32 = FreeImage_Allocate(width, height, 32, 0xFF, 0xFF00, 0xFF0000);
+        if (fib32) {
+            for (int y = 0; y < height; y++) {
+                BYTE* src_bits = FreeImage_GetScanLine(fib, y);
+                BYTE* dst_bits = FreeImage_GetScanLine(fib32, y);
+                memcpy(dst_bits, src_bits, width * 4);
+            }
+        }
+        else {
+            MessageBoxA(NULL, "FreeImage_Allocate failed for 32-bit image", "DDUTIL Error", MB_OK);
+            FreeImage_Unload(fib);
+            return nullptr;
+        }
+    }
+    else {
+        fib32 = FreeImage_ConvertTo32Bits(fib);
+    }
 
-	if(flags & gxCanvas::CANVAS_TEX_MASK) {
-		desc.dwFlags |= DDSD_PIXELFORMAT;
-		desc.ddpfPixelFormat = gfx->texRGBMaskFmt[hi];
-	}
-	else if(flags & gxCanvas::CANVAS_TEX_RGB) {
-		desc.dwFlags |= DDSD_PIXELFORMAT;
-		desc.ddpfPixelFormat = (flags & gxCanvas::CANVAS_TEX_ALPHA) ? gfx->texRGBAlphaFmt[hi] : gfx->texRGBFmt[hi];
-	}
-	else if(flags & gxCanvas::CANVAS_TEX_ALPHA) {
-		desc.dwFlags |= DDSD_PIXELFORMAT;
-		desc.ddpfPixelFormat = gfx->texAlphaFmt[hi];
-	}
-	else if(flags & gxCanvas::CANVAS_TEXTURE) {
-		desc.dwFlags |= DDSD_PIXELFORMAT;
-		desc.ddpfPixelFormat = gfx->primFmt;
-	}
-	if(flags & gxCanvas::CANVAS_TEXTURE) {
-		desc.ddsCaps.dwCaps |= DDSCAPS_TEXTURE;
-		if(!(flags & gxCanvas::CANVAS_TEX_VIDMEM)) {
-			desc.ddsCaps.dwCaps2 |= DDSCAPS2_TEXTUREMANAGE;
-			if(flags & gxCanvas::CANVAS_TEX_MIPMAP) {
-				desc.ddsCaps.dwCaps |= DDSCAPS_MIPMAP | DDSCAPS_COMPLEX;
-			}
-		}
-		if(flags & (gxCanvas::CANVAS_TEX_CUBE)) {
-			desc.ddsCaps.dwCaps |= DDSCAPS_COMPLEX;
-			desc.ddsCaps.dwCaps2 |= DDSCAPS2_CUBEMAP | DDSCAPS2_CUBEMAP_ALLFACES;
-		}
-		adjustTexSize((int*)&desc.dwWidth, (int*)&desc.dwHeight, gfx->dir3dDev);
-	}
-	else {
-		desc.ddsCaps.dwCaps = DDSCAPS_OFFSCREENPLAIN;
-		if(flags & gxCanvas::CANVAS_HIGHCOLOR) {
-			desc.dwFlags |= DDSD_PIXELFORMAT;
-			desc.ddsCaps.dwCaps |= DDSCAPS_SYSTEMMEMORY;
-			desc.ddpfPixelFormat.dwSize = sizeof(DDPIXELFORMAT);
-			desc.ddpfPixelFormat.dwFlags = DDPF_RGB | DDPF_ALPHAPIXELS;
-			desc.ddpfPixelFormat.dwRGBBitCount = 32;
-			desc.ddpfPixelFormat.dwRBitMask = 0xff0000;
-			desc.ddpfPixelFormat.dwGBitMask = 0x00ff00;
-			desc.ddpfPixelFormat.dwBBitMask = 0x0000ff;
-			desc.ddpfPixelFormat.dwRGBAlphaBitMask = 0xff000000;
-		}
-		else if(flags & gxCanvas::CANVAS_NONDISPLAY) {
-			desc.ddsCaps.dwCaps |= DDSCAPS_SYSTEMMEMORY;
-		}
-	}
-	ddSurf* surf;
-	if(gfx->dirDraw->CreateSurface(&desc, &surf, 0) >= 0) return surf;
-	if(desc.ddsCaps.dwCaps & DDSCAPS_OFFSCREENPLAIN) {
-		if(!(desc.ddsCaps.dwCaps & DDSCAPS_SYSTEMMEMORY)) {
-			//try again in system memory!
-			desc.ddsCaps.dwCaps |= DDSCAPS_SYSTEMMEMORY;
-			if(gfx->dirDraw->CreateSurface(&desc, &surf, 0) >= 0) return surf;
-		}
-	}
-	return 0;
-}
+    FreeImage_Unload(fib);
 
-//Tom Speed's DXTC loader
-//
-IDirectDrawSurface7* loadDXTC(const char* filename, gxGraphics* gfx) {
-	HRESULT hr;
-	DDSURFACEDESC2 ddsd;
-	DDSURFACEDESC2 fileddsd;
-	char magicID[4];
-	FILE* fp;
-
-	/* try to open the file */
-	fp = fopen(filename, "rb");
-	if(!fp) return NULL;
-
-	/* valid DDS? */
-	fread(magicID, 1, 4, fp);
-	if(strncmp(magicID, "DDS ", 4) != 0) {
-		fclose(fp);
-		return NULL;
-	}
-
-	/* get the DXTC file surface description */
-	fread(&fileddsd, sizeof(DDSURFACEDESC2), 1, fp);
-
-	if(fileddsd.dwSize != sizeof(DDSURFACEDESC2)) {
-		fclose(fp);
-		return NULL;
-	}
-
-	/* copy the fileddsd before we manipulate it so you
-	can get neccessary info you want about it later */
-	memcpy(&ddsd, &fileddsd, sizeof(DDSURFACEDESC2));
-
-	/* remove unwanted flags if they exist */
-	//not sure if this is needed, works without it though
-	int blockSize = 0;
-	int chunkSize = 0;
-
-	if(ddsd.ddpfPixelFormat.dwFourCC == FOURCC_DXT1)
-		blockSize = 8; // DXT1
-	if(ddsd.ddpfPixelFormat.dwFourCC == FOURCC_DXT3)
-		blockSize = 16; // DXT3
-	if(ddsd.ddpfPixelFormat.dwFourCC == FOURCC_DXT5)
-		blockSize = 16; // DXT5
-
-	/* if it isn't a format we support, exit */
-	if(blockSize == 0) {
-		fclose(fp);
-		return NULL;
-	}
-
-	/* add texture manage flag */
-	ddsd.ddsCaps.dwCaps2 |= DDSCAPS2_TEXTUREMANAGE;
-
-	/* Create the new DXTC surface using the DDSURFACEDESC2
-	we read in from the file */
-	IDirectDrawSurface7* newSurf = NULL;
-	hr = gfx->dirDraw->CreateSurface(&ddsd, &newSurf, NULL);
-	if(FAILED(hr)) {
-		fclose(fp);
-		return NULL;
-	}
-
-	/* Define what type of child surfaces we may wish
-	to access, in this case MipMaps */
-	DDSCAPS2 mipmapddsd;
-	ZeroMemory(&mipmapddsd, sizeof(DDSCAPS2));
-	mipmapddsd.dwCaps = DDSCAPS_TEXTURE | DDSCAPS_MIPMAP | DDSCAPS_COMPLEX;
-
-	/* pointers used when iterating through mipmaps */
-	IDirectDrawSurface7* topDDS = NULL;
-	IDirectDrawSurface7* nextDDS = NULL;
-
-	topDDS = newSurf;
-	topDDS->AddRef();
-
-	while(TRUE) {
-		/* get a description of this surface */
-		hr = topDDS->Lock(NULL, &ddsd, DDLOCK_WAIT, NULL);
-		if(FAILED(hr)) {
-			fclose(fp);
-			topDDS->Release();
-			newSurf->Release();
-			nextDDS->Release();
-			return NULL;
-		}
-
-		/* how big the raw data is for this surface */
-		chunkSize = ((ddsd.dwWidth + 3) / 4) * ((ddsd.dwHeight + 3) / 4) * blockSize;
-
-		/* read in the raw DXTC surface data */
-		if(!fread(ddsd.lpSurface, chunkSize, 1, fp)) {
-			fclose(fp);
-			topDDS->Release();
-			newSurf->Release();
-			nextDDS->Release();
-			return NULL;
-		}
-		topDDS->Unlock(NULL);
+    if (!fib32) {
+        MessageBoxA(NULL, "Failed to obtain 32-bit image, report this error to krimbopple!", "DDUTIL Error", MB_OK);
+        return nullptr;
+    }
 
 
-		/* Get next mipmap in chain, or exit the loop if there's no more */
-		hr = topDDS->GetAttachedSurface(&mipmapddsd, &nextDDS);
-		if(FAILED(hr)) {
-			fclose(fp);
-			topDDS->Release();
-			break;
-		}
+    int w = FreeImage_GetWidth(fib32);
+    int h = FreeImage_GetHeight(fib32);
 
-		topDDS->Release();
-		topDDS = nextDDS;
-		nextDDS->Release();
-	}
+    int adjW = w, adjH = h;
+    if (!(flags & gxCanvas::CANVAS_NONDISPLAY)) adjustTexSize(&adjW, &adjH, gfx->dir3dDev);
 
-	return newSurf;
-}
+    bool hasMask = (flags & gxCanvas::CANVAS_TEX_MASK) != 0;
+    bool hasAlpha = (flags & gxCanvas::CANVAS_TEX_ALPHA) != 0;
+    bool hasMips = (flags & gxCanvas::CANVAS_TEX_MIPMAP) != 0;
 
-ddSurf* ddUtil::loadSurface(const std::string& f, int flags, gxGraphics* gfx) {
+    D3DFORMAT fmt = (hasMask || hasAlpha) ? D3DFMT_A8R8G8B8 : D3DFMT_X8R8G8B8;
+    UINT mipLevels = hasMips ? 0 : 1;
 
-	int i = f.find(".dds");
-	if(i != std::string::npos && i + 4 == f.size()) {
-		//dds file!
-		ddSurf* surf = loadDXTC(f.c_str(), gfx);
-		return surf;
-	}
+    IDirect3DDevice8* dev = gfx->dir3dDev;
+    IDirect3DTexture8* tex = nullptr;
+    bool isNonDisplay = (flags & gxCanvas::CANVAS_NONDISPLAY) != 0;
 
-	FREE_IMAGE_FORMAT fmt = FreeImage_GetFileType(f.c_str(), f.size());
-	if(fmt == FIF_UNKNOWN) {
-		int n = f.find("."); if(n == std::string::npos) return 0;
-		fmt = FreeImage_GetFileTypeFromExt(f.substr(n + 1).c_str());
-		if(fmt == FIF_UNKNOWN) return 0;
-	}
-	FIBITMAP* t_dib = FreeImage_Load(fmt, f.c_str(), 0);
-	if(!t_dib) return 0;
+    //DWORD usage = isNonDisplay ? D3DUSAGE_DYNAMIC : 0;
+    //D3DPOOL pool = isNonDisplay ? D3DPOOL_DEFAULT : D3DPOOL_MANAGED;
+    DWORD usage = 0;
+    D3DPOOL pool = D3DPOOL_MANAGED;
 
-	bool trans = FreeImage_GetBPP(t_dib) == 32 || FreeImage_IsTransparent(t_dib);
+    if (FAILED(dev->CreateTexture(adjW, adjH, mipLevels, 0, fmt, D3DPOOL_MANAGED, &tex))) {
+        DebugMsg(("loadSurface: CreateTexture failed for: " + file).c_str());
+        FreeImage_Unload(fib32); return nullptr;
+    }
 
-	FIBITMAP* dib = FreeImage_ConvertTo32Bits(t_dib);
+    D3DLOCKED_RECT lr;
+    if (FAILED(tex->LockRect(0, &lr, nullptr, 0))) {
+        tex->Release(); FreeImage_Unload(fib32); return nullptr;
+    }
 
-	if(dib) FreeImage_Unload(t_dib);
-	else dib = t_dib;
+    BYTE* bits = (BYTE*)lr.pBits;
+    for (int y = 0; y < h && y < adjH; ++y) {
+        BYTE* src = FreeImage_GetScanLine(fib32, h - 1 - y);
+        DWORD* dst = (DWORD*)(bits + y * lr.Pitch);
+        for (int x = 0; x < w && x < adjW; ++x) {
+            RGBQUAD* p = (RGBQUAD*)(src + x * 4);
+            DWORD argb = ((DWORD)p->rgbReserved << 24) |
+                ((DWORD)p->rgbRed << 16) |
+                ((DWORD)p->rgbGreen << 8) |
+                (DWORD)p->rgbBlue;
+            if (hasMask) {
+                unsigned rgb = argb & 0xffffff;
+                argb = rgb ? (0xff000000 | rgb) : 0;
+            }
+            else if (hasAlpha) {
+                unsigned lum = (((argb >> 16) & 0xff) + ((argb >> 8) & 0xff) + (argb & 0xff)) / 3;
+                argb = (lum << 24) | (argb & 0xffffff) | 0xffffff;
+            }
+            dst[x] = argb;
+        }
+    }
+    tex->UnlockRect(0);
+    FreeImage_Unload(fib32);
 
-	int width = FreeImage_GetWidth(dib);
-	int height = FreeImage_GetHeight(dib);
-	int pitch = FreeImage_GetPitch(dib);
-	void* bits = FreeImage_GetBits(dib);
+    if (hasMips) buildMipMaps(tex);
 
-	ddSurf* src = ::createSurface(width, height, pitch, bits, gfx->dirDraw);
-	if(!src) {
-		FreeImage_Unload(dib);
-		return 0;
-	}
-
-	if(flags & gxCanvas::CANVAS_TEX_ALPHA) {
-		if(flags & gxCanvas::CANVAS_TEX_MASK) {
-			buildMask(src);
-		}
-		else if(!trans) {
-			buildAlpha(src, (flags & gxCanvas::CANVAS_TEX_RGB) ? false : true);
-		}
-	}
-	else {
-		unsigned char* p = (unsigned char*)bits;
-		for(int k = 0; k < height; ++k) {
-			unsigned char* t = p + 3;
-			for(int j = 0; j < width; ++j) {
-				*t = 0xff; t += 4;
-			}
-			p += pitch;
-		}
-	}
-
-	ddSurf* dest = createSurface(width, height, flags, gfx);
-	if(!dest) {
-		src->Release();
-		FreeImage_Unload(dib);
-		return 0;
-	}
-
-	int t_w = width, t_h = height;
-	if(flags & gxCanvas::CANVAS_TEXTURE) adjustTexSize(&t_w, &t_h, gfx->dir3dDev);
-	copy(dest, 0, 0, t_w, t_h, src, 0, height - 1, width, -height);
-
-	src->Release();
-	FreeImage_Unload(dib);
-	return dest;
+    return tex;
 }

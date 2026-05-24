@@ -36,10 +36,17 @@ gxMovie::~gxMovie() {
 
 bool gxMovie::draw(gxCanvas* dest, int x, int y, int w, int h) {
 	if(!playing) return false;
-	if(!dd_sample->Update(0, 0, 0, 0)) {
-		RECT dest_rect = { x,y,x + w,y + h };
-		dest->getSurface()->Blt(&dest_rect, canvas->getSurface(), &src_rect, DDBLT_WAIT, 0);
-		dest->damage(dest_rect);
+	if (!dd_sample->Update(0, 0, 0, 0)) {
+		RECT dest_rect = { x, y, x + w, y + h };
+
+		IDirectDrawSurface* dest_dd_surf = nullptr;
+		dest->getSurface()->QueryInterface(IID_IDirectDrawSurface, (void**)&dest_dd_surf);
+
+		if (dest_dd_surf) {
+			dest_dd_surf->Blt(&dest_rect, dd_surf, &src_rect, DDBLT_WAIT, 0);
+			dest_dd_surf->Release();
+			dest->damage(dest_rect);
+		}
 	}
 	else {
 		playing = false;

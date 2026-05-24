@@ -1,6 +1,10 @@
 #ifndef STD_H
 #define STD_H
 
+#define WIN32_LEAN_AND_MEAN
+#define NOMINMAX
+#define POINTER_64 __ptr64
+
 #include <Windows.h>
 
 #include "constants.h"

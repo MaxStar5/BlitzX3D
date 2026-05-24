@@ -921,6 +921,8 @@ Entity* bbCreateCamera(Entity* p) {
 	gx_canvas->getViewport(&x, &y, &w, &h);
 	Camera* c = new Camera();
 	c->setViewport(x, y, w, h);
+	c->setClsColor(Vector(0, 0, 0));
+	c->setClsMode(true, true);
 	return insertEntity(c, p);
 }
 
@@ -2028,9 +2030,13 @@ int  bbActiveTextures() {
 }
 
 void blitz3d_open() {
+	MessageBoxA(NULL, "blitz3d_open: entered", "Debug", MB_OK);
 	gx_scene = gx_graphics->createScene(0);
+	MessageBoxA(NULL, "blitz3d_open: after createScene", "Debug", MB_OK);
 	if (!gx_scene) RTEX(MultiLang::unable_create_gxscene_instance);
+	MessageBoxA(NULL, "blitz3d_open: scene valid", "Debug", MB_OK);
 	world = new World();
+	MessageBoxA(NULL, "blitz3d_open: after new World", "Debug", MB_OK);
 	::projected = Vector();
 	picked.collision = Collision();
 	picked.with = 0; picked.coords = Vector();
@@ -2045,12 +2051,14 @@ void blitz3d_open() {
 
 void blitz3d_close() {
 	if (!gx_scene) return;
+	gxScene* scene = gx_scene;
+	gx_scene = 0;
 	bbClearWorld(1, 1, 1);
 	Texture::clearFilters();
 	loader_mat_map.clear();
 	delete world;
-	gx_graphics->freeScene(gx_scene);
-	gx_scene = 0;
+	world = 0;
+	if (gx_graphics) gx_graphics->freeScene(scene);
 }
 
 bool blitz3d_create() {

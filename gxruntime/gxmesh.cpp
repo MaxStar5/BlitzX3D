@@ -6,45 +6,61 @@
 
 extern gxRuntime* gx_runtime;
 
-gxMesh::gxMesh(gxGraphics* g, IDirect3DVertexBuffer7* vs, WORD* is, int max_vs, int max_ts) :
-	graphics(g), locked_verts(0), vertex_buff(vs), tri_indices(is), max_verts(max_vs), max_tris(max_ts), mesh_dirty(false) {
+gxMesh::gxMesh(gxGraphics* g, IDirect3DVertexBuffer8* vs, IDirect3DIndexBuffer8* is,
+    int max_vs, int max_ts) :
+    graphics(g), vertex_buff(vs), index_buff(is),
+    locked_verts(nullptr), locked_indices(nullptr),
+    max_verts(max_vs), max_tris(max_ts), mesh_dirty(false) {
 }
 
 gxMesh::~gxMesh() {
-	unlock();
-
-	vertex_buff->Release();
-
-	delete[] tri_indices;
+    unlock();
+    if (vertex_buff) { vertex_buff->Release(); vertex_buff = nullptr; }
+    if (index_buff) { index_buff->Release();  index_buff = nullptr; }
 }
 
 bool gxMesh::lock(bool all) {
-	if(locked_verts) return true;
+    if (locked_verts && locked_indices) return true;
 
-	//V1.1.06...
-	int flags = DDLOCK_WAIT | DDLOCK_WRITEONLY;
+    // lock vert buffer
+    if (!locked_verts) {
+        DWORD vflags = D3DLOCK_NOSYSLOCK | (all ? D3DLOCK_DISCARD : D3DLOCK_NOOVERWRITE);
+        BYTE* ptr = nullptr;
+        if (FAILED(vertex_buff->Lock(0, 0, &ptr, vflags))) {
+            static dxVertex err_verts[32768];
+            locked_verts = err_verts;
+        }
+        else {
+            locked_verts = reinterpret_cast<dxVertex*>(ptr);
+        }
+    }
 
-	//XP or less?
-	if(graphics->runtime->osinfo.dwMajorVersion < 6) {
-		flags |= (all ? DDLOCK_DISCARDCONTENTS : DDLOCK_NOOVERWRITE);
-	}
+    // lock index buffer
+    if (!locked_indices) {
+        DWORD iflags = D3DLOCK_NOSYSLOCK | (all ? D3DLOCK_DISCARD : D3DLOCK_NOOVERWRITE);
+        BYTE* ptr = nullptr;
+        if (FAILED(index_buff->Lock(0, 0, &ptr, iflags))) {
+            static WORD err_indices[32768 * 3];
+            locked_indices = err_indices;
+        }
+        else {
+            locked_indices = reinterpret_cast<WORD*>(ptr);
+        }
+    }
 
-	if(vertex_buff->Lock(flags, (void**)&locked_verts, 0) >= 0) {
-		mesh_dirty = false;
-		return true;
-	}
-
-	static dxVertex* err_verts = new dxVertex[32768];
-
-	locked_verts = err_verts;
-	return true;
+    mesh_dirty = false;
+    return true;
 }
 
 void gxMesh::unlock() {
-	if(locked_verts) {
-		vertex_buff->Unlock();
-		locked_verts = 0;
-	}
+    if (locked_verts) {
+        vertex_buff->Unlock();
+        locked_verts = nullptr;
+    }
+    if (locked_indices) {
+        index_buff->Unlock();
+        locked_indices = nullptr;
+    }
 }
 
 void gxMesh::backup() {
@@ -56,9 +72,12 @@ void gxMesh::restore() {
 }
 
 void gxMesh::render(int first_vert, int vert_cnt, int first_tri, int tri_cnt) {
-	unlock();
-	graphics->dir3dDev->DrawIndexedPrimitiveVB(
-		D3DPT_TRIANGLELIST,
-		vertex_buff, first_vert, vert_cnt,
-		tri_indices + first_tri * 3, tri_cnt * 3, 0);
+    unlock();
+
+    IDirect3DDevice8* dev = graphics->dir3dDev;
+
+    dev->SetStreamSource(0, vertex_buff, sizeof(dxVertex));
+    dev->SetVertexShader(VTXFMT);
+    dev->SetIndices(index_buff, first_vert);
+    dev->DrawIndexedPrimitive(D3DPT_TRIANGLELIST, 0, vert_cnt, first_tri * 3, tri_cnt);
 }

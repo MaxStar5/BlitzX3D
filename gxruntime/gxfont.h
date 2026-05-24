@@ -10,7 +10,7 @@
 class gxCanvas;
 class gxGraphics;
 
-typedef IDirectDrawSurface7 ddSurf;
+// typedef IDirectDrawSurface7 ddSurf;
 
 class gxFont {
 public:
@@ -31,6 +31,8 @@ public:
 	bool isPrintable(int chr)const;				//printable char?
 
 	std::vector<gxCanvas*> atlases;
+
+	gxCanvas* tempCanvas;
 
 	enum {
 		FONT_BOLD = 1,
@@ -58,8 +60,6 @@ private:
 		int horizontalAdvance;
 		int srcRect[4];
 	};
-
-	gxCanvas* tempCanvas;
 
 	const int atlasDims = 1024;
 	void renderAtlas(int chr);

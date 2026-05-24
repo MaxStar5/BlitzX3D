@@ -3,6 +3,11 @@
 
 #pragma warning( disable:4786 )
 
+#define _WINSOCKAPI_
+#define WIN32_LEAN_AND_MEAN
+#define NOMINMAX
+#define POINTER_64 __ptr64
+
 #include "../config/config.h"
 #include "../stdutil/stdutil.h"
 #include "../gxruntime/gxruntime.h"

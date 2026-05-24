@@ -159,13 +159,14 @@ void gxFont::renderAtlas(int chr) {
 
 	if(buffer != nullptr) {
 		gxCanvas* newAtlas = graphics->createCanvas(atlasDims, atlasDims, 0);
+		newAtlas->backup();
 		newAtlas->lock();
 		for(int y = 0; y < atlasDims; y++) {
 			for(int x = 0; x < atlasDims; x++)
 				newAtlas->setPixelFast(x, y, buffer[x + (y * atlasDims)] ? opaquePixel : transparentPixel);
 		}
 		newAtlas->unlock();
-		newAtlas->setMask(0xffffff);
+		newAtlas->setMask(0xff4A412A);
 		newAtlas->backup();
 		atlases.push_back(newAtlas);
 		delete[] buffer;
@@ -179,17 +180,20 @@ void gxFont::render(gxCanvas* dest, unsigned color_argb, int x, int y, const std
 	if(tempCanvas == nullptr || width > tempCanvas->getWidth()) {
 		graphics->freeCanvas(tempCanvas);
 		tempCanvas = graphics->createCanvas(width, tCanvasHeight, 0);
-		tempCanvas->setMask(transparentPixel);
+		tempCanvas->setMask(0xff4A412A);
 	}
 
-	if((color_argb & 0xffffff) == transparentPixel) { color_argb++; }
-	tempCanvas->setColor(transparentPixel);
-	tempCanvas->rect(0, 0, width, tCanvasHeight, true);
-	tempCanvas->setColor(color_argb);
+	if ((color_argb & 0xffffff) == transparentPixel) { color_argb++; }
+
+	tempCanvas->lock();
+	for (int cy = 0; cy < tCanvasHeight; cy++)
+		for (int cx = 0; cx < width; cx++)
+			tempCanvas->setPixelFast(cx, cy, transparentPixel);
+	tempCanvas->unlock();
 
 	int t_x = 0;
 
-	for(int i = 0; i < text.size();) {
+	for (int i = 0; i < (int)text.size();) {
 		int codepointLen = UTF8::measureCodepoint(text[i]);
 		int chr = UTF8::decodeCharacter(text.c_str(), i);
 		std::map<int, GlyphData>::iterator it = glyphData.find(chr);
@@ -200,19 +204,36 @@ void gxFont::render(gxCanvas* dest, unsigned color_argb, int x, int y, const std
 
 		if(it != glyphData.end()) {
 			const GlyphData& gd = it->second;
-
-			if(gd.atlasIndex >= 0) {
-				tempCanvas->rect(t_x - gd.drawOffset[0], glyphRenderBaseline - gd.drawOffset[1], gd.srcRect[2], gd.srcRect[3], true);
-				tempCanvas->blit(t_x - gd.drawOffset[0], glyphRenderBaseline - gd.drawOffset[1], atlases[gd.atlasIndex], gd.srcRect[0], gd.srcRect[1], gd.srcRect[2], gd.srcRect[3], false);
+			if (gd.atlasIndex >= 0) {
+				int dst_x = t_x - gd.drawOffset[0];
+				int dst_y = glyphRenderBaseline - gd.drawOffset[1];
+				gxCanvas* atlas = atlases[gd.atlasIndex];
+				atlas->lock();
+				tempCanvas->lock();
+				for (int gy = 0; gy < gd.srcRect[3]; gy++) {
+					for (int gx = 0; gx < gd.srcRect[2]; gx++) {
+						unsigned px = atlas->getPixelFast(gd.srcRect[0] + gx, gd.srcRect[1] + gy);
+						if ((px & 0xffffff) != transparentPixel) {
+							tempCanvas->setPixelFast(dst_x + gx, dst_y + gy, color_argb);
+						}
+					}
+				}
+				tempCanvas->unlock();
+				atlas->unlock();
 			}
 			t_x += gd.horizontalAdvance;
 		}
 		i += codepointLen;
 	}
 
-	if (underlined)
-	{
-		tempCanvas->rect(0, static_cast<int>(getBaselinePosition() + getUnderlinePosition()), width, max(1, static_cast<int>(getUnderlineThickness())), true);
+	if (underlined) {
+		tempCanvas->lock();
+		int uy = static_cast<int>(getBaselinePosition() + getUnderlinePosition());
+		int uh = max(1, static_cast<int>(getUnderlineThickness()));
+		for (int cy = uy; cy < uy + uh && cy < tCanvasHeight; cy++)
+			for (int cx = 0; cx < width; cx++)
+				tempCanvas->setPixelFast(cx, cy, color_argb);
+		tempCanvas->unlock();
 	}
 
 	dest->blit(x, y - glyphRenderOffset, tempCanvas, 0, 0, width, tCanvasHeight, false);
@@ -233,7 +254,11 @@ int gxFont::charAdvance(int chr) {
 		renderAtlas(chr);
 		it = glyphData.find(chr);
 	}
-	return it != glyphData.end() ? it->second.horizontalAdvance : 0;
+	int adv = (it != glyphData.end()) ? it->second.horizontalAdvance : 0;
+	if (adv == 0 && it != glyphData.end()) {
+		OutputDebugStringA("Font advance is zero!\n");
+	}
+	return adv;
 }
 
 int gxFont::stringWidth(const std::string& text) {

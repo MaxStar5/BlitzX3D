@@ -134,7 +134,7 @@
       <MinimalRebuild>false</MinimalRebuild>
       <CallingConvention>StdCall</CallingConvention>
       <LanguageStandard>stdcpp20</LanguageStandard>
-      <AdditionalIncludeDirectories>..\freetype\include;</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>C:\Program Files (x86)\Microsoft DirectX SDK (June 2010)\Include;..\freetype\include;</AdditionalIncludeDirectories>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
     </ClCompile>
     <Midl>
@@ -158,8 +158,9 @@
       <SubSystem>Windows</SubSystem>
       <OutputFile>..\_release\bin\runtime.dll</OutputFile>
       <ImportLibrary>..\_release\userlibs\runtime.lib</ImportLibrary>
-      <AdditionalDependencies>wsock32.lib;amstrmid.lib;winmm.lib;dxguid.lib;ddraw.lib;dsound.lib;dinput8.lib;odbc32.lib;odbccp32.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>wsock32.lib;amstrmid.lib;winmm.lib;dxguid.lib;ddraw.lib;S:\directx8-msdx8\lib\d3d8.lib;dsound.lib;dinput8.lib;odbc32.lib;odbccp32.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <GenerateDebugInformation>false</GenerateDebugInformation>
+      <AdditionalOptions>/SAFESEH:NO %(AdditionalOptions)</AdditionalOptions>
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>

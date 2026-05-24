@@ -18,6 +18,7 @@ class bbImage
 public:
     bbImage(const std::vector<gxCanvas*>& f) :frames(f)
     {
+        savePixels();
     }
     ~bbImage()
     {
@@ -32,9 +33,51 @@ public:
     {
         gx_graphics->freeCanvas(frames[n]);
         frames[n] = c;
+        savePixels();
+    }
+    void savePixels()
+    {
+        pixelData.resize(frames.size());
+        widths.resize(frames.size());
+        heights.resize(frames.size());
+        for (int k = 0; k < (int)frames.size(); ++k)
+        {
+            gxCanvas* c = frames[k];
+            int w = c->getWidth(), h = c->getHeight();
+            widths[k] = w; heights[k] = h;
+            pixelData[k].resize(w * h);
+            c->lock();
+            for (int y = 0; y < h; ++y)
+                for (int x = 0; x < w; ++x)
+                    pixelData[k][y * w + x] = c->getPixelFast(x, y);
+            c->unlock();
+        }
+    }
+    void restoreToDevice()
+    {
+        for (int k = 0; k < (int)frames.size(); ++k)
+        {
+            int w = widths[k], h = heights[k];
+            gxCanvas* c = gx_graphics->createCanvas(w, h, gxCanvas::CANVAS_TEXTURE);
+            if (!c) continue;
+            c->lock();
+            for (int y = 0; y < h; ++y)
+                for (int x = 0; x < w; ++x)
+                    c->setPixelFast(x, y, pixelData[k][y * w + x]);
+            c->unlock();
+            // preserve handle and mask from old canvas
+            int hx, hy;
+            frames[k]->getHandle(&hx, &hy);
+            c->setHandle(hx, hy);
+            c->setMask(frames[k]->getMask());
+            frames[k] = c;
+            gx_graphics->adoptCanvas(c);
+        }
     }
 private:
     std::vector<gxCanvas*> frames;
+    std::vector<std::vector<uint32_t>> pixelData;
+    std::vector<int> widths, heights;
 };
 
 static int gx_driver;	//Current graphics driver index.
@@ -81,11 +124,14 @@ static inline void debugMode(int n, const char* function)
 
 void bbFreeImage(bbImage* i);
 
-static void freeGraphics()
+static void freeGraphics(bool freeImages = true)
 {
     extern void blitz3d_close();
-    blitz3d_close();
-    while (image_set.size()) bbFreeImage(*image_set.begin());
+    if (gx_graphics) blitz3d_close();
+    if (freeImages)
+    {
+        while (image_set.size()) bbFreeImage(*image_set.begin());
+    }
     if (p_canvas)
     {
         gx_graphics->freeCanvas(p_canvas);
@@ -495,20 +541,32 @@ void bbBufferDirty(gxCanvas* c)
     c->backup();
 }
 
-static void graphics(int w, int h, int d, int flags)
-{
-    freeGraphics();
+static void graphics(int w, int h, int d, int flags) {
+    MessageBoxA(NULL, "graphics(): entered", "Debug", MB_OK);
+    freeGraphics(false);
+    MessageBoxA(NULL, "graphics(): after freeGraphics", "Debug", MB_OK);
     gx_runtime->closeGraphics(gx_graphics);
+    MessageBoxA(NULL, "graphics(): after closeGraphics", "Debug", MB_OK);
     gx_graphics = gx_runtime->openGraphics(w, h, d, gx_driver, flags);
+    MessageBoxA(NULL, "graphics(): after openGraphics", "Debug", MB_OK);
     if (!gx_runtime->idle()) RTEX(0);
-    if (!gx_graphics)
-        RTEX(MultiLang::unable_create_gxgraphics_instance);
+    MessageBoxA(NULL, "graphics(): after idle", "Debug", MB_OK);
+    if (!gx_graphics) RTEX(MultiLang::unable_create_gxgraphics_instance);
+    MessageBoxA(NULL, "graphics(): gx_graphics valid", "Debug", MB_OK);
+
+    for (bbImage* img : image_set) {
+        img->restoreToDevice();
+    }
+
     curr_clsColor = 0;
     curr_color = 0xffffffff;
     curr_font = gx_graphics->getDefaultFont();
-    gxCanvas* buff = (flags & gxGraphics::GRAPHICS_3D) ?
-        gx_graphics->getBackCanvas() : gx_graphics->getFrontCanvas();
+
+    MessageBoxA(NULL, "graphics(): after getDefaultFont", "Debug", MB_OK);
+    gxCanvas* buff = (flags & gxGraphics::GRAPHICS_3D) ? gx_graphics->getBackCanvas() : gx_graphics->getFrontCanvas();
+    MessageBoxA(NULL, "graphics(): before bbSetBuffer", "Debug", MB_OK);
     bbSetBuffer(buff);
+    MessageBoxA(NULL, "graphics(): after bbSetBuffer", "Debug", MB_OK);
 }
 
 void bbGraphics(int w, int h, int d, int mode)
@@ -551,7 +609,7 @@ void bbEndGraphics()
 {
     freeGraphics();
     gx_runtime->closeGraphics(gx_graphics);
-    gx_graphics = gx_runtime->openGraphics(400, 300, 0, 0, gxGraphics::GRAPHICS_WINDOWED);
+    gx_graphics = gx_runtime->openGraphics(400, 300, 0, 0, gxGraphics::GRAPHICS_WINDOWED | 4);  // 4 = GRAPHICS_3D
     if (!gx_runtime->idle()) RTEX(0);
     if (gx_graphics)
     {
@@ -908,7 +966,7 @@ bbImage* bbLoadImage(BBStr* s)
     std::string t = *s; delete s;
     gxCanvas* c = gx_graphics->loadCanvas(t, 0);
     if (!c) return 0;
-    if (auto_dirty) c->backup();
+    c->backup();
     if (auto_midhandle) c->setHandle(c->getWidth() / 2, c->getHeight() / 2);
     std::vector<gxCanvas*> frames;
     frames.push_back(c);
@@ -917,48 +975,45 @@ bbImage* bbLoadImage(BBStr* s)
     return i;
 }
 
-bbImage* bbLoadAnimImage(BBStr* s, int w, int h, int first, int cnt)
-{
-
+bbImage* bbLoadAnimImage(BBStr* s, int w, int h, int first, int cnt) {
     std::string t = *s; delete s;
 
-    if (cnt < 1) ErrorLog("LoadAnimImage", MultiLang::illegal_frame_count);
-    if (first < 0) ErrorLog("LoadAnimImage", MultiLang::illegal_first_frame);
+    gxCanvas* pic = gx_graphics->loadCanvas(t, gxCanvas::CANVAS_TEXTURE);
+    if (!pic) {
+        MessageBoxA(NULL, "loadCanvas (CANVAS_TEXTURE) failed", "LoadAnimImage", MB_OK);
+        return 0;
+    }
 
-    gxCanvas* pic = gx_graphics->loadCanvas(t, gxCanvas::CANVAS_NONDISPLAY);
-    if (!pic) return 0;
-
-    //frames per row, per picture
     int fpr = pic->getWidth() / w;
     int fpp = pic->getHeight() / h * fpr;
-    if (first + cnt > fpp)
-    {
+    if (first + cnt > fpp) {
         gx_graphics->freeCanvas(pic);
-        ErrorLog("LoadAnimImage", MultiLang::not_enough_frames_bitmap);
+        return 0;
     }
 
-    //x,y of first frame...
-    std::vector<gxCanvas*> frames;
-    int src_x = first % fpr * w, src_y = first / fpr * h;
+    int src_x = first % fpr * w;
+    int src_y = first / fpr * h;
 
-    for (int k = 0; k < cnt; ++k)
-    {
-        gxCanvas* c = gx_graphics->createCanvas(w, h, 0);
-        if (!c)
-        {
-            for (--k; k >= 0; --k) gx_graphics->freeCanvas(frames[k]);
-            gx_graphics->freeCanvas(pic); return 0;
+    std::vector<gxCanvas*> frames;
+    for (int k = 0; k < cnt; ++k) {
+        gxCanvas* c = gx_graphics->createCanvas(w, h, gxCanvas::CANVAS_TEXTURE);
+        if (!c) {
+            for (int i = 0; i < k; ++i) gx_graphics->freeCanvas(frames[i]);
+            gx_graphics->freeCanvas(pic);
+            return 0;
         }
         c->blit(0, 0, pic, src_x, src_y, w, h, true);
-        if (auto_dirty) c->backup();
-        if (auto_midhandle) c->setHandle(c->getWidth() / 2, c->getHeight() / 2);
+        c->backup();
+        if (auto_midhandle) c->setHandle(w / 2, h / 2);
         frames.push_back(c);
-        src_x += w; if (src_x + w > pic->getWidth()) { src_x = 0; src_y += h; }
+        src_x += w;
+        if (src_x + w > pic->getWidth()) { src_x = 0; src_y += h; }
     }
     gx_graphics->freeCanvas(pic);
-    bbImage* i = new bbImage(frames);
-    image_set.insert(i);
-    return i;
+
+    bbImage* image = new bbImage(frames);
+    image_set.insert(image);
+    return image;
 }
 
 bbImage* bbCopyImage(bbImage* i)
@@ -1121,6 +1176,9 @@ void bbDrawBlockRect(bbImage* i, int x, int y, int r_x, int r_y, int r_w, int r_
 
 void bbMaskImage(bbImage* i, int r, int g, int b)
 {
+    char dbg[128];
+    sprintf(dbg, "MaskImage: ptr=%p image_set.size=%d", (void*)i, (int)image_set.size());
+    MessageBoxA(NULL, dbg, "Debug", MB_OK);
     debugImage(i, "MaskImage");
     unsigned argb = (r << 16) | (g << 8) | b;
     const std::vector<gxCanvas*>& f = i->getFrames();
@@ -1149,13 +1207,17 @@ void bbAutoMidHandle(int enable)
 int bbImageWidth(bbImage* i)
 {
     debugImage(i, "ImageWidth");
-    return i->getFrames()[0]->getWidth();
+    gxCanvas* c = i->getFrames()[0];
+    int hx, hy; c->getHandle(&hx, &hy);
+    return c->getWidth() - hx;
 }
 
 int bbImageHeight(bbImage* i)
 {
     debugImage(i, "ImageHeight");
-    return i->getFrames()[0]->getHeight();
+    gxCanvas* c = i->getFrames()[0];
+    int hx, hy; c->getHandle(&hx, &hy);
+    return c->getHeight() - hy;
 }
 
 int bbImageXHandle(bbImage* i)
@@ -1487,24 +1549,18 @@ void bbHidePointer()
     gx_runtime->setPointerVisible(false);
 }
 
-bool graphics_create()
-{
+bool graphics_create() {
     p_canvas = 0;
     filter = true;
     gx_driver = 0;
-    freeGraphics();
     auto_dirty = true;
     auto_midhandle = false;
-    gx_graphics = gx_runtime->openGraphics(400, 300, 0, 0, gxGraphics::GRAPHICS_WINDOWED);
-    if (gx_graphics)
-    {
-        curr_clsColor = 0;
-        curr_color = 0xffffffff;
-        curr_font = gx_graphics->getDefaultFont();
-        bbSetBuffer(bbFrontBuffer());
-        return true;
-    }
-    return false;
+    gx_graphics = nullptr;
+    curr_clsColor = 0;
+    curr_color = 0xffffffff;
+    curr_font = nullptr;
+    gx_canvas = nullptr;
+    return true;
 }
 
 bool graphics_destroy()

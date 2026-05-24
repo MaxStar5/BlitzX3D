@@ -6,7 +6,7 @@
 
 #include <set>
 #include <string>
-#include <d3d.h>
+#include <d3d8.h>
 
 #include "ddutil.h"
 
@@ -20,21 +20,19 @@ class gxRuntime;
 
 class gxGraphics {
 public:
-	IDirectDraw7* dirDraw;
-	IDirectDraw* ds_dirDraw;
+	IDirect3DDevice8* dir3dDev;
+	IDirect3DSurface8* frontBuffer;
+	IDirect3DSurface8* backBuffer;
+	IDirect3D8* dir3d;
 
-	IDirect3D7* dir3d;
-	IDirect3DDevice7* dir3dDev;
-	D3DDEVICEDESC7 dir3dDevDesc;
-	DDPIXELFORMAT primFmt, zbuffFmt;
-
-	DDPIXELFORMAT texRGBFmt[2], texAlphaFmt[2], texRGBAlphaFmt[2], texRGBMaskFmt[2];
-
+	D3DFORMAT           zbuffFmt;
+	D3DPRESENT_PARAMETERS present_params;
+	
 	FT_Library ftLibrary;
 
 	bool running_on_wine;
 
-	gxGraphics(gxRuntime* runtime, IDirectDraw7* dirDraw, IDirectDrawSurface7* front, IDirectDrawSurface7* back, bool d3d);
+	gxGraphics(gxRuntime* runtime, IDirect3DDevice8* device, IDirect3DSurface8* front, IDirect3DSurface8* back, bool d3d);
 	~gxGraphics();
 
 	bool restore();
@@ -110,6 +108,8 @@ public:
 	gxScene* createScene(int flags);
 	gxScene* verifyScene(gxScene* scene);
 	void freeScene(gxScene* scene);
+
+	void adoptCanvas(gxCanvas* c);
 
 	gxMesh* createMesh(int max_verts, int max_tris, int flags);
 	gxMesh* verifyMesh(gxMesh* mesh);

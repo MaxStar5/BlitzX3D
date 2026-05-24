@@ -3,6 +3,11 @@
 #ifndef BBRUNTIME_DLL_H
 #define BBRUNTIME_DLL_H
 
+#define _WINSOCKAPI_
+#define WIN32_LEAN_AND_MEAN
+#define NOMINMAX
+#define POINTER_64 __ptr64
+
 #include <Windows.h>
 
 #include "../stdutil/stdutil.h"

@@ -6,35 +6,46 @@
 class gxFont;
 class gxGraphics;
 
-typedef IDirectDrawSurface7 ddSurf;
 
 class gxCanvas {
 public:
-	gxCanvas(gxGraphics* g, IDirectDrawSurface7* s, int f);
+	gxCanvas(gxGraphics* g, IDirect3DSurface8* surf, int flags);
+	gxCanvas(gxGraphics* g, IDirect3DTexture8* tex, int flags);
+	gxCanvas(gxGraphics* g, IDirect3DCubeTexture8* cube_tex, int flags);
 	~gxCanvas();
 
-	void backup()const;
-	void restore()const;
-	ddSurf* getSurface()const;
-	ddSurf* getTexSurface()const;
+	gxGraphics* graphics;
+
+	void backup();
+	void restore();
+
+	IDirect3DSurface8* getSurface()  const;
+	IDirect3DBaseTexture8* getTexture() const;
+
 	void setModify(int n);
-	int getModify()const;
+	int  getModify() const;
 
 	bool attachZBuffer();
 	void releaseZBuffer();
 
-	bool clip(RECT* d)const;
-	bool clip(RECT* d, RECT* s)const;
-	void damage(const RECT& r)const;
+	bool clip(RECT* d)          const;
+	bool clip(RECT* d, RECT* s) const;
+	void damage(const RECT& r)  const;
+
+	IDirect3DSurface8* surf;             // the "active" surf
+	IDirect3DSurface8* z_surf;           // depth/stencil surf
 
 private:
-	int flags, cube_mode;
-	gxGraphics* graphics;
+	int   flags, cube_mode;
 
-	ddSurf* main_surf, * surf, * z_surf, * cube_surfs[6];
+	IDirect3DSurface8* plain_surf;   // non text offscreen surf
+	IDirect3DTexture8* tex;
+	IDirect3DCubeTexture8* cube_tex;
+
+	IDirect3DSurface8* cube_surfs[6];
 
 	mutable int mod_cnt;
-	mutable ddSurf* t_surf;
+	mutable IDirect3DSurface8* t_surf;
 
 	mutable int locked_pitch, locked_cnt, lock_mod_cnt, remip_cnt;
 	mutable unsigned char* locked_surf;
@@ -51,7 +62,7 @@ private:
 	int origin_x, origin_y, handle_x, handle_y;
 	unsigned mask_surf, color_surf, color_argb, clsColor_surf;
 
-	void updateBitMask(const RECT& r)const;
+	void updateBitMask(const RECT& r) const;
 
 	/***** GX INTERFACE *****/
 public:
@@ -136,6 +147,7 @@ public:
 	unsigned getMask()const;
 	unsigned getColor()const;
 	unsigned getClsColor()const;
+	IDirect3DBaseTexture8* getTexSurface() const;
 };
 
 #endif
