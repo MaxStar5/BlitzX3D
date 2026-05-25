@@ -11,12 +11,10 @@ extern gxRuntime* gx_runtime;
 
 static AsmCoder asm_coder;
 
-static void DebugMsg(const char* msg) {
-    MessageBoxA(NULL, msg, "Graphics Debug", MB_OK);
-}
+static thread_local std::string g_lastImageError;
 
-static void DebugMsg(const std::string& msg) {
-    MessageBoxA(NULL, msg.c_str(), "Graphics Debug", MB_OK);
+const std::string& ddUtil::getLastImageError() {
+    return g_lastImageError;
 }
 
 PixelFormat::~PixelFormat() {
@@ -213,13 +211,18 @@ IDirect3DTexture8* ddUtil::createSurface(int width, int height, int flags, gxGra
 }
 
 IDirect3DTexture8* ddUtil::loadSurface(const std::string& file, int flags, gxGraphics* gfx) {
+    g_lastImageError.clear();
+
     FREE_IMAGE_FORMAT fif = FreeImage_GetFileType(file.c_str(), 0);
     if (fif == FIF_UNKNOWN) fif = FreeImage_GetFIFFromFilename(file.c_str());
-    if (fif == FIF_UNKNOWN) return nullptr;
+    if (fif == FIF_UNKNOWN) {
+        g_lastImageError = "Unsupported or unknown image format: " + file;
+        return nullptr;
+    }
 
     FIBITMAP* fib = FreeImage_Load(fif, file.c_str(), 0);
     if (!fib) {
-        DebugMsg(("loadSurface: FreeImage_Load failed for: " + file).c_str());
+        g_lastImageError = "FreeImage_Load failed for: " + file;
         return nullptr;
     }
 
@@ -232,30 +235,27 @@ IDirect3DTexture8* ddUtil::loadSurface(const std::string& file, int flags, gxGra
         int height = FreeImage_GetHeight(fib);
 
         fib32 = FreeImage_Allocate(width, height, 32, 0xFF, 0xFF00, 0xFF0000);
-        if (fib32) {
-            for (int y = 0; y < height; y++) {
-                BYTE* src_bits = FreeImage_GetScanLine(fib, y);
-                BYTE* dst_bits = FreeImage_GetScanLine(fib32, y);
-                memcpy(dst_bits, src_bits, width * 4);
-            }
-        }
-        else {
-            MessageBoxA(NULL, "FreeImage_Allocate failed for 32-bit image", "DDUTIL Error", MB_OK);
+        if (!fib32) {
+            g_lastImageError = "FreeImage_Allocate failed for 32-bit image: " + file;
             FreeImage_Unload(fib);
             return nullptr;
+        }
+        for (int y = 0; y < height; y++) {
+            BYTE* src_bits = FreeImage_GetScanLine(fib, y);
+            BYTE* dst_bits = FreeImage_GetScanLine(fib32, y);
+            memcpy(dst_bits, src_bits, width * 4);
         }
     }
     else {
         fib32 = FreeImage_ConvertTo32Bits(fib);
+        if (!fib32) {
+            g_lastImageError = "FreeImage_ConvertTo32Bits failed for: " + file;
+            FreeImage_Unload(fib);
+            return nullptr;
+        }
     }
 
     FreeImage_Unload(fib);
-
-    if (!fib32) {
-        MessageBoxA(NULL, "Failed to obtain 32-bit image, report this error to krimbopple!", "DDUTIL Error", MB_OK);
-        return nullptr;
-    }
-
 
     int w = FreeImage_GetWidth(fib32);
     int h = FreeImage_GetHeight(fib32);
@@ -279,14 +279,19 @@ IDirect3DTexture8* ddUtil::loadSurface(const std::string& file, int flags, gxGra
     DWORD usage = 0;
     D3DPOOL pool = D3DPOOL_MANAGED;
 
-    if (FAILED(dev->CreateTexture(adjW, adjH, mipLevels, 0, fmt, D3DPOOL_MANAGED, &tex))) {
-        DebugMsg(("loadSurface: CreateTexture failed for: " + file).c_str());
-        FreeImage_Unload(fib32); return nullptr;
+    HRESULT hr = dev->CreateTexture(adjW, adjH, mipLevels, 0, fmt, D3DPOOL_MANAGED, &tex);
+    if (FAILED(hr) || !tex) {
+        g_lastImageError = "CreateTexture failed for " + file + " (HRESULT " + std::to_string(hr) + ")";
+        FreeImage_Unload(fib32);
+        return nullptr;
     }
 
     D3DLOCKED_RECT lr;
     if (FAILED(tex->LockRect(0, &lr, nullptr, 0))) {
-        tex->Release(); FreeImage_Unload(fib32); return nullptr;
+        g_lastImageError = "LockRect failed for " + file;
+        tex->Release();
+        FreeImage_Unload(fib32);
+        return nullptr;
     }
 
     BYTE* bits = (BYTE*)lr.pBits;

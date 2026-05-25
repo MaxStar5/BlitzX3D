@@ -965,7 +965,12 @@ bbImage* bbLoadImage(BBStr* s)
 {
     std::string t = *s; delete s;
     gxCanvas* c = gx_graphics->loadCanvas(t, 0);
-    if (!c) return 0;
+    if (!c) {
+        std::string errMsg = "Failed to load image: " + t;
+        const std::string& libErr = ddUtil::getLastImageError();
+        if (!libErr.empty()) errMsg += " (" + libErr + ")";
+        RTEX(errMsg.c_str());
+    }
     c->backup();
     if (auto_midhandle) c->setHandle(c->getWidth() / 2, c->getHeight() / 2);
     std::vector<gxCanvas*> frames;
