@@ -177,6 +177,8 @@ void gxFont::renderAtlas(int chr) {
 
 void gxFont::render(gxCanvas* dest, unsigned color_argb, int x, int y, const std::string& text) {
 	int width = stringWidth(text);
+	if (width <= 0) return;
+
 	if(tempCanvas == nullptr || width > tempCanvas->getWidth()) {
 		graphics->freeCanvas(tempCanvas);
 		tempCanvas = graphics->createCanvas(width, tCanvasHeight, 0);
@@ -185,20 +187,25 @@ void gxFont::render(gxCanvas* dest, unsigned color_argb, int x, int y, const std
 
 	if ((color_argb & 0xffffff) == transparentPixel) { color_argb++; }
 
-	tempCanvas->lock();
-	for (int cy = 0; cy < tCanvasHeight; cy++)
-		for (int cx = 0; cx < width; cx++)
-			tempCanvas->setPixelFast(cx, cy, transparentPixel);
-	tempCanvas->unlock();
+	unsigned savedClsColor = tempCanvas->getClsColor();
+	tempCanvas->setClsColor(transparentPixel);
+	tempCanvas->cls();
+	tempCanvas->setClsColor(savedClsColor);
 
 	int t_x = 0;
+	gxCanvas* currentAtlas = nullptr;
+
+	tempCanvas->lock();
 
 	for (int i = 0; i < (int)text.size();) {
 		int codepointLen = UTF8::measureCodepoint(text[i]);
 		int chr = UTF8::decodeCharacter(text.c_str(), i);
 		std::map<int, GlyphData>::iterator it = glyphData.find(chr);
 		if(it == glyphData.end()) {
+			if (currentAtlas) { currentAtlas->unlock(); currentAtlas = nullptr; }
+			tempCanvas->unlock();
 			renderAtlas(chr);
+			tempCanvas->lock();
 			it = glyphData.find(chr);
 		}
 
@@ -208,8 +215,13 @@ void gxFont::render(gxCanvas* dest, unsigned color_argb, int x, int y, const std
 				int dst_x = t_x - gd.drawOffset[0];
 				int dst_y = glyphRenderBaseline - gd.drawOffset[1];
 				gxCanvas* atlas = atlases[gd.atlasIndex];
-				atlas->lock();
-				tempCanvas->lock();
+
+				if (atlas != currentAtlas) {
+					if (currentAtlas) currentAtlas->unlock();
+					currentAtlas = atlas;
+					currentAtlas->lock();
+				}
+
 				for (int gy = 0; gy < gd.srcRect[3]; gy++) {
 					for (int gx = 0; gx < gd.srcRect[2]; gx++) {
 						unsigned px = atlas->getPixelFast(gd.srcRect[0] + gx, gd.srcRect[1] + gy);
@@ -218,13 +230,14 @@ void gxFont::render(gxCanvas* dest, unsigned color_argb, int x, int y, const std
 						}
 					}
 				}
-				tempCanvas->unlock();
-				atlas->unlock();
 			}
 			t_x += gd.horizontalAdvance;
 		}
 		i += codepointLen;
 	}
+
+	if (currentAtlas) { currentAtlas->unlock(); currentAtlas = nullptr; }
+	tempCanvas->unlock();
 
 	if (underlined) {
 		tempCanvas->lock();
