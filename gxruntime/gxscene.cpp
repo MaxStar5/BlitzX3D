@@ -644,6 +644,10 @@ bool gxScene::begin(const std::vector<gxLight*>& lights) {
 		dir3dDev->SetRenderTarget(target->surf, target->z_surf);
 	}
 
+	dir3dDev->SetViewport(&viewport);
+
+	D3DRECT clearRect = {(LONG)viewport.X, (LONG)viewport.Y, (LONG)(viewport.X + viewport.Width), (LONG)(viewport.Y + viewport.Height) };
+
 	dir3dDev->Clear(0, NULL, D3DCLEAR_ZBUFFER, 0, 1.0f, 0);
 
 	setRS(D3DRS_FILLMODE, wireframe ? D3DFILL_WIREFRAME : D3DFILL_SOLID);

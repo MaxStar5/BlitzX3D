@@ -810,26 +810,7 @@ bool gxRuntime::setDisplayMode(int w, int h, int d, bool d3d) {
 }
 
 gxGraphics* gxRuntime::openWindowedGraphics(int w, int h, int d, bool d3d) {
-	DebugMsg("Entering openWindowedGraphics");
-
-	if (!d3d) {
-		DebugMsg("openWindowedGraphics: d3d flag is false, returning 0");
-		return 0;
-	}
-
-	D3DCAPS8 caps;
-	if (FAILED(this->d3d->GetDeviceCaps(D3DADAPTER_DEFAULT, D3DDEVTYPE_HAL, &caps))) {
-		// fallback limits if caps query fails
-		caps.MaxTextureWidth = 2048;
-		caps.MaxTextureHeight = 2048;
-	}
-	int maxW = caps.MaxTextureWidth;
-	int maxH = caps.MaxTextureHeight;
-	int safeW = min(w, maxW);
-	int safeH = min(h, maxH);
-	if (safeW != w || safeH != h) {
-		DebugMsg(("Resolution clamped from " + std::to_string(w) + "x" + std::to_string(h) + " to " + std::to_string(safeW) + "x" + std::to_string(safeH)).c_str());
-	}
+	if (!d3d) return 0;
 
 	ZeroMemory(&d3dpp, sizeof(d3dpp));
 	d3dpp.Windowed = TRUE;
@@ -837,71 +818,24 @@ gxGraphics* gxRuntime::openWindowedGraphics(int w, int h, int d, bool d3d) {
 	d3dpp.Flags = D3DPRESENTFLAG_LOCKABLE_BACKBUFFER;
 	d3dpp.EnableAutoDepthStencil = FALSE;
 	d3dpp.BackBufferCount = 1;
-	d3dpp.BackBufferWidth = safeW;
-	d3dpp.BackBufferHeight = safeH;
+	d3dpp.BackBufferWidth = w;
+	d3dpp.BackBufferHeight = h;
 
 	D3DDISPLAYMODE mode;
-	HRESULT hr = this->d3d->GetAdapterDisplayMode(D3DADAPTER_DEFAULT, &mode);
-	if (FAILED(hr)) {
-		std::stringstream ss;
-		ss << "GetAdapterDisplayMode failed: HRESULT=0x" << std::hex << hr;
-		DebugMsg(ss.str());
+	if (FAILED(this->d3d->GetAdapterDisplayMode(D3DADAPTER_DEFAULT, &mode))) return 0;
+
+	d3dpp.BackBufferFormat =
+		(mode.Format == D3DFMT_R8G8B8 || mode.Format == D3DFMT_A8R8G8B8 || mode.Format == D3DFMT_X8R8G8B8) ? mode.Format : D3DFMT_X8R8G8B8;
+
+	if (FAILED(this->d3d->CreateDevice(D3DADAPTER_DEFAULT, D3DDEVTYPE_HAL, hwnd, D3DCREATE_SOFTWARE_VERTEXPROCESSING, &d3dpp, &d3dDevice))) return 0;
+
+	if (FAILED(d3dDevice->GetBackBuffer(0, D3DBACKBUFFER_TYPE_MONO, &backBuffer))) {
+		d3dDevice->Release(); d3dDevice = 0;
 		return 0;
 	}
 
-	if (mode.Format == D3DFMT_R8G8B8 || mode.Format == D3DFMT_A8R8G8B8 || mode.Format == D3DFMT_X8R8G8B8) {
-		d3dpp.BackBufferFormat = mode.Format;
-	}
-	else {
-		d3dpp.BackBufferFormat = D3DFMT_X8R8G8B8;
-	}
-
-	std::stringstream ss;
-	ss << "BackBufferFormat: " << d3dpp.BackBufferFormat << " Width=" << d3dpp.BackBufferWidth << " Height=" << d3dpp.BackBufferHeight;
-	DebugMsg(ss.str());
-
-	hr = this->d3d->CreateDevice(D3DADAPTER_DEFAULT, D3DDEVTYPE_HAL, hwnd,
-		D3DCREATE_SOFTWARE_VERTEXPROCESSING,
-		&d3dpp, &d3dDevice);
-
-	if (FAILED(hr)) {
-		std::stringstream ss2;
-		ss2 << "CreateDevice failed: HRESULT=0x" << std::hex << hr;
-		DebugMsg(ss2.str());
-		return 0;
-	}
-
-	DebugMsg("CreateDevice succeeded");
-
-	hr = d3dDevice->GetBackBuffer(0, D3DBACKBUFFER_TYPE_MONO, &backBuffer);
-	if (FAILED(hr) || !backBuffer) {
-		std::stringstream ss2;
-		ss2 << "GetBackBuffer failed: HRESULT=0x" << std::hex << hr << " ptr=" << backBuffer;
-		DebugMsg(ss2.str());
-		if (d3dDevice) d3dDevice->Release();
-		d3dDevice = 0;
-		return 0;
-	}
-
-	DebugMsg("GetBackBuffer succeeded");
-
-	D3DSURFACE_DESC backDesc;
-	backBuffer->GetDesc(&backDesc);
-	int frontW = backDesc.Width;
-	int frontH = backDesc.Height;
-
-	D3DFORMAT safeFormat = D3DFMT_A8R8G8B8;
-	hr = d3dDevice->CreateImageSurface(frontW, frontH, safeFormat, &frontBuffer);
-	if (FAILED(hr) || !frontBuffer) {
-		hr = d3dDevice->CreateImageSurface(frontW, frontH, backDesc.Format, &frontBuffer);
-		if (FAILED(hr) || !frontBuffer) {
-			DebugMsg("CreateImageSurface failed with both safe and backbuffer formats");
-			frontBuffer = backBuffer;
-			frontBuffer->AddRef();
-			DebugMsg("Falling back to reusing backbuffer as frontbuffer");
-		}
-	}
-	if (frontBuffer) DebugMsg("CreateImageSurface succeeded (or fallback used)");
+	frontBuffer = backBuffer;
+	frontBuffer->AddRef();
 
 	// Do we need this timer stuff anymore?
 	if (!(timerID = timeSetEvent(100, 10, timerCallback, 0, TIME_PERIODIC))) {
@@ -909,7 +843,6 @@ gxGraphics* gxRuntime::openWindowedGraphics(int w, int h, int d, bool d3d) {
 		timerID = 0;
 	}
 
-	DebugMsg("openWindowedGraphics SUCCESS - returning new gxGraphics");
 	return new gxGraphics(this, d3dDevice, frontBuffer, backBuffer, d3d);
 }
 

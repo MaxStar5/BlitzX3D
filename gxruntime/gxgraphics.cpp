@@ -174,9 +174,6 @@ void gxGraphics::vwait() { // stubby stbu stub
 
 void gxGraphics::flip(bool v) {
 	runtime->flip(v);
-	if (frontBuffer != backBuffer && dir3dDev) {
-		dir3dDev->CopyRects(backBuffer, nullptr, 0, frontBuffer, nullptr);
-	}
 }
 
 void gxGraphics::copy(gxCanvas* dest, int dx, int dy, int dw, int dh, gxCanvas* src, int sx, int sy, int sw, int sh) {

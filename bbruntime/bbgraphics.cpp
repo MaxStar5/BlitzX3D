@@ -870,7 +870,13 @@ void bbCopyRect(int sx, int sy, int w, int h, int dx, int dy, gxCanvas* src, gxC
     else src = gx_canvas;
     if (dest) debugCanvas(dest, "CopyRect");
     else dest = gx_canvas;
-    dest->blit(dx, dy, src, sx, sy, w, h, true);
+
+    if (dest->getFlags() & gxCanvas::CANVAS_TEXTURE) {
+        gx_graphics->copy(dest, dx, dy, w, h, src, sx, sy, w, h);
+    }
+    else {
+        dest->blit(dx, dy, src, sx, sy, w, h, true);
+    }
 }
 
 void bbCopyRectStretch(int sx, int sy, int w, int h, int dx, int dy, int dw, int dh, gxCanvas* src, gxCanvas* dest)
