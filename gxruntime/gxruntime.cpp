@@ -827,7 +827,7 @@ gxGraphics* gxRuntime::openWindowedGraphics(int w, int h, int d, bool d3d) {
 	d3dpp.BackBufferFormat =
 		(mode.Format == D3DFMT_R8G8B8 || mode.Format == D3DFMT_A8R8G8B8 || mode.Format == D3DFMT_X8R8G8B8) ? mode.Format : D3DFMT_X8R8G8B8;
 
-	if (FAILED(this->d3d->CreateDevice(D3DADAPTER_DEFAULT, D3DDEVTYPE_HAL, hwnd, D3DCREATE_SOFTWARE_VERTEXPROCESSING, &d3dpp, &d3dDevice))) return 0;
+	if (FAILED(this->d3d->CreateDevice(D3DADAPTER_DEFAULT, D3DDEVTYPE_HAL, hwnd, D3DCREATE_HARDWARE_VERTEXPROCESSING, &d3dpp, &d3dDevice))) return 0;
 
 	if (FAILED(d3dDevice->GetBackBuffer(0, D3DBACKBUFFER_TYPE_MONO, &backBuffer))) {
 		d3dDevice->Release(); d3dDevice = 0;
@@ -865,7 +865,7 @@ gxGraphics* gxRuntime::openExclusiveGraphics(int w, int h, int d, bool d3d) {
 	d3dpp.EnableAutoDepthStencil = FALSE;
 
 	if (FAILED(this->d3d->CreateDevice(D3DADAPTER_DEFAULT, D3DDEVTYPE_REF, hwnd,
-		D3DCREATE_SOFTWARE_VERTEXPROCESSING,
+		D3DCREATE_HARDWARE_VERTEXPROCESSING,
 		&d3dpp, &d3dDevice))) {
 		return 0;
 	}
