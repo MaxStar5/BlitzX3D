@@ -253,7 +253,12 @@ void gxScene::setTexState(int n, const TexState& state, bool tex_blend) {
 	setTSS(n, D3DTSS_BUMPENVMAT11, state.bumpEnvMat[1][1]);
 	setTSS(n, D3DTSS_BUMPENVLSCALE, state.bumpEnvScale);
 	setTSS(n, D3DTSS_BUMPENVLOFFSET, state.bumpEnvOffset);
-	setTSS(n, D3DTSS_ALPHAOP, (flags & gxCanvas::CANVAS_TEX_ALPHA) ? D3DTOP_MODULATE : D3DTOP_SELECTARG2);
+	if (flags & (gxCanvas::CANVAS_TEX_ALPHA | gxCanvas::CANVAS_TEX_MASK)) {
+		setTSS(n, D3DTSS_ALPHAOP, D3DTOP_SELECTARG1);
+	}
+	else {
+		setTSS(n, D3DTSS_ALPHAOP, D3DTOP_SELECTARG2);
+	}
 }
 
 int  gxScene::hwTexUnits() {
