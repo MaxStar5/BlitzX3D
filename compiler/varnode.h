@@ -4,8 +4,6 @@
 #include "varnode.h"
 
 struct VarNode : public Node {
-	DECLARE_ARENA_ALLOCATION()
-
 	Type* sem_type;
 
 	//get set var

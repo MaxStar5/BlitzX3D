@@ -9,34 +9,19 @@
 #include "../../MultiLang/MultiLang.h"
 
 #include <iomanip>
-#include <unordered_map>
 
-typedef std::unordered_map<std::string, Inst*> InstMap;
+typedef std::map<std::string, Inst*> InstMap;
 typedef InstMap::value_type InstPair;
 typedef InstMap::const_iterator InstIter;
 
 static InstMap instMap;
-static std::unordered_map<std::string, std::vector<Inst*>> instVariants;
 
 Assem_x86::Assem_x86(std::istream& in, Module* mod) :Assem(in, mod) {
 
-	static bool initialized = false;
-	if (!initialized) {
-		initialized = true;
-
-		for (int k = 0; ; ++k) {
-			const char* name = insts[k].name;
-			if (!name || name[0] == 0) break;
-
-			std::vector<Inst*> variants;
-			variants.push_back(&insts[k]);
-			int j = k + 1;
-			while (insts[j].name == 0) {
-				variants.push_back(&insts[j]);
-				++j;
-			}
-			instVariants[name] = variants;
-			k = j - 1;
+	//build instruction map, if not built already.
+	if(!instMap.size()) {
+		for(int k = 0; !insts[k].name || insts[k].name[0]; ++k) {
+			if(insts[k].name) instMap.insert(InstPair(insts[k].name, &insts[k]));
 		}
 	}
 }
@@ -140,19 +125,13 @@ void Assem_x86::assemInst(const std::string& name, const std::string& lhs, const
 		if(!(lop.mode & inst->lmode) || !(rop.mode & inst->rmode)) throw Ex(MultiLang::illegal_addressing_mode);
 	}
 	else {
-		auto it = instVariants.find(name);
-		if (it == instVariants.end())
-			throw Ex(MultiLang::unrecognized_instruction);
-
-		inst = nullptr;
-		for (Inst* candidate : it->second) {
-			if ((lop.mode & candidate->lmode) && (rop.mode & candidate->rmode)) {
-				inst = candidate;
-				break;
-			}
+		InstIter it = instMap.find(name);
+		if(it == instMap.end()) throw Ex(MultiLang::unrecognized_instruction);
+		inst = it->second;
+		for(;;) {
+			if((lop.mode & inst->lmode) && (rop.mode & inst->rmode)) break;
+			if((++inst)->name) throw Ex(MultiLang::illegal_addressing_mode);
 		}
-		if (!inst)
-			throw Ex(MultiLang::illegal_addressing_mode);
 	}
 
 	//16/32 bit modifier - NOP for now

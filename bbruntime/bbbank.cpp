@@ -9,7 +9,8 @@ struct bbBank {
 
 	bbBank(int sz) :size(sz) {
 		capacity = (size + 15) & ~15;
-		data = new char[capacity]();
+		data = new char[capacity];
+		memset(data, 0, size);
 	}
 	virtual ~bbBank() {
 		delete[] data;
@@ -31,7 +32,7 @@ struct bbBank {
 	}
 };
 
-static std::unordered_set<bbBank*> bank_set;
+static std::set<bbBank*> bank_set;
 
 static inline void debugBank(bbBank* b, const char* function) {
 	if (!bank_set.count(b)) {
