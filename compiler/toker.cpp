@@ -7,12 +7,13 @@
 #include <regex>
 #include <chrono>
 #include <functional>
+#include <unordered_map>
 
 int Toker::chars_toked;
 
 std::map<std::string, std::string> MacroDefines;
 
-static std::map<std::string, int> alphaTokes, lowerTokes;
+static std::unordered_map<std::string, int> alphaTokes, lowerTokes;
 
 static void makeKeywords()
 {
@@ -111,15 +112,14 @@ static void makeKeywords()
     alphaTokes["End While"] = WEND;
 #endif
 
-    std::map<std::string, int>::const_iterator it;
-    for (it = alphaTokes.begin(); it != alphaTokes.end(); ++it)
-    {
+    std::unordered_map<std::string, int>::const_iterator it;
+    for (it = alphaTokes.begin(); it != alphaTokes.end(); ++it) {
         lowerTokes[tolower(it->first)] = it->second;
     }
     made = true;
 }
 
-Toker::Toker(const std::string& file, std::istream& in, bool debug, bool preprocess) :inc_file(file), in(in), curr_row(-1), preprocess(preprocess)
+Toker::Toker(const std::string& file, std::istream& in, bool debug, bool preprocess) :inc_file(file), in(in), curr_row(-1), preprocess(preprocess), skipLine(false), noMacro(false)
 {
     if (preprocess) {
         MacroDefines["__DEBUG__"] = debug ? "True" : "False";
@@ -129,7 +129,7 @@ Toker::Toker(const std::string& file, std::istream& in, bool debug, bool preproc
     nextline();
 }
 
-std::map<std::string, int>& Toker::getKeywords()
+std::unordered_map<std::string, int>& Toker::getKeywords()
 {
     makeKeywords();
     return alphaTokes;
@@ -158,12 +158,6 @@ int Toker::lookAhead(int n)
 
 void Toker::nextline()
 {
-    static bool noMacro = false;
-    static std::vector<ConditionalState> conditionalStack;
-    static bool skipLine = false;
-    static const int maxMacroDepth = 100;
-    static int macroDepth = 0;
-
     ++curr_row;
     curr_toke = 0;
     tokes.clear();
@@ -405,46 +399,49 @@ void Toker::nextline()
             return;
         }
 
-        for (size_t i = 0; i < MacroDefines.size(); i++)
-        {
-            static auto replaceAll = [](const std::string_view& str) {
-                std::string result;
-                result.reserve(str.size());
+        static const int MAX_MACRO_DEPTH = 100;
+        static int macroDepth = 0;
+        if (macroDepth < MAX_MACRO_DEPTH) {
+            macroDepth++;
+            bool changed;
+            do {
+                changed = false;
+                std::string newLine;
                 size_t pos = 0;
-
-                while (pos < str.size()) {
-                    if (str[pos] == '"') {
-                        size_t endPos = str.find('"', pos + 1);
-                        if (endPos == std::string::npos) break;
-                        result.append(str.substr(pos, endPos - pos + 1));
-                        pos = endPos + 1;
+                while (pos < line.size()) {
+                    if (line[pos] == '"') {
+                        size_t end = pos + 1;
+                        while (end < line.size() && (line[end] != '"' || line[end - 1] == '\\'))
+                            ++end;
+                        if (end < line.size()) ++end;
+                        newLine += line.substr(pos, end - pos);
+                        pos = end;
                         continue;
                     }
-
+                    if (line[pos] == ';') {
+                        newLine += line.substr(pos);
+                        break;
+                    }
                     bool matched = false;
                     for (const auto& [name, value] : MacroDefines) {
-                        size_t matchPos = str.find(name, pos);
-                        if (matchPos == pos) {
-                            bool isStartValid = (matchPos == 0 || !isalnum(str[matchPos - 1]) && str[matchPos - 1] != '_');
-                            bool isEndValid = (matchPos + name.size() == str.size() || !isalnum(str[matchPos + name.size()]) && str[matchPos + name.size()] != '_');
-                            if (isStartValid && isEndValid) {
-                                result.append(value);
-                                pos += name.size();
-                                matched = true;
-                                break;
-                            }
+                        if (line.compare(pos, name.size(), name) == 0 &&
+                            (pos == 0 || (!isalnum(line[pos - 1]) && line[pos - 1] != '_')) &&
+                            (pos + name.size() == line.size() || (!isalnum(line[pos + name.size()]) && line[pos + name.size()] != '_'))) {
+                            newLine += value;
+                            pos += name.size();
+                            changed = true;
+                            matched = true;
+                            break;
                         }
                     }
-
                     if (!matched) {
-                        result.push_back(str[pos]);
+                        newLine += line[pos];
                         ++pos;
                     }
                 }
-
-                return result;
-                };
-            line = replaceAll(line);
+                line = std::move(newLine);
+            } while (changed);
+            macroDepth--;
         }
     }
 
@@ -509,7 +506,7 @@ void Toker::nextline()
                 }
             }
 
-            std::map<std::string, int>::iterator it = lowerTokes.find(ident);
+            auto it = lowerTokes.find(ident);
 
             if (it == lowerTokes.end())
             {
