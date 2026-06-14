@@ -361,7 +361,7 @@ void MainFrame::OnDestroy() {
 
 void MainFrame::setTitle(const std::string& s)
 {
-	SetWindowText(("Blitz3D TSS - " + s).c_str());
+	SetWindowText(("BlitzX3D - " + s).c_str());
 	return;
 }
 
