@@ -23,8 +23,8 @@ Please read [this document](EXTENDING.md).
 2. Select Release or Debug config and rebuild the entire solution.
 3. All done! You can find output files in the `_release` and `_release/bin` dirs. Feel free to delete `.pdb` and `.ilk` files here.
 
-- **Note:** BlitzX3D uses the OpenAL audio backend,
-when redistributing programs built with BlitzX3D, ensure the required OpenAL runtime libraries are included with your application if not already present on the system.
+- **Note:** BlitzX3D plans on using the OpenAL audio backend,
+when redistributing programs built with BlitzX3D in the future, ensure the required OpenAL runtime libraries are included with your application if not already present on the system.
 
 ## In memory of Mark Sibly
 
