@@ -22,6 +22,14 @@ public:
 	IDirect3DSurface8* getSurface()  const;
 	IDirect3DBaseTexture8* getTexture() const;
 
+	mutable int mod_cnt;
+
+	mutable IDirect3DTexture8* blit_tex;
+	mutable int blit_tex_mod_cnt;
+	mutable unsigned blit_tex_mask;
+
+	PixelFormat format;
+
 	void setModify(int n);
 	int  getModify() const;
 
@@ -44,7 +52,6 @@ private:
 
 	IDirect3DSurface8* cube_surfs[6];
 
-	mutable int mod_cnt;
 	mutable IDirect3DSurface8* t_surf;
 
 	mutable int locked_pitch, locked_cnt, lock_mod_cnt, remip_cnt;
@@ -54,8 +61,6 @@ private:
 	mutable unsigned* cm_mask;
 
 	RECT clip_rect;
-
-	PixelFormat format;
 
 	gxFont* font;
 	RECT viewport;
