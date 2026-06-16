@@ -58,6 +58,19 @@ void PixelFormat::setFormat(D3DFORMAT fmt) {
     asm_coder.CodePoint(point_code, depth, amask, rmask, gmask, bmask);
 }
 
+static void buildAlphaInverse(FIBITMAP* fib, BYTE* bits, int pitch, int w, int h) {
+    for (int y = 0; y < h; ++y) {
+        BYTE* src = FreeImage_GetScanLine(fib, h - 1 - y);
+        DWORD* dst = (DWORD*)(bits + y * pitch);
+        for (int x = 0; x < w; ++x) {
+            RGBQUAD* p = (RGBQUAD*)(src + x * 4);
+            unsigned avg = (p->rgbRed + p->rgbGreen + p->rgbBlue) / 3;
+            unsigned alpha = 255 - avg;
+            dst[x] = (alpha << 24) | ((DWORD)p->rgbRed << 16) | ((DWORD)p->rgbGreen << 8) | p->rgbBlue;
+        }
+    }
+}
+
 static void adjustTexSize(int* width, int* height, IDirect3DDevice8* dev) {
     D3DCAPS8 caps;
     if (FAILED(dev->GetDeviceCaps(&caps))) { *width = *height = 256; return; }
@@ -264,7 +277,7 @@ IDirect3DSurface8* ddUtil::loadDisplaySurface(const std::string& file, int flags
             }
         }
         else {
-            buildAlpha(fib32, bits, lr.Pitch, w, h, !(flags & gxCanvas::CANVAS_TEX_RGB));
+            buildAlphaInverse(fib32, bits, lr.Pitch, w, h);
         }
     }
     else {
@@ -357,7 +370,7 @@ IDirect3DTexture8* ddUtil::loadTextureSurface(const std::string& file, int flags
             for (int y = h; y < adjH; ++y) memset(bits + y * lr.Pitch, 0, adjW * sizeof(DWORD));
         }
         else {
-            buildAlpha(fib32, bits, lr.Pitch, w, h, !(flags & gxCanvas::CANVAS_TEX_RGB));
+            buildAlphaInverse(fib32, bits, lr.Pitch, w, h);
         }
     }
     else {
