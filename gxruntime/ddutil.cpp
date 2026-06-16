@@ -153,6 +153,30 @@ void ddUtil::copy(IDirect3DSurface8* dest_surf, int dx, int dy, int dw, int dh,
     src_surf->UnlockRect();
 }
 
+IDirect3DSurface8* ddUtil::createDisplaySurface(int w, int h, gxGraphics* gfx) {
+    IDirect3DSurface8* surf = nullptr;
+    gfx->dir3dDev->CreateImageSurface(w, h, D3DFMT_A8R8G8B8, &surf);
+    return surf;
+}
+
+IDirect3DTexture8* ddUtil::createTextureSurface(int w, int h, int flags, gxGraphics* gfx) {
+    IDirect3DDevice8* dev = gfx->dir3dDev;
+    adjustTexSize(&w, &h, dev);
+
+    bool hasAlpha = (flags & gxCanvas::CANVAS_TEX_ALPHA) != 0;
+    bool hasMask = (flags & gxCanvas::CANVAS_TEX_MASK) != 0;
+    bool hasMips = (flags & gxCanvas::CANVAS_TEX_MIPMAP) != 0;
+    bool isCube = (flags & gxCanvas::CANVAS_TEX_CUBE) != 0;
+
+    D3DFORMAT fmt = (hasAlpha || hasMask) ? D3DFMT_A8R8G8B8 : D3DFMT_X8R8G8B8;
+    if (flags & gxCanvas::CANVAS_TEX_HICOLOR) fmt = D3DFMT_A4R4G4B4;
+
+    UINT mipLevels = hasMips ? 0 : 1;
+    IDirect3DTexture8* tex = nullptr;
+    dev->CreateTexture(w, h, mipLevels, 0, fmt, D3DPOOL_MANAGED, &tex);
+    return tex;
+}
+
 static void buildMask(FIBITMAP* fib, BYTE* bits, int pitch, int w, int h) {
     for (int y = 0; y < h; ++y) {
         BYTE* src = FreeImage_GetScanLine(fib, h - 1 - y);
@@ -179,78 +203,92 @@ static void buildAlpha(FIBITMAP* fib, BYTE* bits, int pitch, int w, int h, bool 
     }
 }
 
-IDirect3DTexture8* ddUtil::createSurface(int width, int height, int flags, gxGraphics* gfx) {
-    IDirect3DDevice8* dev = gfx->dir3dDev;
-
-    bool isTexture = (flags & gxCanvas::CANVAS_TEXTURE) != 0;
-    bool hasMips = (flags & gxCanvas::CANVAS_TEX_MIPMAP) != 0 && isTexture;
-    bool isAlpha = (flags & gxCanvas::CANVAS_TEX_ALPHA) != 0;
-
-    if (isTexture) adjustTexSize(&width, &height, dev);
-
-    D3DFORMAT fmt = (isAlpha || (flags & gxCanvas::CANVAS_TEX_MASK)) ? D3DFMT_A8R8G8B8 : D3DFMT_X8R8G8B8;
-    if (flags & gxCanvas::CANVAS_TEX_HICOLOR) fmt = D3DFMT_A4R4G4B4;
-
-    UINT mipLevels = hasMips ? 0 : 1;
-    IDirect3DTexture8* tex = nullptr;
-    if (FAILED(dev->CreateTexture(width, height, mipLevels, 0, fmt, D3DPOOL_MANAGED, &tex))) return nullptr;
-    return tex;
-}
-
-IDirect3DTexture8* ddUtil::loadSurface(const std::string& file, int flags, gxGraphics* gfx,
-    int* outLogicalW, int* outLogicalH) {
+IDirect3DSurface8* ddUtil::loadDisplaySurface(const std::string& file, int flags, gxGraphics* gfx) {
     g_lastImageError.clear();
 
     FREE_IMAGE_FORMAT fif = FreeImage_GetFileType(file.c_str(), 0);
     if (fif == FIF_UNKNOWN) fif = FreeImage_GetFIFFromFilename(file.c_str());
-    if (fif == FIF_UNKNOWN) {
-        g_lastImageError = "Unsupported or unknown image format: " + file;
-        return nullptr;
-    }
+    if (fif == FIF_UNKNOWN) { g_lastImageError = "Unknown format: " + file; return nullptr; }
 
     FIBITMAP* fib = FreeImage_Load(fif, file.c_str(), 0);
-    if (!fib) {
-        g_lastImageError = "FreeImage_Load failed for: " + file;
-        return nullptr;
-    }
+    if (!fib) { g_lastImageError = "Load failed: " + file; return nullptr; }
 
-    int bpp = FreeImage_GetBPP(fib);
-    FIBITMAP* fib32 = nullptr;
-
-    if (bpp == 32) {
-        // manually create a copy since FreeImage_Clone is unavailable in this ver
-        int width = FreeImage_GetWidth(fib);
-        int height = FreeImage_GetHeight(fib);
-
-        fib32 = FreeImage_Allocate(width, height, 32, 0xFF, 0xFF00, 0xFF0000);
-        if (!fib32) {
-            g_lastImageError = "FreeImage_Allocate failed for 32-bit image: " + file;
-            FreeImage_Unload(fib);
-            return nullptr;
-        }
-        for (int y = 0; y < height; y++) {
-            memcpy(FreeImage_GetScanLine(fib32, y), FreeImage_GetScanLine(fib, y), width * 4);
-        }
+    FIBITMAP* fib32;
+    if (FreeImage_GetBPP(fib) == 32) {
+        fib32 = fib;
     }
     else {
         fib32 = FreeImage_ConvertTo32Bits(fib);
-        if (!fib32) {
-            g_lastImageError = "FreeImage_ConvertTo32Bits failed for: " + file;
-            FreeImage_Unload(fib);
-            return nullptr;
-        }
+        FreeImage_Unload(fib);
+        if (!fib32) { g_lastImageError = "ConvertTo32Bits failed: " + file; return nullptr; }
     }
-
-    FreeImage_Unload(fib);
 
     int w = FreeImage_GetWidth(fib32);
     int h = FreeImage_GetHeight(fib32);
 
-    if (outLogicalW) *outLogicalW = w;
-    if (outLogicalH) *outLogicalH = h;
+    IDirect3DSurface8* surf = nullptr;
+    if (FAILED(gfx->dir3dDev->CreateImageSurface(w, h, D3DFMT_A8R8G8B8, &surf))) {
+        g_lastImageError = "CreateImageSurface failed: " + file;
+        FreeImage_Unload(fib32);
+        return nullptr;
+    }
 
+    D3DLOCKED_RECT lr;
+    if (FAILED(surf->LockRect(&lr, nullptr, 0))) {
+        g_lastImageError = "LockRect failed: " + file;
+        surf->Release();
+        FreeImage_Unload(fib32);
+        return nullptr;
+    }
+
+    bool hasMask = (flags & gxCanvas::CANVAS_TEX_MASK) != 0;
+    bool hasAlpha = (flags & gxCanvas::CANVAS_TEX_ALPHA) != 0;
+    BYTE* bits = (BYTE*)lr.pBits;
+
+    if (hasMask)
+        buildMask(fib32, bits, lr.Pitch, w, h);
+    else if (hasAlpha)
+        buildAlpha(fib32, bits, lr.Pitch, w, h, !(flags & gxCanvas::CANVAS_TEX_RGB));
+    else {
+        for (int y = 0; y < h; ++y) {
+            BYTE* src = FreeImage_GetScanLine(fib32, h - 1 - y);
+            DWORD* dst = (DWORD*)(bits + y * lr.Pitch);
+            for (int x = 0; x < w; ++x) {
+                RGBQUAD* p = (RGBQUAD*)(src + x * 4);
+                dst[x] = 0xff000000 | ((DWORD)p->rgbRed << 16) | ((DWORD)p->rgbGreen << 8) | p->rgbBlue;
+            }
+        }
+    }
+
+    surf->UnlockRect();
+    FreeImage_Unload(fib32);
+    return surf;
+}
+
+IDirect3DTexture8* ddUtil::loadTextureSurface(const std::string& file, int flags, gxGraphics* gfx) {
+    g_lastImageError.clear();
+
+    FREE_IMAGE_FORMAT fif = FreeImage_GetFileType(file.c_str(), 0);
+    if (fif == FIF_UNKNOWN) fif = FreeImage_GetFIFFromFilename(file.c_str());
+    if (fif == FIF_UNKNOWN) { g_lastImageError = "Unknown format: " + file; return nullptr; }
+
+    FIBITMAP* fib = FreeImage_Load(fif, file.c_str(), 0);
+    if (!fib) { g_lastImageError = "Load failed: " + file; return nullptr; }
+
+    FIBITMAP* fib32;
+    if (FreeImage_GetBPP(fib) == 32) {
+        fib32 = fib;
+    }
+    else {
+        fib32 = FreeImage_ConvertTo32Bits(fib);
+        FreeImage_Unload(fib);
+        if (!fib32) { g_lastImageError = "ConvertTo32Bits failed: " + file; return nullptr; }
+    }
+
+    int w = FreeImage_GetWidth(fib32);
+    int h = FreeImage_GetHeight(fib32);
     int adjW = w, adjH = h;
-    if (!(flags & gxCanvas::CANVAS_NONDISPLAY)) adjustTexSize(&adjW, &adjH, gfx->dir3dDev);
+    adjustTexSize(&adjW, &adjH, gfx->dir3dDev);
 
     bool hasMask = (flags & gxCanvas::CANVAS_TEX_MASK) != 0;
     bool hasAlpha = (flags & gxCanvas::CANVAS_TEX_ALPHA) != 0;
@@ -259,54 +297,45 @@ IDirect3DTexture8* ddUtil::loadSurface(const std::string& file, int flags, gxGra
     D3DFORMAT fmt = (hasMask || hasAlpha) ? D3DFMT_A8R8G8B8 : D3DFMT_X8R8G8B8;
     UINT mipLevels = hasMips ? 0 : 1;
 
-    IDirect3DDevice8* dev = gfx->dir3dDev;
     IDirect3DTexture8* tex = nullptr;
-    HRESULT hr = dev->CreateTexture(adjW, adjH, mipLevels, 0, fmt, D3DPOOL_MANAGED, &tex);
-    if (FAILED(hr) || !tex) {
-        g_lastImageError = "CreateTexture failed for " + file + " (HRESULT " + std::to_string(hr) + ")";
+    HRESULT hr = gfx->dir3dDev->CreateTexture(adjW, adjH, mipLevels, 0, fmt, D3DPOOL_MANAGED, &tex);
+    if (FAILED(hr)) {
+        g_lastImageError = "CreateTexture failed: " + file;
         FreeImage_Unload(fib32);
         return nullptr;
     }
 
     D3DLOCKED_RECT lr;
-    if (FAILED(tex->LockRect(0, &lr, nullptr, 0))) {
-        g_lastImageError = "LockRect failed for " + file;
+    hr = tex->LockRect(0, &lr, nullptr, 0);
+    if (FAILED(hr)) {
+        g_lastImageError = "LockRect failed: " + file;
         tex->Release();
         FreeImage_Unload(fib32);
         return nullptr;
     }
 
     BYTE* bits = (BYTE*)lr.pBits;
-    for (int y = 0; y < h && y < adjH; ++y) {
-        BYTE* src = FreeImage_GetScanLine(fib32, h - 1 - y);
-        DWORD* dst = (DWORD*)(bits + y * lr.Pitch);
-        for (int x = 0; x < w && x < adjW; ++x) {
-            RGBQUAD* p = (RGBQUAD*)(src + x * 4);
-            DWORD argb = ((DWORD)p->rgbReserved << 24) |
-                ((DWORD)p->rgbRed << 16) |
-                ((DWORD)p->rgbGreen << 8) |
-                (DWORD)p->rgbBlue;
-            if (hasMask) {
-                unsigned rgb = argb & 0xffffff;
-                argb = rgb ? (0xff000000 | rgb) : 0;
+    if (hasMask)
+        buildMask(fib32, bits, lr.Pitch, w, h);
+    else if (hasAlpha)
+        buildAlpha(fib32, bits, lr.Pitch, w, h, !(flags & gxCanvas::CANVAS_TEX_RGB));
+    else {
+        for (int y = 0; y < h && y < adjH; ++y) {
+            BYTE* src = FreeImage_GetScanLine(fib32, h - 1 - y);
+            DWORD* dst = (DWORD*)(bits + y * lr.Pitch);
+            for (int x = 0; x < w && x < adjW; ++x) {
+                RGBQUAD* p = (RGBQUAD*)(src + x * 4);
+                dst[x] = 0xff000000 | ((DWORD)p->rgbRed << 16) | ((DWORD)p->rgbGreen << 8) | p->rgbBlue;
             }
-            else if (hasAlpha) {
-                unsigned lum = (((argb >> 16) & 0xff) + ((argb >> 8) & 0xff) + (argb & 0xff)) / 3;
-                argb = (lum << 24) | (argb & 0xffffff) | 0xffffff;
-            }
-            dst[x] = argb;
+            // zero padding so it never bleeds into bilinear samples
+            if (w < adjW) memset(dst + w, 0, (adjW - w) * sizeof(DWORD));
         }
-
-        // zero padding so it never bleeds into bilinear samples
-        if (w < adjW) memset(dst + w, 0, (adjW - w) * sizeof(DWORD));
+        for (int y = h; y < adjH; ++y) memset(bits + y * lr.Pitch, 0, adjW * sizeof(DWORD));
     }
-
-    for (int y = h; y < adjH; ++y) memset(bits + y * lr.Pitch, 0, adjW * sizeof(DWORD));
 
     tex->UnlockRect(0);
     FreeImage_Unload(fib32);
 
     if (hasMips) buildMipMaps(tex);
-
     return tex;
 }

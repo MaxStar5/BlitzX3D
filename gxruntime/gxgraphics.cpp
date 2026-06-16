@@ -201,20 +201,33 @@ void gxGraphics::closeMovie(gxMovie* m) {
 }
 
 gxCanvas* gxGraphics::createCanvas(int w, int h, int flags) {
-	IDirect3DTexture8* tex = ddUtil::createSurface(w, h, flags, this);
-	if (!tex) return nullptr;
-	gxCanvas* c = new gxCanvas(this, tex, flags);
+	if (flags & gxCanvas::CANVAS_TEXTURE) {
+		IDirect3DTexture8* tex = ddUtil::createTextureSurface(w, h, flags, this);
+		if (!tex) return nullptr;
+		gxCanvas* c = new gxCanvas(this, tex, flags);
+		canvas_set.insert(c);
+		c->cls();
+		return c;
+	}
+	IDirect3DSurface8* surf = ddUtil::createDisplaySurface(w, h, this);
+	if (!surf) return nullptr;
+	gxCanvas* c = new gxCanvas(this, surf, flags);
 	canvas_set.insert(c);
 	c->cls();
 	return c;
 }
 
 gxCanvas* gxGraphics::loadCanvas(const std::string& f, int flags) {
-	int logW = 0, logH = 0;
-	IDirect3DTexture8* tex = ddUtil::loadSurface(f, flags, this, &logW, &logH);
-	if (!tex) return nullptr;
-	gxCanvas* c = new gxCanvas(this, tex, flags);
-	if (logW > 0 && logH > 0) c->setLogicalSize(logW, logH);
+	if (flags & gxCanvas::CANVAS_TEXTURE) {
+		IDirect3DTexture8* tex = ddUtil::loadTextureSurface(f, flags, this);
+		if (!tex) return nullptr;
+		gxCanvas* c = new gxCanvas(this, tex, flags);
+		canvas_set.insert(c);
+		return c;
+	}
+	IDirect3DSurface8* surf = ddUtil::loadDisplaySurface(f, flags, this);
+	if (!surf) return nullptr;
+	gxCanvas* c = new gxCanvas(this, surf, flags);
 	canvas_set.insert(c);
 	return c;
 }

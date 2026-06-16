@@ -617,6 +617,47 @@ static void restoreBlitState(IDirect3DDevice8* dev, SavedBlitState& s) {
     if (s.oldTex) s.oldTex->Release();
 }
 
+static bool isRenderTarget(IDirect3DSurface8* s) {
+    D3DSURFACE_DESC desc;
+    return SUCCEEDED(s->GetDesc(&desc)) && (desc.Usage & D3DUSAGE_RENDERTARGET);
+}
+
+static void cpuBlit(gxCanvas* dest, const RECT& dest_r, gxCanvas* src, const RECT& src_r, bool solid) {
+    int dw = dest_r.right - dest_r.left;
+    int dh = dest_r.bottom - dest_r.top;
+    int sw = src_r.right - src_r.left;
+    int sh = src_r.bottom - src_r.top;
+    bool stretch = (dw != sw || dh != sh);
+
+    D3DLOCKED_RECT srcLR, dstLR;
+    if (FAILED(src->surf->LockRect(&srcLR, nullptr, D3DLOCK_READONLY))) return;
+    if (FAILED(dest->surf->LockRect(&dstLR, nullptr, 0))) { src->surf->UnlockRect(); return; }
+
+    const PixelFormat& sf = src->format;
+    const PixelFormat& df = dest->format;
+    int sp = sf.getPitch(), dp = df.getPitch();
+
+    unsigned maskRGB = solid ? ~0u : (sf.toARGB(src->mask_surf) & 0x00ffffffu);
+    bool doMask = (maskRGB != ~0u);
+
+    for (int y = 0; y < dh; ++y) {
+        int sy = stretch ? (y * sh / dh) : y;
+        const unsigned char* srow = (const unsigned char*)srcLR.pBits
+            + (src_r.top + sy) * srcLR.Pitch + src_r.left * sp;
+        unsigned char* drow = (unsigned char*)dstLR.pBits
+            + (dest_r.top + y) * dstLR.Pitch + dest_r.left * dp;
+        for (int x = 0; x < dw; ++x) {
+            int sx = stretch ? (x * sw / dw) : x;
+            unsigned argb = sf.toARGB(sf.getPixel((void*)(srow + sx * sp)));
+            if (doMask && (argb & 0x00ffffffu) == maskRGB) continue;
+            df.setPixel(drow + x * dp, df.fromARGB(argb));
+        }
+    }
+
+    dest->surf->UnlockRect();
+    src->surf->UnlockRect();
+}
+
 void gxCanvas::blit(int x, int y, gxCanvas* src, int src_x, int src_y,
     int src_w, int src_h, bool solid)
 {
@@ -628,6 +669,12 @@ void gxCanvas::blit(int x, int y, gxCanvas* src, int src_x, int src_y,
 
     if (!clip(&dest_r, &src_r)) return;
     if (!::clip(src->clip_rect, &src_r, &dest_r)) return;
+
+    if (!isRenderTarget(surf)) {
+        cpuBlit(this, dest_r, src, src_r, solid);
+        damage(dest_r);
+        return;
+    }
 
     IDirect3DDevice8* dev = graphics->dir3dDev;
     if (!dev) return;
@@ -676,6 +723,12 @@ void gxCanvas::blitstretch(int x, int y, int w, int h,
     src_r.bottom = src_y + clipBottom * src_h / h;
 
     if (!::clip(src->clip_rect, &src_r)) return;
+
+    if (!isRenderTarget(surf)) {
+        cpuBlit(this, dest_r, src, src_r, solid);
+        damage(dest_r);
+        return;
+    }
 
     IDirect3DDevice8* dev = graphics->dir3dDev;
     if (!dev) return;

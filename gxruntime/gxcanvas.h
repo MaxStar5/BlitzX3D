@@ -32,6 +32,8 @@ public:
 
 	RECT clip_rect;
 
+	unsigned mask_surf, color_surf, color_argb, clsColor_surf;
+
 	void setModify(int n);
 	int  getModify() const;
 
@@ -66,7 +68,6 @@ private:
 	gxFont* font;
 	RECT viewport;
 	int origin_x, origin_y, handle_x, handle_y;
-	unsigned mask_surf, color_surf, color_argb, clsColor_surf;
 
 	void updateBitMask(const RECT& r) const;
 
