@@ -243,12 +243,30 @@ IDirect3DSurface8* ddUtil::loadDisplaySurface(const std::string& file, int flags
 
     bool hasMask = (flags & gxCanvas::CANVAS_TEX_MASK) != 0;
     bool hasAlpha = (flags & gxCanvas::CANVAS_TEX_ALPHA) != 0;
+    bool hasActualAlpha = (FreeImage_IsTransparent(fib32) == TRUE);
     BYTE* bits = (BYTE*)lr.pBits;
 
-    if (hasMask)
+    if (hasMask) {
         buildMask(fib32, bits, lr.Pitch, w, h);
-    else if (hasAlpha)
-        buildAlpha(fib32, bits, lr.Pitch, w, h, !(flags & gxCanvas::CANVAS_TEX_RGB));
+    }
+    else if (hasAlpha) {
+        if (hasActualAlpha) {
+            for (int y = 0; y < h; ++y) {
+                BYTE* src = FreeImage_GetScanLine(fib32, h - 1 - y);
+                DWORD* dst = (DWORD*)(bits + y * lr.Pitch);
+                for (int x = 0; x < w; ++x) {
+                    RGBQUAD* p = (RGBQUAD*)(src + x * 4);
+                    dst[x] = ((DWORD)p->rgbReserved << 24) |
+                        ((DWORD)p->rgbRed << 16) |
+                        ((DWORD)p->rgbGreen << 8) |
+                        p->rgbBlue;
+                }
+            }
+        }
+        else {
+            buildAlpha(fib32, bits, lr.Pitch, w, h, !(flags & gxCanvas::CANVAS_TEX_RGB));
+        }
+    }
     else {
         for (int y = 0; y < h; ++y) {
             BYTE* src = FreeImage_GetScanLine(fib32, h - 1 - y);
@@ -293,8 +311,11 @@ IDirect3DTexture8* ddUtil::loadTextureSurface(const std::string& file, int flags
     bool hasMask = (flags & gxCanvas::CANVAS_TEX_MASK) != 0;
     bool hasAlpha = (flags & gxCanvas::CANVAS_TEX_ALPHA) != 0;
     bool hasMips = (flags & gxCanvas::CANVAS_TEX_MIPMAP) != 0;
+    bool hasActualAlpha = (FreeImage_IsTransparent(fib32) == TRUE);
 
-    D3DFORMAT fmt = (hasMask || hasAlpha) ? D3DFMT_A8R8G8B8 : D3DFMT_X8R8G8B8;
+    D3DFORMAT fmt = D3DFMT_A8R8G8B8;
+    if (flags & gxCanvas::CANVAS_TEX_HICOLOR) fmt = D3DFMT_A4R4G4B4;
+
     UINT mipLevels = hasMips ? 0 : 1;
 
     IDirect3DTexture8* tex = nullptr;
@@ -315,10 +336,30 @@ IDirect3DTexture8* ddUtil::loadTextureSurface(const std::string& file, int flags
     }
 
     BYTE* bits = (BYTE*)lr.pBits;
-    if (hasMask)
+
+    if (hasMask) {
         buildMask(fib32, bits, lr.Pitch, w, h);
-    else if (hasAlpha)
-        buildAlpha(fib32, bits, lr.Pitch, w, h, !(flags & gxCanvas::CANVAS_TEX_RGB));
+    }
+    else if (hasAlpha) {
+        if (hasActualAlpha) {
+            for (int y = 0; y < h && y < adjH; ++y) {
+                BYTE* src = FreeImage_GetScanLine(fib32, h - 1 - y);
+                DWORD* dst = (DWORD*)(bits + y * lr.Pitch);
+                for (int x = 0; x < w && x < adjW; ++x) {
+                    RGBQUAD* p = (RGBQUAD*)(src + x * 4);
+                    dst[x] = ((DWORD)p->rgbReserved << 24) |
+                        ((DWORD)p->rgbRed << 16) |
+                        ((DWORD)p->rgbGreen << 8) |
+                        p->rgbBlue;
+                }
+                if (w < adjW) memset(dst + w, 0, (adjW - w) * sizeof(DWORD));
+            }
+            for (int y = h; y < adjH; ++y) memset(bits + y * lr.Pitch, 0, adjW * sizeof(DWORD));
+        }
+        else {
+            buildAlpha(fib32, bits, lr.Pitch, w, h, !(flags & gxCanvas::CANVAS_TEX_RGB));
+        }
+    }
     else {
         for (int y = 0; y < h && y < adjH; ++y) {
             BYTE* src = FreeImage_GetScanLine(fib32, h - 1 - y);
