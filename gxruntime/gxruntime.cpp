@@ -24,6 +24,7 @@ struct gxRuntime::GfxMode {
 struct gxRuntime::GfxDriver {
 	D3DADAPTER_IDENTIFIER8 identifier;
 	std::vector<GfxMode*> modes;
+	UINT adapter;
 };
 
 static const int static_ws = WS_VISIBLE | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX;
@@ -800,7 +801,7 @@ bool gxRuntime::setDisplayMode(int w, int h, int d, bool d3d) {
 	else if (d == 16) format = D3DFMT_R5G6B5;
 	else return false;
 
-	HRESULT hr = this->d3d->CheckDeviceType(D3DADAPTER_DEFAULT, D3DDEVTYPE_HAL, format, format, FALSE);
+	HRESULT hr = this->d3d->CheckDeviceType(curr_driver->adapter, D3DDEVTYPE_HAL, format, format, FALSE);
 	if (FAILED(hr)) return false;
 
 	d3dpp.BackBufferWidth = w;
@@ -822,12 +823,11 @@ gxGraphics* gxRuntime::openWindowedGraphics(int w, int h, int d, bool d3d) {
 	d3dpp.BackBufferHeight = h;
 
 	D3DDISPLAYMODE mode;
-	if (FAILED(this->d3d->GetAdapterDisplayMode(D3DADAPTER_DEFAULT, &mode))) return 0;
+	if (FAILED(this->d3d->GetAdapterDisplayMode(curr_driver->adapter, &mode))) return 0;
 
-	d3dpp.BackBufferFormat =
-		(mode.Format == D3DFMT_R8G8B8 || mode.Format == D3DFMT_A8R8G8B8 || mode.Format == D3DFMT_X8R8G8B8) ? mode.Format : D3DFMT_X8R8G8B8;
+	d3dpp.BackBufferFormat = (mode.Format == D3DFMT_R8G8B8 || mode.Format == D3DFMT_A8R8G8B8 || mode.Format == D3DFMT_X8R8G8B8) ? mode.Format : D3DFMT_X8R8G8B8;
 
-	if (FAILED(this->d3d->CreateDevice(D3DADAPTER_DEFAULT, D3DDEVTYPE_HAL, hwnd, D3DCREATE_HARDWARE_VERTEXPROCESSING, &d3dpp, &d3dDevice))) return 0;
+	if (FAILED(this->d3d->CreateDevice(curr_driver->adapter, D3DDEVTYPE_HAL, hwnd, D3DCREATE_HARDWARE_VERTEXPROCESSING, &d3dpp, &d3dDevice))) return 0;
 
 	if (FAILED(d3dDevice->GetBackBuffer(0, D3DBACKBUFFER_TYPE_MONO, &backBuffer))) {
 		d3dDevice->Release(); d3dDevice = 0;
@@ -864,9 +864,7 @@ gxGraphics* gxRuntime::openExclusiveGraphics(int w, int h, int d, bool d3d) {
 	d3dpp.BackBufferCount = 1;
 	d3dpp.EnableAutoDepthStencil = FALSE;
 
-	if (FAILED(this->d3d->CreateDevice(D3DADAPTER_DEFAULT, D3DDEVTYPE_REF, hwnd,
-		D3DCREATE_HARDWARE_VERTEXPROCESSING,
-		&d3dpp, &d3dDevice))) {
+	if (FAILED(this->d3d->CreateDevice(curr_driver->adapter, D3DDEVTYPE_REF, hwnd, D3DCREATE_HARDWARE_VERTEXPROCESSING, &d3dpp, &d3dDevice))) {
 		return 0;
 	}
 
@@ -1060,6 +1058,7 @@ void gxRuntime::enumGfx() {
 		D3DADAPTER_IDENTIFIER8 id;
 		if (SUCCEEDED(d3d->GetAdapterIdentifier(i, 0, &id))) {
 			GfxDriver* d = new GfxDriver;
+			d->adapter = i;
 			d->identifier = id;
 			UINT modeCount = d3d->GetAdapterModeCount(i);
 			for (UINT j = 0; j < modeCount; ++j) {
