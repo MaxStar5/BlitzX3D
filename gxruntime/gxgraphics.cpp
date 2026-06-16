@@ -202,7 +202,7 @@ void gxGraphics::closeMovie(gxMovie* m) {
 
 gxCanvas* gxGraphics::createCanvas(int w, int h, int flags) {
 	IDirect3DTexture8* tex = ddUtil::createSurface(w, h, flags, this);
-	if (!tex) return 0;
+	if (!tex) return nullptr;
 	gxCanvas* c = new gxCanvas(this, tex, flags);
 	canvas_set.insert(c);
 	c->cls();
@@ -210,9 +210,11 @@ gxCanvas* gxGraphics::createCanvas(int w, int h, int flags) {
 }
 
 gxCanvas* gxGraphics::loadCanvas(const std::string& f, int flags) {
-	IDirect3DTexture8* tex = ddUtil::loadSurface(f, flags, this);
-	if (!tex) return 0;
+	int logW = 0, logH = 0;
+	IDirect3DTexture8* tex = ddUtil::loadSurface(f, flags, this, &logW, &logH);
+	if (!tex) return nullptr;
 	gxCanvas* c = new gxCanvas(this, tex, flags);
+	if (logW > 0 && logH > 0) c->setLogicalSize(logW, logH);
 	canvas_set.insert(c);
 	return c;
 }

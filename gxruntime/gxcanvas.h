@@ -30,6 +30,8 @@ public:
 
 	PixelFormat format;
 
+	RECT clip_rect;
+
 	void setModify(int n);
 	int  getModify() const;
 
@@ -60,7 +62,6 @@ private:
 	mutable int cm_pitch;
 	mutable unsigned* cm_mask;
 
-	RECT clip_rect;
 
 	gxFont* font;
 	RECT viewport;
@@ -139,6 +140,9 @@ public:
 
 	void setCubeMode(int mode);
 	void setCubeFace(int face);
+
+	int logical_w, logical_h;
+	void setLogicalSize(int w, int h) { logical_w = w; logical_h = h; }
 
 	//ACCESSORS
 	int getWidth()const;

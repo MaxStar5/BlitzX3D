@@ -112,6 +112,8 @@ gxCanvas::gxCanvas(gxGraphics* g, IDirect3DSurface8* s, int f) :
     clip_rect.left = clip_rect.top = 0;
     clip_rect.right = desc.Width;
     clip_rect.bottom = desc.Height;
+    logical_w = desc.Width;
+    logical_h = desc.Height;
     cm_pitch = (clip_rect.right + 31) / 32 + 1;
     setMask(0); setColor(~0); setClsColor(0);
     setOrigin(0, 0); setHandle(0, 0);
@@ -135,6 +137,8 @@ gxCanvas::gxCanvas(gxGraphics* g, IDirect3DTexture8* t, int f) :
     clip_rect.left = clip_rect.top = 0;
     clip_rect.right = desc.Width;
     clip_rect.bottom = desc.Height;
+    logical_w = desc.Width;
+    logical_h = desc.Height;
     cm_pitch = (clip_rect.right + 31) / 32 + 1;
     setMask(0); setColor(~0); setClsColor(0);
     setOrigin(0, 0); setHandle(0, 0);
@@ -169,6 +173,8 @@ gxCanvas::gxCanvas(gxGraphics* g, IDirect3DCubeTexture8* ct, int f) :
     clip_rect.left = clip_rect.top = 0;
     clip_rect.right = desc.Width;
     clip_rect.bottom = desc.Height;
+    logical_w = desc.Width;
+    logical_h = desc.Height;
     cm_pitch = (clip_rect.right + 31) / 32 + 1;
     setMask(0); setColor(~0); setClsColor(0);
     setOrigin(0, 0); setHandle(0, 0);
@@ -465,19 +471,21 @@ static IDirect3DTexture8* getOrBuildBlitTex(IDirect3DDevice8* dev, gxCanvas* src
 
     if (src->blit_tex) { src->blit_tex->Release(); src->blit_tex = nullptr; }
 
-    int w = src->getWidth();
-    int h = src->getHeight();
+    int texW = src->clip_rect.right;
+    int texH = src->clip_rect.bottom;
+    int logW = src->logical_w;
+    int logH = src->logical_h;
 
     IDirect3DTexture8* newTex = nullptr;
-    if (FAILED(dev->CreateTexture(w, h, 1, 0, D3DFMT_A8R8G8B8, D3DPOOL_MANAGED, &newTex)))
+    if (FAILED(dev->CreateTexture(texW, texH, 1, 0, D3DFMT_A8R8G8B8, D3DPOOL_MANAGED, &newTex)))
         return nullptr;
 
     IDirect3DSurface8* texSurf = nullptr;
     if (FAILED(newTex->GetSurfaceLevel(0, &texSurf))) { newTex->Release(); return nullptr; }
 
     D3DLOCKED_RECT srcLR, dstLR;
-    RECT fullRect = { 0, 0, w, h };
-    if (FAILED(src->surf->LockRect(&srcLR, &fullRect, D3DLOCK_READONLY))) {
+    RECT srcRect = { 0, 0, texW, texH };
+    if (FAILED(src->surf->LockRect(&srcLR, &srcRect, D3DLOCK_READONLY))) {
         texSurf->Release(); newTex->Release(); return nullptr;
     }
     if (FAILED(texSurf->LockRect(&dstLR, nullptr, 0))) {
@@ -488,17 +496,23 @@ static IDirect3DTexture8* getOrBuildBlitTex(IDirect3DDevice8* dev, gxCanvas* src
     const PixelFormat& fmt = src->format;
     int pitch = fmt.getPitch();
 
-    for (int y = 0; y < h; ++y) {
+    for (int y = 0; y < texH; ++y) {
         const unsigned char* srcRow = (const unsigned char*)srcLR.pBits + y * srcLR.Pitch;
         unsigned* dstRow = (unsigned*)((unsigned char*)dstLR.pBits + y * dstLR.Pitch);
-        for (int x = 0; x < w; ++x) {
-            unsigned argb = fmt.toARGB(fmt.getPixel((void*)(srcRow + x * pitch)));
-            if (doMask && (argb & 0x00ffffffu) == maskRGB)
-                argb = 0x00000000u;   // fully transparent
-            else
-                argb |= 0xff000000u;  // fully opaque
-            dstRow[x] = argb;
+        if (y < logH) {
+            for (int x = 0; x < logW; ++x) {
+                unsigned argb = fmt.toARGB(fmt.getPixel((void*)(srcRow + x * pitch)));
+                if (doMask && (argb & 0x00ffffffu) == maskRGB)
+                    argb = 0x00000000u;   // fully transparent
+                else
+                    argb |= 0xff000000u;  // fully opaque
+                dstRow[x] = argb;
+            }
         }
+
+        // zero out padding it never bleeds into samples!!
+        if (logW < texW) memset(dstRow + logW, 0, (texW - logW) * sizeof(unsigned));
+        if (y >= logH) memset(dstRow, 0, texW * sizeof(unsigned));
     }
 
     texSurf->UnlockRect();
@@ -627,15 +641,13 @@ void gxCanvas::blit(int x, int y, gxCanvas* src, int src_x, int src_y,
 
     dev->SetRenderTarget(surf, nullptr);
 
-    D3DSURFACE_DESC surfDesc;
-    surf->GetDesc(&surfDesc);
-    D3DVIEWPORT8 vp = { 0, 0, surfDesc.Width, surfDesc.Height, 0.0f, 1.0f };
+    D3DVIEWPORT8 vp = { 0, 0, (DWORD)clip_rect.right, (DWORD)clip_rect.bottom, 0.0f, 1.0f };
     dev->SetViewport(&vp);
 
     setupBlitRenderState(dev, solid);
 
     dev->BeginScene();
-    drawBlitQuad(dev, blitTex, dest_r, src_r, src->getWidth(), src->getHeight());
+    drawBlitQuad(dev, blitTex, dest_r, src_r, src->clip_rect.right, src->clip_rect.bottom);
     dev->EndScene();
 
     restoreBlitState(dev, saved);
@@ -677,9 +689,7 @@ void gxCanvas::blitstretch(int x, int y, int w, int h,
 
     dev->SetRenderTarget(surf, nullptr);
 
-    D3DSURFACE_DESC surfDesc;
-    surf->GetDesc(&surfDesc);
-    D3DVIEWPORT8 vp = { 0, 0, surfDesc.Width, surfDesc.Height, 0.0f, 1.0f };
+    D3DVIEWPORT8 vp = { 0, 0, (DWORD)clip_rect.right, (DWORD)clip_rect.bottom, 0.0f, 1.0f };
     dev->SetViewport(&vp);
 
     setupBlitRenderState(dev, solid);
@@ -687,7 +697,7 @@ void gxCanvas::blitstretch(int x, int y, int w, int h,
     dev->SetTextureStageState(0, D3DTSS_MINFILTER, D3DTEXF_LINEAR);
 
     dev->BeginScene();
-    drawBlitQuad(dev, blitTex, dest_r, src_r, src->getWidth(), src->getHeight());
+    drawBlitQuad(dev, blitTex, dest_r, src_r, src->clip_rect.right, src->clip_rect.bottom);
     dev->EndScene();
 
     restoreBlitState(dev, saved);
@@ -713,8 +723,8 @@ void gxCanvas::text(int x, int y, const std::string& t) {
     if (e > b) font->render(this, format.toARGB(color_surf), x, y, t.substr(b, e - b));
 }
 
-int gxCanvas::getWidth()  const { return clip_rect.right; }
-int gxCanvas::getHeight() const { return clip_rect.bottom; }
+int gxCanvas::getWidth()  const { return logical_w; }
+int gxCanvas::getHeight() const { return logical_h; }
 int gxCanvas::getDepth()  const { return format.getDepth(); }
 
 void gxCanvas::getOrigin(int* x, int* y)  const { *x = origin_x; *y = origin_y; }

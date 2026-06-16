@@ -185,32 +185,20 @@ IDirect3DTexture8* ddUtil::createSurface(int width, int height, int flags, gxGra
     bool isTexture = (flags & gxCanvas::CANVAS_TEXTURE) != 0;
     bool hasMips = (flags & gxCanvas::CANVAS_TEX_MIPMAP) != 0 && isTexture;
     bool isAlpha = (flags & gxCanvas::CANVAS_TEX_ALPHA) != 0;
-    bool isCube = (flags & gxCanvas::CANVAS_TEX_CUBE) != 0;
 
     if (isTexture) adjustTexSize(&width, &height, dev);
 
     D3DFORMAT fmt = (isAlpha || (flags & gxCanvas::CANVAS_TEX_MASK)) ? D3DFMT_A8R8G8B8 : D3DFMT_X8R8G8B8;
     if (flags & gxCanvas::CANVAS_TEX_HICOLOR) fmt = D3DFMT_A4R4G4B4;
 
-    DWORD usage = 0;
-    D3DPOOL pool = D3DPOOL_MANAGED;
-
-    if (!isTexture) {
-        // off screen render target / canvas
-        usage = D3DUSAGE_DYNAMIC;
-        pool = D3DPOOL_DEFAULT;
-        fmt = D3DFMT_A8R8G8B8;
-    }
-
-    UINT mipLevels = hasMips ? 0 : 1;  // 0 = full mip chain
-
+    UINT mipLevels = hasMips ? 0 : 1;
     IDirect3DTexture8* tex = nullptr;
-    if (FAILED(dev->CreateTexture(width, height, mipLevels, usage, fmt, pool, &tex))) return nullptr;
-
+    if (FAILED(dev->CreateTexture(width, height, mipLevels, 0, fmt, D3DPOOL_MANAGED, &tex))) return nullptr;
     return tex;
 }
 
-IDirect3DTexture8* ddUtil::loadSurface(const std::string& file, int flags, gxGraphics* gfx) {
+IDirect3DTexture8* ddUtil::loadSurface(const std::string& file, int flags, gxGraphics* gfx,
+    int* outLogicalW, int* outLogicalH) {
     g_lastImageError.clear();
 
     FREE_IMAGE_FORMAT fif = FreeImage_GetFileType(file.c_str(), 0);
@@ -241,9 +229,7 @@ IDirect3DTexture8* ddUtil::loadSurface(const std::string& file, int flags, gxGra
             return nullptr;
         }
         for (int y = 0; y < height; y++) {
-            BYTE* src_bits = FreeImage_GetScanLine(fib, y);
-            BYTE* dst_bits = FreeImage_GetScanLine(fib32, y);
-            memcpy(dst_bits, src_bits, width * 4);
+            memcpy(FreeImage_GetScanLine(fib32, y), FreeImage_GetScanLine(fib, y), width * 4);
         }
     }
     else {
@@ -260,6 +246,9 @@ IDirect3DTexture8* ddUtil::loadSurface(const std::string& file, int flags, gxGra
     int w = FreeImage_GetWidth(fib32);
     int h = FreeImage_GetHeight(fib32);
 
+    if (outLogicalW) *outLogicalW = w;
+    if (outLogicalH) *outLogicalH = h;
+
     int adjW = w, adjH = h;
     if (!(flags & gxCanvas::CANVAS_NONDISPLAY)) adjustTexSize(&adjW, &adjH, gfx->dir3dDev);
 
@@ -272,13 +261,6 @@ IDirect3DTexture8* ddUtil::loadSurface(const std::string& file, int flags, gxGra
 
     IDirect3DDevice8* dev = gfx->dir3dDev;
     IDirect3DTexture8* tex = nullptr;
-    bool isNonDisplay = (flags & gxCanvas::CANVAS_NONDISPLAY) != 0;
-
-    //DWORD usage = isNonDisplay ? D3DUSAGE_DYNAMIC : 0;
-    //D3DPOOL pool = isNonDisplay ? D3DPOOL_DEFAULT : D3DPOOL_MANAGED;
-    DWORD usage = 0;
-    D3DPOOL pool = D3DPOOL_MANAGED;
-
     HRESULT hr = dev->CreateTexture(adjW, adjH, mipLevels, 0, fmt, D3DPOOL_MANAGED, &tex);
     if (FAILED(hr) || !tex) {
         g_lastImageError = "CreateTexture failed for " + file + " (HRESULT " + std::to_string(hr) + ")";
@@ -314,7 +296,13 @@ IDirect3DTexture8* ddUtil::loadSurface(const std::string& file, int flags, gxGra
             }
             dst[x] = argb;
         }
+
+        // zero padding so it never bleeds into bilinear samples
+        if (w < adjW) memset(dst + w, 0, (adjW - w) * sizeof(DWORD));
     }
+
+    for (int y = h; y < adjH; ++y) memset(bits + y * lr.Pitch, 0, adjW * sizeof(DWORD));
+
     tex->UnlockRect(0);
     FreeImage_Unload(fib32);
 
