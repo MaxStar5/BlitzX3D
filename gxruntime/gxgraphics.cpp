@@ -159,38 +159,102 @@ bool gxGraphics::restore() {
 bool gxGraphics::changeDisplayMode(int width, int height, bool fullscreen, bool borderless) {
 	if (!dir3dDev) return false;
 
+	HWND hwnd = runtime->hwnd;
+
+	if (fullscreen) {
+		SetWindowLong(hwnd, GWL_STYLE, WS_VISIBLE | WS_POPUP);
+		SetWindowPos(hwnd, HWND_TOPMOST, 0, 0, width, height, SWP_FRAMECHANGED);
+		ShowCursor(FALSE);
+	}
+	else if (borderless) {
+		SetWindowLong(hwnd, GWL_STYLE, WS_VISIBLE | WS_POPUP);
+		int dw = GetSystemMetrics(SM_CXSCREEN);
+		int dh = GetSystemMetrics(SM_CYSCREEN);
+		SetWindowPos(hwnd, HWND_TOPMOST, 0, 0, dw, dh, SWP_FRAMECHANGED);
+		width = dw;
+		height = dh;
+	}
+	else {
+		DWORD style = WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX | WS_VISIBLE;
+		SetWindowLong(hwnd, GWL_STYLE, style);
+		RECT w_r, c_r;
+		GetWindowRect(hwnd, &w_r);
+		GetClientRect(hwnd, &c_r);
+		int borderX = (w_r.right - w_r.left) - (c_r.right - c_r.left);
+		int borderY = (w_r.bottom - w_r.top) - (c_r.bottom - c_r.top);
+		int cx = (GetSystemMetrics(SM_CXSCREEN) - width) / 2;
+		int cy = (GetSystemMetrics(SM_CYSCREEN) - height) / 2;
+		MoveWindow(hwnd, cx, cy, width + borderX, height + borderY, TRUE);
+	}
+
+	if (runtime->backBuffer) {
+		runtime->backBuffer->Release();
+		runtime->backBuffer = nullptr;
+	}
+	if (runtime->frontBuffer && runtime->frontBuffer != runtime->backBuffer) {
+		runtime->frontBuffer->Release();
+		runtime->frontBuffer = nullptr;
+	}
+
 	present_params.BackBufferWidth = width;
 	present_params.BackBufferHeight = height;
 	present_params.Windowed = !fullscreen;
+	if (fullscreen) {
+		present_params.FullScreen_RefreshRateInHz = D3DPRESENT_RATE_DEFAULT;
+		present_params.FullScreen_PresentationInterval = D3DPRESENT_INTERVAL_DEFAULT;
+	}
+	else {
+		present_params.FullScreen_RefreshRateInHz = 0;
+		present_params.FullScreen_PresentationInterval = 0;
+	}
 
 	HRESULT hr = dir3dDev->Reset(&present_params);
 	if (FAILED(hr)) {
+		char buf[256];
+		sprintf(buf, "Reset failed: 0x%08X", hr);
+		runtime->debugLog(buf);
 		return false;
 	}
 
 	IDirect3DSurface8* newBack = nullptr;
 	hr = dir3dDev->GetBackBuffer(0, D3DBACKBUFFER_TYPE_MONO, &newBack);
-	if (FAILED(hr) || !newBack) return false;
-
-	if (runtime->backBuffer) {
-		runtime->backBuffer->Release();
+	if (FAILED(hr) || !newBack) {
+		runtime->debugLog("GetBackBuffer failed");
+		return false;
 	}
 	runtime->backBuffer = newBack;
+	runtime->frontBuffer = newBack;
+	newBack->AddRef();
 	newBack->AddRef();
 
-	if (front_canvas) {
-		IDirect3DSurface8* oldFront = front_canvas->surf;
-		front_canvas->surf = newBack;
+	auto updateCanvas = [&](gxCanvas* canvas) {
+		if (!canvas) return;
+		if (canvas->surf) {
+			canvas->surf->Release();
+			canvas->surf = nullptr;
+		}
+		canvas->surf = newBack;
 		newBack->AddRef();
-		if (oldFront) oldFront->Release();
-	}
 
-	if (back_canvas) {
-		IDirect3DSurface8* oldBack = back_canvas->surf;
-		back_canvas->surf = newBack;
-		newBack->AddRef();
-		if (oldBack) oldBack->Release();
-	}
+		canvas->logical_w = width;
+		canvas->logical_h = height;
+		canvas->clip_rect.left = 0;
+		canvas->clip_rect.top = 0;
+		canvas->clip_rect.right = width;
+		canvas->clip_rect.bottom = height;
+		canvas->setViewport(0, 0, width, height);
+
+		if (canvas->z_surf) {
+			canvas->releaseZBuffer();
+			canvas->attachZBuffer();
+		}
+		};
+
+	updateCanvas(front_canvas);
+	updateCanvas(back_canvas);
+
+	InvalidateRect(hwnd, nullptr, FALSE);
+
 	return true;
 }
 
