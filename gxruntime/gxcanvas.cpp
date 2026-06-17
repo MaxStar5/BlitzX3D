@@ -56,41 +56,47 @@ static bool clip(const RECT& viewport, RECT* d, RECT* s) {
     return true;
 }
 
+class FillRectGuard {
+    IDirect3DDevice8* dev;
+    IDirect3DSurface8* oldRT;
+    IDirect3DSurface8* oldDS;
+    bool active;
+
+public:
+    FillRectGuard(IDirect3DDevice8* d) : dev(d), oldRT(nullptr), oldDS(nullptr), active(false) {
+        if (!dev) return;
+        dev->GetRenderTarget(&oldRT);
+        dev->GetDepthStencilSurface(&oldDS);
+        active = true;
+    }
+    // this is retarded
+    // but it works!
+    ~FillRectGuard() {
+        if (!active || !dev) return;
+        dev->SetRenderTarget(oldRT, oldDS);
+        if (oldRT) oldRT->Release();
+        if (oldDS) oldDS->Release();
+        active = false;
+    }
+
+    FillRectGuard(const FillRectGuard&) = delete;
+    FillRectGuard& operator=(const FillRectGuard&) = delete;
+};
+
 void gxCanvas::fillRect(const RECT& r, unsigned argb) {
     if (graphics && graphics->dir3dDev && locked_cnt == 0) {
         D3DSURFACE_DESC desc;
         if (SUCCEEDED(surf->GetDesc(&desc)) && (desc.Usage & D3DUSAGE_RENDERTARGET)) {
-            IDirect3DSurface8* oldRT = nullptr;
-            IDirect3DSurface8* oldDS = nullptr;
-            if (SUCCEEDED(graphics->dir3dDev->GetRenderTarget(&oldRT))) {
-                graphics->dir3dDev->GetDepthStencilSurface(&oldDS);
-                bool needRestore = false;
-                if (oldRT != surf) {
-                    if (SUCCEEDED(graphics->dir3dDev->SetRenderTarget(surf, nullptr)))
-                        needRestore = true;
-                    else {
-                        if (oldRT) oldRT->Release();
-                        if (oldDS) oldDS->Release();
-                        goto cpu_fallback;
-                    }
-                }
+            FillRectGuard guard(graphics->dir3dDev);
+            if (SUCCEEDED(graphics->dir3dDev->SetRenderTarget(surf, nullptr))) {
                 D3DRECT rect = { r.left, r.top, r.right, r.bottom };
                 if (SUCCEEDED(graphics->dir3dDev->Clear(1, &rect, D3DCLEAR_TARGET, argb, 0.0f, 0))) {
-                    if (needRestore)
-                        graphics->dir3dDev->SetRenderTarget(oldRT, oldDS);
-                    if (oldRT) oldRT->Release();
-                    if (oldDS) oldDS->Release();
                     return;
                 }
-                if (needRestore)
-                    graphics->dir3dDev->SetRenderTarget(oldRT, oldDS);
-                if (oldRT) oldRT->Release();
-                if (oldDS) oldDS->Release();
             }
         }
     }
 
-cpu_fallback:
     D3DLOCKED_RECT lr;
     if (FAILED(surf->LockRect(&lr, &r, 0))) return;
 
@@ -610,7 +616,9 @@ struct SavedBlitState {
     IDirect3DBaseTexture8* oldTex;
     D3DVIEWPORT8 oldVP;
     DWORD oldZ, oldAlphaTest, oldAlphaFunc, oldAlphaRef, oldAlphaBlend;
-    DWORD oldCOp, oldCArg1, oldAOp, oldMag, oldMin;
+    DWORD oldSrcBlend, oldDestBlend;
+    DWORD oldLighting, oldTextureFactor;
+    DWORD oldCOp, oldCArg1, oldCArg2, oldAOp, oldAArg1, oldMag, oldMin;
 };
 
 static void saveBlitState(IDirect3DDevice8* dev, SavedBlitState& s) {
@@ -620,12 +628,18 @@ static void saveBlitState(IDirect3DDevice8* dev, SavedBlitState& s) {
     dev->GetViewport(&s.oldVP);
     dev->GetRenderState(D3DRS_ZENABLE, &s.oldZ);
     dev->GetRenderState(D3DRS_ALPHABLENDENABLE, &s.oldAlphaBlend);
+    dev->GetRenderState(D3DRS_SRCBLEND, &s.oldSrcBlend);
+    dev->GetRenderState(D3DRS_DESTBLEND, &s.oldDestBlend);
     dev->GetRenderState(D3DRS_ALPHATESTENABLE, &s.oldAlphaTest);
     dev->GetRenderState(D3DRS_ALPHAFUNC, &s.oldAlphaFunc);
     dev->GetRenderState(D3DRS_ALPHAREF, &s.oldAlphaRef);
+    dev->GetRenderState(D3DRS_LIGHTING, &s.oldLighting);
+    dev->GetRenderState(D3DRS_TEXTUREFACTOR, &s.oldTextureFactor);
     dev->GetTextureStageState(0, D3DTSS_COLOROP, &s.oldCOp);
     dev->GetTextureStageState(0, D3DTSS_COLORARG1, &s.oldCArg1);
+    dev->GetTextureStageState(0, D3DTSS_COLORARG2, &s.oldCArg2);
     dev->GetTextureStageState(0, D3DTSS_ALPHAOP, &s.oldAOp);
+    dev->GetTextureStageState(0, D3DTSS_ALPHAARG1, &s.oldAArg1);
     dev->GetTextureStageState(0, D3DTSS_MAGFILTER, &s.oldMag);
     dev->GetTextureStageState(0, D3DTSS_MINFILTER, &s.oldMin);
 }
@@ -637,12 +651,18 @@ static void restoreBlitState(IDirect3DDevice8* dev, SavedBlitState& s) {
     dev->SetViewport(&s.oldVP);
     dev->SetRenderState(D3DRS_ZENABLE, s.oldZ);
     dev->SetRenderState(D3DRS_ALPHABLENDENABLE, s.oldAlphaBlend);
+    dev->SetRenderState(D3DRS_SRCBLEND, s.oldSrcBlend);
+    dev->SetRenderState(D3DRS_DESTBLEND, s.oldDestBlend);
     dev->SetRenderState(D3DRS_ALPHATESTENABLE, s.oldAlphaTest);
     dev->SetRenderState(D3DRS_ALPHAFUNC, s.oldAlphaFunc);
     dev->SetRenderState(D3DRS_ALPHAREF, s.oldAlphaRef);
+    dev->SetRenderState(D3DRS_LIGHTING, s.oldLighting);
+    dev->SetRenderState(D3DRS_TEXTUREFACTOR, s.oldTextureFactor);
     dev->SetTextureStageState(0, D3DTSS_COLOROP, s.oldCOp);
     dev->SetTextureStageState(0, D3DTSS_COLORARG1, s.oldCArg1);
+    dev->SetTextureStageState(0, D3DTSS_COLORARG2, s.oldCArg2);
     dev->SetTextureStageState(0, D3DTSS_ALPHAOP, s.oldAOp);
+    dev->SetTextureStageState(0, D3DTSS_ALPHAARG1, s.oldAArg1);
     dev->SetTextureStageState(0, D3DTSS_MAGFILTER, s.oldMag);
     dev->SetTextureStageState(0, D3DTSS_MINFILTER, s.oldMin);
     dev->SetTexture(0, s.oldTex);
@@ -783,6 +803,73 @@ void gxCanvas::blitstretch(int x, int y, int w, int h,
 
     dev->BeginScene();
     drawBlitQuad(dev, blitTex, dest_r, src_r, src->clip_rect.right, src->clip_rect.bottom);
+    dev->EndScene();
+
+    restoreBlitState(dev, saved);
+    damage(dest_r);
+}
+
+void gxCanvas::blitAlpha(int x, int y, gxCanvas* src,
+    int src_x, int src_y, int src_w, int src_h,
+    unsigned color_argb, bool filter) {
+    x += origin_x - src->handle_x;
+    y += origin_y - src->handle_y;
+
+    Rect dest_r(x, y, src_w, src_h);
+    Rect src_r(src_x, src_y, src_w, src_h);
+
+    if (!clip(&dest_r, &src_r)) return;
+    if (!::clip(src->clip_rect, &src_r, &dest_r)) return;
+
+    if (!isRenderTarget(surf)) {
+        return;
+    }
+
+    IDirect3DDevice8* dev = graphics->dir3dDev;
+    if (!dev) return;
+
+    IDirect3DBaseTexture8* tex = src->getTexture();
+    if (!tex) {
+        return;
+    }
+
+    SavedBlitState saved;
+    saveBlitState(dev, saved);
+
+    dev->SetRenderTarget(surf, nullptr);
+
+    D3DVIEWPORT8 vp = { 0, 0, (DWORD)clip_rect.right, (DWORD)clip_rect.bottom, 0.0f, 1.0f };
+    dev->SetViewport(&vp);
+
+    dev->SetRenderState(D3DRS_LIGHTING, FALSE);
+    dev->SetRenderState(D3DRS_ZENABLE, FALSE);
+    dev->SetRenderState(D3DRS_ALPHABLENDENABLE, TRUE);
+    dev->SetRenderState(D3DRS_SRCBLEND, D3DBLEND_SRCALPHA);
+    dev->SetRenderState(D3DRS_DESTBLEND, D3DBLEND_INVSRCALPHA);
+    dev->SetRenderState(D3DRS_ALPHATESTENABLE, FALSE);
+
+    dev->SetRenderState(D3DRS_TEXTUREFACTOR, color_argb);
+
+    dev->SetTextureStageState(0, D3DTSS_COLOROP, D3DTOP_MODULATE);
+    dev->SetTextureStageState(0, D3DTSS_COLORARG1, D3DTA_TEXTURE);
+    dev->SetTextureStageState(0, D3DTSS_COLORARG2, D3DTA_TFACTOR);
+
+    dev->SetTextureStageState(0, D3DTSS_ALPHAOP, D3DTOP_SELECTARG1);
+    dev->SetTextureStageState(0, D3DTSS_ALPHAARG1, D3DTA_TEXTURE);
+
+    if (filter) {
+        dev->SetTextureStageState(0, D3DTSS_MAGFILTER, D3DTEXF_LINEAR);
+        dev->SetTextureStageState(0, D3DTSS_MINFILTER, D3DTEXF_LINEAR);
+    }
+    else {
+        dev->SetTextureStageState(0, D3DTSS_MAGFILTER, D3DTEXF_POINT);
+        dev->SetTextureStageState(0, D3DTSS_MINFILTER, D3DTEXF_POINT);
+    }
+
+    dev->SetTexture(0, tex);
+
+    dev->BeginScene();
+    drawBlitQuad(dev, (IDirect3DTexture8*)tex, dest_r, src_r, src->clip_rect.right, src->clip_rect.bottom);
     dev->EndScene();
 
     restoreBlitState(dev, saved);

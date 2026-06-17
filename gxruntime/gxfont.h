@@ -22,6 +22,7 @@ public:
 	int charWidth(int c);
 	int charAdvance(int c);
 	int stringWidth(const std::string& text);
+	void setSmooth(bool enable) { smooth = enable; }
 
 	//ACCESSORS
 	int getWidth()const;							//width of widest char
@@ -43,6 +44,7 @@ public:
 	bool bold;
 	bool italic;
 	bool underlined;
+	bool smooth;
 private:
 	float getBaselinePosition()const;
 	float getUnderlinePosition()const;
