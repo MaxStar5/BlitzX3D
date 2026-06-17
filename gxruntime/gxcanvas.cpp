@@ -56,19 +56,48 @@ static bool clip(const RECT& viewport, RECT* d, RECT* s) {
     return true;
 }
 
-static void fillRect(IDirect3DSurface8* surf, const RECT& r, unsigned argb) {
+void gxCanvas::fillRect(const RECT& r, unsigned argb) {
+    if (graphics && graphics->dir3dDev && locked_cnt == 0) {
+        D3DSURFACE_DESC desc;
+        if (SUCCEEDED(surf->GetDesc(&desc)) && (desc.Usage & D3DUSAGE_RENDERTARGET)) {
+            IDirect3DSurface8* oldRT = nullptr;
+            IDirect3DSurface8* oldDS = nullptr;
+            if (SUCCEEDED(graphics->dir3dDev->GetRenderTarget(&oldRT))) {
+                graphics->dir3dDev->GetDepthStencilSurface(&oldDS);
+                bool needRestore = false;
+                if (oldRT != surf) {
+                    if (SUCCEEDED(graphics->dir3dDev->SetRenderTarget(surf, nullptr)))
+                        needRestore = true;
+                    else {
+                        if (oldRT) oldRT->Release();
+                        if (oldDS) oldDS->Release();
+                        goto cpu_fallback;
+                    }
+                }
+                D3DRECT rect = { r.left, r.top, r.right, r.bottom };
+                if (SUCCEEDED(graphics->dir3dDev->Clear(1, &rect, D3DCLEAR_TARGET, argb, 0.0f, 0))) {
+                    if (needRestore)
+                        graphics->dir3dDev->SetRenderTarget(oldRT, oldDS);
+                    if (oldRT) oldRT->Release();
+                    if (oldDS) oldDS->Release();
+                    return;
+                }
+                if (needRestore)
+                    graphics->dir3dDev->SetRenderTarget(oldRT, oldDS);
+                if (oldRT) oldRT->Release();
+                if (oldDS) oldDS->Release();
+            }
+        }
+    }
+
+cpu_fallback:
     D3DLOCKED_RECT lr;
     if (FAILED(surf->LockRect(&lr, &r, 0))) return;
 
-    D3DSURFACE_DESC desc;
-    surf->GetDesc(&desc);
-    PixelFormat fmt;
-    fmt.setFormat(desc.Format);
-
-    int pitch = fmt.getPitch();   // bytes per pixel
     int w = r.right - r.left;
     int h = r.bottom - r.top;
-    unsigned nat = fmt.fromARGB(argb);
+    unsigned nat = format.fromARGB(argb);
+    int pitch = format.getPitch();
 
     for (int y = 0; y < h; ++y) {
         unsigned char* row = (unsigned char*)lr.pBits + y * lr.Pitch;
@@ -86,7 +115,10 @@ static void fillRect(IDirect3DSurface8* surf, const RECT& r, unsigned argb) {
             unsigned char b1 = (nat >> 8) & 0xff;
             unsigned char b2 = (nat >> 16) & 0xff;
             unsigned char* p = row;
-            for (int x = 0; x < w; ++x) { p[0] = b0; p[1] = b1; p[2] = b2; p += 3; }
+            for (int x = 0; x < w; ++x) {
+                p[0] = b0; p[1] = b1; p[2] = b2;
+                p += 3;
+            }
         }
     }
     surf->UnlockRect();
@@ -347,7 +379,7 @@ void gxCanvas::setViewport(int x, int y, int w, int h) {
 }
 
 void gxCanvas::cls() {
-    fillRect(surf, viewport, format.toARGB(clsColor_surf));
+    fillRect(viewport, format.toARGB(clsColor_surf));
     damage(viewport);
 }
 
@@ -355,7 +387,7 @@ void gxCanvas::plot(int x, int y) {
     x += origin_x; if (x < viewport.left || x >= viewport.right)  return;
     y += origin_y; if (y < viewport.top || y >= viewport.bottom) return;
     Rect dest(x, y, 1, 1);
-    fillRect(surf, dest, format.toARGB(color_surf));
+    fillRect(dest, format.toARGB(color_surf));
     damage(dest);
 }
 
@@ -409,14 +441,14 @@ void gxCanvas::rect(int x, int y, int w, int h, bool solid) {
     if (!clip(&dest)) return;
     unsigned argb = format.toARGB(color_surf);
     if (solid) {
-        fillRect(surf, dest, argb);
+        fillRect(dest, argb);
         damage(dest);
         return;
     }
-    Rect r1(x, y, w, 1);           if (clip(&r1)) fillRect(surf, r1, argb);
-    Rect r2(x, y, 1, h);           if (clip(&r2)) fillRect(surf, r2, argb);
-    Rect r3(x + w - 1, y, 1, h);   if (clip(&r3)) fillRect(surf, r3, argb);
-    Rect r4(x, y + h - 1, w, 1);   if (clip(&r4)) fillRect(surf, r4, argb);
+    Rect r1(x, y, w, 1);           if (clip(&r1)) fillRect(r1, argb);
+    Rect r2(x, y, 1, h);           if (clip(&r2)) fillRect(r2, argb);
+    Rect r3(x + w - 1, y, 1, h);   if (clip(&r3)) fillRect(r3, argb);
+    Rect r4(x, y + h - 1, w, 1);   if (clip(&r4)) fillRect(r4, argb);
     damage(dest);
 }
 
@@ -436,7 +468,7 @@ void gxCanvas::oval(int x1, int y1, int w, int h, bool solid) {
             Rect dr; dr.top = t; dr.bottom = t + 1;
             dr.left = xa < viewport.left ? viewport.left : xa;
             dr.right = xb > viewport.right ? viewport.right : xb;
-            fillRect(surf, dr, argb);
+            fillRect(dr, argb);
         }
         damage(dest);
         return;
@@ -448,8 +480,8 @@ void gxCanvas::oval(int x1, int y1, int w, int h, bool solid) {
     for (; t <= hh; ++y, ++t) {
         float x = sqrtf(rsq - y * y) * ar;
         int xa = (int)floor(cx - x), xb = (int)floor(cx + x);
-        Rect r1(xa, t, p_xa - xa, 1); if (r1.right <= r1.left)r1.right = r1.left + 1; if (clip(&r1)) fillRect(surf, r1, argb);
-        Rect r2(p_xb, t, xb - p_xb, 1); if (r2.left >= r2.right)r2.left = r2.right - 1; if (clip(&r2)) fillRect(surf, r2, argb);
+        Rect r1(xa, t, p_xa - xa, 1); if (r1.right <= r1.left)r1.right = r1.left + 1; if (clip(&r1)) fillRect(r1, argb);
+        Rect r2(p_xb, t, xb - p_xb, 1); if (r2.left >= r2.right)r2.left = r2.right - 1; if (clip(&r2)) fillRect(r2, argb);
         p_xa = xa; p_xb = xb;
     }
     p_xa = p_xb = (int)cx;
@@ -458,8 +490,8 @@ void gxCanvas::oval(int x1, int y1, int w, int h, bool solid) {
     for (; t > hh; --y, --t) {
         float x = sqrtf(rsq - y * y) * ar;
         int xa = (int)floor(cx - x), xb = (int)floor(cx + x);
-        Rect r1(xa, t, p_xa - xa, 1); if (r1.right <= r1.left)r1.right = r1.left + 1; if (clip(&r1)) fillRect(surf, r1, argb);
-        Rect r2(p_xb, t, xb - p_xb, 1); if (r2.left >= r2.right)r2.left = r2.right - 1; if (clip(&r2)) fillRect(surf, r2, argb);
+        Rect r1(xa, t, p_xa - xa, 1); if (r1.right <= r1.left)r1.right = r1.left + 1; if (clip(&r1)) fillRect(r1, argb);
+        Rect r2(p_xb, t, xb - p_xb, 1); if (r2.left >= r2.right)r2.left = r2.right - 1; if (clip(&r2)) fillRect(r2, argb);
         p_xa = xa; p_xb = xb;
     }
     damage(dest);

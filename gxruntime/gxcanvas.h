@@ -103,6 +103,8 @@ public:
 		CUBESPACE_CAMERA = 4
 	};
 
+	void fillRect(const RECT& r, unsigned argb);
+
 	//MANIPULATORS
 	void setFont(gxFont* font);
 	void setMask(unsigned argb);
