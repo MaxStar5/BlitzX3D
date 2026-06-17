@@ -902,6 +902,10 @@ void bbCopyRectStretch(int sx, int sy, int w, int h, int dx, int dy, int dw, int
 
 
 gxFont* bbLoadFont(BBStr* name, int height, bool bold, bool italic, bool underlined) {
+    if (!gx_graphics) {
+        delete name;
+        return nullptr;
+    }
     gxFont* font = gx_graphics->loadFont(*name, height, bold, italic, underlined);
     delete name;
     return font;
@@ -1576,14 +1580,19 @@ bool graphics_create() {
     p_canvas = 0;
     filter = true;
     gx_driver = 0;
+    freeGraphics();
     auto_dirty = true;
     auto_midhandle = false;
-    gx_graphics = nullptr;
-    curr_clsColor = 0;
-    curr_color = 0xffffffff;
-    curr_font = nullptr;
-    gx_canvas = nullptr;
-    return true;
+    gx_graphics = gx_runtime->openGraphics(400, 300, 0, 0, gxGraphics::GRAPHICS_WINDOWED | 4); // do this so fonts arent null at launch like how DX7 managed it
+    if (gx_graphics)
+    {
+        curr_clsColor = 0;
+        curr_color = 0xffffffff;
+        curr_font = gx_graphics->getDefaultFont();
+        bbSetBuffer(bbFrontBuffer());
+        return true;
+    }
+    return false;
 }
 
 bool graphics_destroy()
