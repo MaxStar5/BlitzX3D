@@ -862,6 +862,12 @@ void bbText(int x, int y, BBStr* str, int xPos, int yPos)
     delete str;
 }
 
+void bbSetFontSmooth(int enable) {
+    if (curr_font) {
+        curr_font->setSmooth(enable != 0);
+    }
+}
+
 BBStr* bbConvertToANSI(BBStr* str)
 {
     BBStr* ret = new BBStr(UTF8::convertToAnsi(str->c_str()));
@@ -1705,6 +1711,7 @@ void graphics_link(void (*rtSym)(const char* sym, void* pc))
     rtSym("%StringWidth$string", bbStringWidth);
     rtSym("%StringHeight$string", bbStringHeight);
     rtSym("$FontPath$facename", bbFontPath);
+    rtSym("SetFontSmooth%enable", bbSetFontSmooth);
 
     //movies
     rtSym("%OpenMovie$file", bbOpenMovie);
