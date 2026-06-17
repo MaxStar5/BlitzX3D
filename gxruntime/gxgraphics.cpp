@@ -156,6 +156,44 @@ bool gxGraphics::restore() {
 	return true;
 }
 
+bool gxGraphics::changeDisplayMode(int width, int height, bool fullscreen, bool borderless) {
+	if (!dir3dDev) return false;
+
+	present_params.BackBufferWidth = width;
+	present_params.BackBufferHeight = height;
+	present_params.Windowed = !fullscreen;
+
+	HRESULT hr = dir3dDev->Reset(&present_params);
+	if (FAILED(hr)) {
+		return false;
+	}
+
+	IDirect3DSurface8* newBack = nullptr;
+	hr = dir3dDev->GetBackBuffer(0, D3DBACKBUFFER_TYPE_MONO, &newBack);
+	if (FAILED(hr) || !newBack) return false;
+
+	if (runtime->backBuffer) {
+		runtime->backBuffer->Release();
+	}
+	runtime->backBuffer = newBack;
+	newBack->AddRef();
+
+	if (front_canvas) {
+		IDirect3DSurface8* oldFront = front_canvas->surf;
+		front_canvas->surf = newBack;
+		newBack->AddRef();
+		if (oldFront) oldFront->Release();
+	}
+
+	if (back_canvas) {
+		IDirect3DSurface8* oldBack = back_canvas->surf;
+		back_canvas->surf = newBack;
+		newBack->AddRef();
+		if (oldBack) oldBack->Release();
+	}
+	return true;
+}
+
 gxCanvas* gxGraphics::getFrontCanvas()const {
 	return front_canvas;
 }
@@ -264,7 +302,7 @@ gxFont* gxGraphics::loadFont(std::string f, int height, bool bold, bool italic, 
 		t = f;
 	}
 
-	gxFont* newFont = new gxFont(ftLibrary, this, f, height, bold, italic, underlined);
+	gxFont* newFont = new gxFont(ftLibrary, this, f, height, bold, italic, underlined); // this line crashes in the backported version of UER, investigate !
 	font_set.emplace(newFont);
 	return newFont;
 }

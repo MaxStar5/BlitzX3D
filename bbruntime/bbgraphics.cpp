@@ -622,6 +622,18 @@ void bbEndGraphics()
     RTEX(MultiLang::unable_close_gxgraphics_instance);
 }
 
+void bbSetGraphicsMode(int width, int height, int fullscreen, int borderless = 0) {
+    if (!gx_graphics) {
+        ErrorLog("SetGraphicsMode", MultiLang::graphics_not_set);
+        return;
+    }
+    bool fs = (fullscreen != 0);
+    bool bl = (borderless != 0);
+    if (!gx_graphics->changeDisplayMode(width, height, fs, bl)) {
+        ErrorLog("SetGraphicsMode", "Failed to change display mode");
+    }
+}
+
 int bbGraphicsLost()
 {
     return gx_runtime->graphicsLost();
@@ -1617,6 +1629,7 @@ void graphics_link(void (*rtSym)(const char* sym, void* pc))
     rtSym("Graphics%width%height%depth=0%mode=0", bbGraphics);
     rtSym("Graphics3D%width%height%depth=0%mode=0", bbGraphics3D);
     rtSym("EndGraphics", bbEndGraphics);
+    rtSym("SetGraphicsMode%width%height%fullscreen", bbSetGraphicsMode);
     rtSym("%GraphicsLost", bbGraphicsLost);
     rtSym("%InFocus", bbInFocus);
 

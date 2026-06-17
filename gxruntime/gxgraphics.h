@@ -70,6 +70,7 @@ public:
 	//MANIPULATORS
 	void vwait();
 	void flip(bool vwait);
+	bool changeDisplayMode(int width, int height, bool fullscreen, bool borderless = false);
 
 	//SPECIAL!
 	void copy(gxCanvas* dest, int dx, int dy, int dw, int dh, gxCanvas* src, int sx, int sy, int sw, int sh);
