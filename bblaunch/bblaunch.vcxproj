@@ -51,7 +51,7 @@
     <OutDir>..\_release\</OutDir>
     <IntDir>.\Release\</IntDir>
     <LinkIncremental>false</LinkIncremental>
-    <TargetName>Blitz3D</TargetName>
+    <TargetName>BlitzX3D</TargetName>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <ClCompile>
@@ -151,7 +151,7 @@
     <Link>
       <SuppressStartupBanner>true</SuppressStartupBanner>
       <SubSystem>Windows</SubSystem>
-      <OutputFile>..\_release\Blitz3D.exe</OutputFile>
+      <OutputFile>..\_release\BlitzX3D.exe</OutputFile>
       <AdditionalDependencies>dxguid.lib;odbc32.lib;odbccp32.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <GenerateDebugInformation>false</GenerateDebugInformation>
     </Link>
