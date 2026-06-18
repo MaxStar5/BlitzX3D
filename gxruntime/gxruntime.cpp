@@ -925,7 +925,7 @@ gxGraphics* gxRuntime::openGraphics(int w, int h, int d, int driver, int flags) 
 
 			int ws = (gfx_mode == GMODE_SCALED) ? scaled_ws : static_ws;
 			if (border_mode == 1)
-				SetWindowLong(hwnd, GWL_STYLE, WS_POPUP);
+				SetWindowLong(hwnd, GWL_STYLE, WS_POPUP | WS_VISIBLE);
 			else
 				SetWindowLong(hwnd, GWL_STYLE, ws);
 			SetWindowPos(hwnd, 0, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_FRAMECHANGED);
