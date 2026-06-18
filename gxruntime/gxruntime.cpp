@@ -850,10 +850,20 @@ gxGraphics* gxRuntime::openExclusiveGraphics(int w, int h, int d, bool d3d) {
 	if (!d3d) return 0;
 
 	D3DFORMAT format;
-	if (d == 32) format = D3DFMT_X8R8G8B8;
+	if (d == 0) {
+		D3DDISPLAYMODE mode;
+		if (FAILED(this->d3d->GetAdapterDisplayMode(curr_driver->adapter, &mode))) return 0;
+		format = mode.Format;
+	}
+	else if (d == 32) format = D3DFMT_X8R8G8B8;
 	else if (d == 24) format = D3DFMT_R8G8B8;
 	else if (d == 16) format = D3DFMT_R5G6B5;
 	else return 0;
+
+	if (FAILED(this->d3d->CheckDeviceType(curr_driver->adapter, D3DDEVTYPE_HAL, format, format, FALSE))) {
+		DebugMsg("openExclusiveGraphics: CheckDeviceType failed for requested format");
+		return 0;
+	}
 
 	ZeroMemory(&d3dpp, sizeof(d3dpp));
 	d3dpp.Windowed = FALSE;
@@ -863,8 +873,9 @@ gxGraphics* gxRuntime::openExclusiveGraphics(int w, int h, int d, bool d3d) {
 	d3dpp.SwapEffect = D3DSWAPEFFECT_DISCARD;
 	d3dpp.BackBufferCount = 1;
 	d3dpp.EnableAutoDepthStencil = FALSE;
+	d3dpp.Flags = D3DPRESENTFLAG_LOCKABLE_BACKBUFFER;
 
-	if (FAILED(this->d3d->CreateDevice(curr_driver->adapter, D3DDEVTYPE_REF, hwnd, D3DCREATE_HARDWARE_VERTEXPROCESSING, &d3dpp, &d3dDevice))) {
+	if (FAILED(this->d3d->CreateDevice(curr_driver->adapter, D3DDEVTYPE_HAL, hwnd, D3DCREATE_HARDWARE_VERTEXPROCESSING, &d3dpp, &d3dDevice))) {
 		return 0;
 	}
 
