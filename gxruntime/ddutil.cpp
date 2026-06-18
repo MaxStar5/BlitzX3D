@@ -73,25 +73,38 @@ static void buildAlphaInverse(FIBITMAP* fib, BYTE* bits, int pitch, int w, int h
 
 static void adjustTexSize(int* width, int* height, IDirect3DDevice8* dev) {
     D3DCAPS8 caps;
-    if (FAILED(dev->GetDeviceCaps(&caps))) { *width = *height = 256; return; }
+    if (FAILED(dev->GetDeviceCaps(&caps))) {
+        *width = *height = 256;
+        return;
+    }
 
-    int w = *width, h = *height;
+    if (!(caps.TextureCaps & D3DPTEXTURECAPS_POW2)) {
+        return;
+    }
 
-    for (w = 1; w < *width; w <<= 1) {}
-    for (h = 1; h < *height; h <<= 1) {}
+    int w = 1;
+    while (w < *width)  w <<= 1;
+    int h = 1;
+    while (h < *height) h <<= 1;
 
     if (caps.TextureCaps & D3DPTEXTURECAPS_SQUAREONLY) {
-        if (w > h) h = w; else w = h;
+        if (w > h) h = w;
+        else       w = h;
     }
 
     if (int maxAsp = caps.MaxTextureAspectRatio) {
         int asp = w > h ? w / h : h / w;
-        if (asp > maxAsp) { if (w > h) h = w / maxAsp; else w = h / maxAsp; }
+        if (asp > maxAsp) {
+            if (w > h) h = w / maxAsp;
+            else       w = h / maxAsp;
+        }
     }
 
     if (caps.MaxTextureWidth && w > (int)caps.MaxTextureWidth)  w = caps.MaxTextureWidth;
     if (caps.MaxTextureHeight && h > (int)caps.MaxTextureHeight) h = caps.MaxTextureHeight;
-    *width = w; *height = h;
+
+    *width = w;
+    *height = h;
 }
 
 void ddUtil::buildMipMaps(IDirect3DTexture8* tex) {
