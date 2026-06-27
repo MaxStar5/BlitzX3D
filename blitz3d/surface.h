@@ -109,7 +109,6 @@ private:
 	std::vector<Triangle> triangles;
 	int mesh_vs, mesh_ts;
 	int valid_vs, valid_ts;
-	int boned_ts_valid;
 	Monitor* mon;
 };
 
