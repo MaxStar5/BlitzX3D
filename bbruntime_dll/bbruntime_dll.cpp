@@ -196,27 +196,29 @@ static void _cdecl seTranslator(unsigned int u, EXCEPTION_POINTERS* pExp) {
 	switch (u) {
 	case EXCEPTION_INT_DIVIDE_BY_ZERO:
 		bbruntime_panic(MultiLang::integer_divide_zero);
-		return;
+		break;
 	case EXCEPTION_ACCESS_VIOLATION:
 		throw_mav();
-		return;
+		break;
 	case EXCEPTION_ILLEGAL_INSTRUCTION:
 		bbruntime_panic(MultiLang::illegal_instruction);
-		return;
+		break;
 	case EXCEPTION_STACK_OVERFLOW:
 		bbruntime_panic(MultiLang::stack_overflow);
-		return;
+		break;
 	case EXCEPTION_INT_OVERFLOW:
 		bbruntime_panic(MultiLang::integer_overflow);
-		return;
+		break;
 	case EXCEPTION_FLT_OVERFLOW:
 		bbruntime_panic(MultiLang::float_overflow);
-		return;
+		break;
 	case EXCEPTION_FLT_DIVIDE_BY_ZERO:
 		bbruntime_panic(MultiLang::float_divide_zero);
-		return;
+		break;
+	default:
+		bbruntime_panic(MultiLang::unknown_runtime_exception);
+		break;
 	}
-	bbruntime_panic(MultiLang::unknown_runtime_exception);
 }
 
 int Runtime::version() {
