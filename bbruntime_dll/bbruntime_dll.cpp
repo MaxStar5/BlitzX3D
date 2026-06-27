@@ -173,25 +173,25 @@ static void _cdecl seTranslator(unsigned int u, EXCEPTION_POINTERS* pExp) {
 	switch (u) {
 	case EXCEPTION_INT_DIVIDE_BY_ZERO:
 		bbruntime_panic(MultiLang::integer_divide_zero);
-		break;
+		return;
 	case EXCEPTION_ACCESS_VIOLATION:
 		throw_mav();
-		break;
+		return;
 	case EXCEPTION_ILLEGAL_INSTRUCTION:
 		bbruntime_panic(MultiLang::illegal_instruction);
-		break;
+		return;
 	case EXCEPTION_STACK_OVERFLOW:
 		bbruntime_panic(MultiLang::stack_overflow);
-		break;
+		return;
 	case EXCEPTION_INT_OVERFLOW:
 		bbruntime_panic(MultiLang::integer_overflow);
-		break;
+		return;
 	case EXCEPTION_FLT_OVERFLOW:
 		bbruntime_panic(MultiLang::float_overflow);
-		break;
+		return;
 	case EXCEPTION_FLT_DIVIDE_BY_ZERO:
 		bbruntime_panic(MultiLang::float_divide_zero);
-		break;
+		return;
 	}
 	bbruntime_panic(MultiLang::unknown_runtime_exception);
 }
@@ -219,6 +219,7 @@ int Runtime::symValue(const char* sym) {
 
 void Runtime::startup(HINSTANCE h) {
 	hinst = h;
+	module_pc = (void*)h;
 }
 
 void Runtime::shutdown() {
