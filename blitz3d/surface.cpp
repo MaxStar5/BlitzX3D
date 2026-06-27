@@ -6,11 +6,11 @@ extern gxGraphics* gx_graphics;
 static Surface::Monitor nop_mon;
 
 Surface::Surface() :
-	mesh(0), mesh_vs(0), mesh_ts(0), valid_vs(0), valid_ts(0), mon(&nop_mon) {
+	mesh(0), mesh_vs(0), mesh_ts(0), valid_vs(0), valid_ts(0), boned_ts_valid(-1), mon(&nop_mon) {
 }
 
 Surface::Surface(Monitor* m) :
-	mesh(0), mesh_vs(0), mesh_ts(0), valid_vs(0), valid_ts(0), mon(m) {
+	mesh(0), mesh_vs(0), mesh_ts(0), valid_vs(0), valid_ts(0), boned_ts_valid(-1), mon(m) {
 }
 
 Surface::~Surface() {
@@ -114,17 +114,21 @@ gxMesh* Surface::getMesh() {
 
 gxMesh* Surface::getMesh(const std::vector<Bone>& bones) {
 
-	valid_vs = valid_ts = 0;
-
-	if(mesh_vs < vertices.size() || mesh_ts < triangles.size()) {
-		if(mesh) gx_graphics->freeMesh(mesh);
+	if (mesh_vs < vertices.size() || mesh_ts < triangles.size()) {
+		if (mesh) gx_graphics->freeMesh(mesh);
 		mesh_vs = vertices.size();
 		mesh_ts = triangles.size();
 		mesh = gx_graphics->createMesh(mesh_vs, mesh_ts, 0);
+		boned_ts_valid = -1;
+	}
+	else if (mesh->dirty()) {
+		boned_ts_valid = -1;
 	}
 
 	mesh->lock(true);
-	for(; valid_vs < vertices.size(); ++valid_vs) {
+
+	valid_vs = 0;
+	for (; valid_vs < vertices.size(); ++valid_vs) {
 		const Vertex& v = vertices[valid_vs];
 		if(v.bone_bones[0] == 255) {
 			//no bone!
@@ -149,9 +153,12 @@ gxMesh* Surface::getMesh(const std::vector<Bone>& bones) {
 			mesh->setVertex(valid_vs, tv, tn.normalized(), v.color, v.tex_coords);
 		}
 	}
-	for(; valid_ts < triangles.size(); ++valid_ts) {
-		const Triangle& t = triangles[valid_ts];
-		mesh->setTriangle(valid_ts, t.verts[0], t.verts[1], t.verts[2]);
+	if (boned_ts_valid != mon->geom_changes) {
+		for (valid_ts = 0; valid_ts < triangles.size(); ++valid_ts) {
+			const Triangle& t = triangles[valid_ts];
+			mesh->setTriangle(valid_ts, t.verts[0], t.verts[1], t.verts[2]);
+		}
+		boned_ts_valid = mon->geom_changes;
 	}
 	mesh->unlock();
 	return mesh;
