@@ -23,6 +23,7 @@ public:
 	IDirect3DBaseTexture8* getTexture() const;
 
 	mutable int mod_cnt;
+	mutable bool mipmapNeeded;
 
 	mutable IDirect3DTexture8* blit_tex;
 	mutable int blit_tex_mod_cnt;
@@ -162,6 +163,7 @@ public:
 	unsigned getColor()const;
 	unsigned getClsColor()const;
 	IDirect3DBaseTexture8* getTexSurface() const;
+	void setMipmapNeeded(bool needed) const { mipmapNeeded = needed; }
 };
 
 #endif

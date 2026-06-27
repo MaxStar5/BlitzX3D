@@ -1209,9 +1209,6 @@ void bbDrawBlockRect(bbImage* i, int x, int y, int r_x, int r_y, int r_w, int r_
 
 void bbMaskImage(bbImage* i, int r, int g, int b)
 {
-    char dbg[128];
-    sprintf(dbg, "MaskImage: ptr=%p image_set.size=%d", (void*)i, (int)image_set.size());
-    MessageBoxA(NULL, dbg, "Debug", MB_OK);
     debugImage(i, "MaskImage");
     unsigned argb = (r << 16) | (g << 8) | b;
     const std::vector<gxCanvas*>& f = i->getFrames();

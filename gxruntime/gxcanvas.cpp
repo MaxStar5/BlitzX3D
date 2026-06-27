@@ -104,26 +104,41 @@ void gxCanvas::fillRect(const RECT& r, unsigned argb) {
     int h = r.bottom - r.top;
     unsigned nat = format.fromARGB(argb);
     int pitch = format.getPitch();
+    unsigned char* dstBase = (unsigned char*)lr.pBits;
 
-    for (int y = 0; y < h; ++y) {
-        unsigned char* row = (unsigned char*)lr.pBits + y * lr.Pitch;
-        if (pitch == 4) {
-            unsigned* p = (unsigned*)row;
-            for (int x = 0; x < w; ++x) p[x] = nat;
+    if (pitch == 4) {
+        for (int y = 0; y < h; ++y) {
+            unsigned* row = (unsigned*)(dstBase + y * lr.Pitch);
+            std::fill(row, row + w, nat);
         }
-        else if (pitch == 2) {
-            unsigned short val = (unsigned short)nat;
-            unsigned short* p = (unsigned short*)row;
-            for (int x = 0; x < w; ++x) p[x] = val;
+    }
+    else if (pitch == 2) {
+        unsigned short val = (unsigned short)nat;
+        for (int y = 0; y < h; ++y) {
+            unsigned short* row = (unsigned short*)(dstBase + y * lr.Pitch);
+            std::fill(row, row + w, val);
         }
-        else {
-            unsigned char b0 = nat & 0xff;
-            unsigned char b1 = (nat >> 8) & 0xff;
-            unsigned char b2 = (nat >> 16) & 0xff;
-            unsigned char* p = row;
+    }
+    else if (pitch == 3) {
+        unsigned char* tempRow = new unsigned char[w * 3];
+        unsigned char* p = tempRow;
+        unsigned char b0 = nat & 0xff;
+        unsigned char b1 = (nat >> 8) & 0xff;
+        unsigned char b2 = (nat >> 16) & 0xff;
+        for (int x = 0; x < w; ++x) {
+            *p++ = b0; *p++ = b1; *p++ = b2;
+        }
+        for (int y = 0; y < h; ++y) {
+            unsigned char* row = dstBase + y * lr.Pitch;
+            memcpy(row, tempRow, w * 3);
+        }
+        delete[] tempRow;
+    }
+    else {
+        for (int y = 0; y < h; ++y) {
+            unsigned char* row = dstBase + y * lr.Pitch;
             for (int x = 0; x < w; ++x) {
-                p[0] = b0; p[1] = b1; p[2] = b2;
-                p += 3;
+                format.setPixel(row + x * pitch, nat);
             }
         }
     }
@@ -152,6 +167,7 @@ gxCanvas::gxCanvas(gxGraphics* g, IDirect3DSurface8* s, int f) :
     clip_rect.bottom = desc.Height;
     logical_w = desc.Width;
     logical_h = desc.Height;
+    mipmapNeeded = (flags & CANVAS_TEX_MIPMAP) != 0;
     cm_pitch = (clip_rect.right + 31) / 32 + 1;
     setMask(0); setColor(~0); setClsColor(0);
     setOrigin(0, 0); setHandle(0, 0);
@@ -177,6 +193,7 @@ gxCanvas::gxCanvas(gxGraphics* g, IDirect3DTexture8* t, int f) :
     clip_rect.bottom = desc.Height;
     logical_w = desc.Width;
     logical_h = desc.Height;
+    mipmapNeeded = (flags & CANVAS_TEX_MIPMAP) != 0;
     cm_pitch = (clip_rect.right + 31) / 32 + 1;
     setMask(0); setColor(~0); setClsColor(0);
     setOrigin(0, 0); setHandle(0, 0);
@@ -213,6 +230,7 @@ gxCanvas::gxCanvas(gxGraphics* g, IDirect3DCubeTexture8* ct, int f) :
     clip_rect.bottom = desc.Height;
     logical_w = desc.Width;
     logical_h = desc.Height;
+    mipmapNeeded = (flags & CANVAS_TEX_MIPMAP) != 0;
     cm_pitch = (clip_rect.right + 31) / 32 + 1;
     setMask(0); setColor(~0); setClsColor(0);
     setOrigin(0, 0); setHandle(0, 0);
@@ -293,8 +311,9 @@ IDirect3DBaseTexture8* gxCanvas::getTexture() const {
 }
 
 IDirect3DBaseTexture8* gxCanvas::getTexSurface() const {
-    if (mod_cnt != remip_cnt && tex && (flags & CANVAS_TEX_MIPMAP))
+    if (mod_cnt != remip_cnt && tex && (flags & CANVAS_TEX_MIPMAP) && mipmapNeeded) {
         ddUtil::buildMipMaps(tex);
+    }
     remip_cnt = mod_cnt;
     return getTexture();
 }
