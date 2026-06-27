@@ -17,6 +17,27 @@
 #include <cstring>
 #include <cstdio>
 #include <ctime>
+#include <DbgHelp.h>
+#pragma comment(lib, "Dbghelp.lib")
+
+static void writeMiniDump(EXCEPTION_POINTERS* pExp) {
+	char path[MAX_PATH];
+	if (!GetTempPathA(MAX_PATH, path)) return;
+	strcat_s(path, MAX_PATH, "blitz_crash.dmp");
+
+	HANDLE hFile = CreateFileA(path, GENERIC_WRITE, 0, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
+	if (hFile == INVALID_HANDLE_VALUE) return;
+
+	MINIDUMP_EXCEPTION_INFORMATION mdei;
+	mdei.ThreadId = GetCurrentThreadId();
+	mdei.ExceptionPointers = pExp;
+	mdei.ClientPointers = FALSE;
+
+	MINIDUMP_TYPE dumpType = (MINIDUMP_TYPE)(MiniDumpWithThreadInfo | MiniDumpWithIndirectlyReferencedMemory | MiniDumpWithDataSegs);
+
+	MiniDumpWriteDump(GetCurrentProcess(), GetCurrentProcessId(), hFile, dumpType, pExp ? &mdei : NULL, NULL, NULL);
+	CloseHandle(hFile);
+}
 
 static void writeCrashLog(const char* fmt, ...) {
 	char path[MAX_PATH];
@@ -120,6 +141,8 @@ static void killer() {
 
 static void _cdecl seTranslator(unsigned int u, EXCEPTION_POINTERS* pExp) {
 	if (pExp && pExp->ExceptionRecord) {
+		writeMiniDump(pExp);
+
 		EXCEPTION_RECORD* rec = pExp->ExceptionRecord;
 		void* crashAddr = rec->ExceptionAddress;
 
@@ -166,7 +189,7 @@ static void _cdecl seTranslator(unsigned int u, EXCEPTION_POINTERS* pExp) {
 		strcat_s(logPath, MAX_PATH, "blitz_crash.log");
 
 		char msg[512];
-		sprintf_s(msg, sizeof(msg), "A crash has occurred.\n\nThe log file has been saved to:\n%s\n\n" "Please send this file to krimbopple for debugging.", logPath);
+		sprintf_s(msg, sizeof(msg), "A crash has occurred.\n\nThe log and dump files have been saved to:\n%s\n\n" "Please send this file to krimbopple for debugging.", logPath);
 		MessageBoxA(NULL, msg, "Blitz Runtime Error", MB_OK | MB_ICONERROR);
 	}
 
