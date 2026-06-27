@@ -56,7 +56,6 @@ gxGraphics::gxGraphics(gxRuntime* rt, IDirect3DDevice8* dev, IDirect3DSurface8* 
 }
 
 gxGraphics::~gxGraphics() {
-	if (_gamma) _gamma->Release();
 	while (scene_set.size()) freeScene(*scene_set.begin());
 	while (movie_set.size()) closeMovie(*movie_set.begin());
 	while (font_set.size()) freeFont(*font_set.begin());
@@ -85,20 +84,15 @@ gxGraphics::~gxGraphics() {
 }
 
 void gxGraphics::setGamma(int r, int g, int b, float dr, float dg, float db) {
-	_gammaRamp.red[r & 255] = dr * 257.0f;
-	_gammaRamp.green[g & 255] = dg * 257.0f;
-	_gammaRamp.blue[b & 255] = db * 257.0f;
+	//bruh
 }
 
 void gxGraphics::updateGamma(bool calibrate) {
-	if (!_gamma) return;
-	_gamma->SetGammaRamp(calibrate ? DDSGR_CALIBRATE : 0, &_gammaRamp);
+	//bruh
 }
 
 void gxGraphics::getGamma(int r, int g, int b, float* dr, float* dg, float* db) {
-	*dr = _gammaRamp.red[r & 255] / 257.0f;
-	*dg = _gammaRamp.green[g & 255] / 257.0f;
-	*db = _gammaRamp.blue[b & 255] / 257.0f;
+	//bruh
 }
 
 bool gxGraphics::restore() {

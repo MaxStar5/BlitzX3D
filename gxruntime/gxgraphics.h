@@ -54,8 +54,8 @@ private:
 	std::set<gxMovie*> movie_set;
 	std::set<std::string> font_res;
 
-	DDGAMMARAMP _gammaRamp;
-	IDirectDrawGammaControl* _gamma;
+	// DDGAMMARAMP _gammaRamp;
+	// IDirectDrawGammaControl* _gamma;
 
 	/***** GX INTERFACE *****/
 public:
