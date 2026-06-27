@@ -58,17 +58,10 @@ void PixelFormat::setFormat(D3DFORMAT fmt) {
     asm_coder.CodePoint(point_code, depth, amask, rmask, gmask, bmask);
 }
 
-static void buildAlphaInverse(FIBITMAP* fib, BYTE* bits, int pitch, int w, int h) {
-    for (int y = 0; y < h; ++y) {
-        BYTE* src = FreeImage_GetScanLine(fib, h - 1 - y);
-        DWORD* dst = (DWORD*)(bits + y * pitch);
-        for (int x = 0; x < w; ++x) {
-            RGBQUAD* p = (RGBQUAD*)(src + x * 4);
-            unsigned avg = (p->rgbRed + p->rgbGreen + p->rgbBlue) / 3;
-            unsigned alpha = 255 - avg;
-            dst[x] = (alpha << 24) | ((DWORD)p->rgbRed << 16) | ((DWORD)p->rgbGreen << 8) | p->rgbBlue;
-        }
-    }
+// bruh
+static bool hasRealAlpha(FIBITMAP* fib) {
+    if (FreeImage_IsTransparent(fib) == TRUE) return true;
+    return FreeImage_GetColorType(fib) == FIC_RGBALPHA;
 }
 
 static void adjustTexSize(int* width, int* height, IDirect3DDevice8* dev) {
@@ -269,7 +262,7 @@ IDirect3DSurface8* ddUtil::loadDisplaySurface(const std::string& file, int flags
 
     bool hasMask = (flags & gxCanvas::CANVAS_TEX_MASK) != 0;
     bool hasAlpha = (flags & gxCanvas::CANVAS_TEX_ALPHA) != 0;
-    bool hasActualAlpha = (FreeImage_IsTransparent(fib32) == TRUE);
+    bool hasActualAlpha = hasRealAlpha(fib32);
     BYTE* bits = (BYTE*)lr.pBits;
 
     if (hasMask) {
@@ -290,7 +283,7 @@ IDirect3DSurface8* ddUtil::loadDisplaySurface(const std::string& file, int flags
             }
         }
         else {
-            buildAlphaInverse(fib32, bits, lr.Pitch, w, h);
+            buildAlpha(fib32, bits, lr.Pitch, w, h, false);
         }
     }
     else {
@@ -337,7 +330,7 @@ IDirect3DTexture8* ddUtil::loadTextureSurface(const std::string& file, int flags
     bool hasMask = (flags & gxCanvas::CANVAS_TEX_MASK) != 0;
     bool hasAlpha = (flags & gxCanvas::CANVAS_TEX_ALPHA) != 0;
     bool hasMips = (flags & gxCanvas::CANVAS_TEX_MIPMAP) != 0;
-    bool hasActualAlpha = (FreeImage_IsTransparent(fib32) == TRUE);
+    bool hasActualAlpha = hasRealAlpha(fib32);
 
     D3DFORMAT fmt = D3DFMT_A8R8G8B8;
     if (flags & gxCanvas::CANVAS_TEX_HICOLOR) fmt = D3DFMT_A4R4G4B4;
@@ -383,7 +376,13 @@ IDirect3DTexture8* ddUtil::loadTextureSurface(const std::string& file, int flags
             for (int y = h; y < adjH; ++y) memset(bits + y * lr.Pitch, 0, adjW * sizeof(DWORD));
         }
         else {
-            buildAlphaInverse(fib32, bits, lr.Pitch, w, h);
+            buildAlpha(fib32, bits, lr.Pitch, w, h, false);
+            if (w < adjW) {
+                for (int y = 0; y < h; ++y) {
+                    memset(bits + y * lr.Pitch + w * sizeof(DWORD), 0, (adjW - w) * sizeof(DWORD));
+                }
+            }
+            for (int y = h; y < adjH; ++y) memset(bits + y * lr.Pitch, 0, adjW * sizeof(DWORD));
         }
     }
     else {
