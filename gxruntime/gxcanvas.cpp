@@ -104,41 +104,26 @@ void gxCanvas::fillRect(const RECT& r, unsigned argb) {
     int h = r.bottom - r.top;
     unsigned nat = format.fromARGB(argb);
     int pitch = format.getPitch();
-    unsigned char* dstBase = (unsigned char*)lr.pBits;
 
-    if (pitch == 4) {
-        for (int y = 0; y < h; ++y) {
-            unsigned* row = (unsigned*)(dstBase + y * lr.Pitch);
-            std::fill(row, row + w, nat);
+    for (int y = 0; y < h; ++y) {
+        unsigned char* row = (unsigned char*)lr.pBits + y * lr.Pitch;
+        if (pitch == 4) {
+            unsigned* p = (unsigned*)row;
+            for (int x = 0; x < w; ++x) p[x] = nat;
         }
-    }
-    else if (pitch == 2) {
-        unsigned short val = (unsigned short)nat;
-        for (int y = 0; y < h; ++y) {
-            unsigned short* row = (unsigned short*)(dstBase + y * lr.Pitch);
-            std::fill(row, row + w, val);
+        else if (pitch == 2) {
+            unsigned short val = (unsigned short)nat;
+            unsigned short* p = (unsigned short*)row;
+            for (int x = 0; x < w; ++x) p[x] = val;
         }
-    }
-    else if (pitch == 3) {
-        unsigned char* tempRow = new unsigned char[w * 3];
-        unsigned char* p = tempRow;
-        unsigned char b0 = nat & 0xff;
-        unsigned char b1 = (nat >> 8) & 0xff;
-        unsigned char b2 = (nat >> 16) & 0xff;
-        for (int x = 0; x < w; ++x) {
-            *p++ = b0; *p++ = b1; *p++ = b2;
-        }
-        for (int y = 0; y < h; ++y) {
-            unsigned char* row = dstBase + y * lr.Pitch;
-            memcpy(row, tempRow, w * 3);
-        }
-        delete[] tempRow;
-    }
-    else {
-        for (int y = 0; y < h; ++y) {
-            unsigned char* row = dstBase + y * lr.Pitch;
+        else {
+            unsigned char b0 = nat & 0xff;
+            unsigned char b1 = (nat >> 8) & 0xff;
+            unsigned char b2 = (nat >> 16) & 0xff;
+            unsigned char* p = row;
             for (int x = 0; x < w; ++x) {
-                format.setPixel(row + x * pitch, nat);
+                p[0] = b0; p[1] = b1; p[2] = b2;
+                p += 3;
             }
         }
     }
