@@ -17,6 +17,17 @@ static void DebugMsg(const std::string& msg) {
 	MessageBoxA(NULL, msg.c_str(), "Graphics Debug", MB_OK);
 }
 
+static DWORD pickVertexProcessingFlag(IDirect3D8* d3d, UINT adapter) {
+	D3DCAPS8 caps;
+	if (FAILED(d3d->GetDeviceCaps(adapter, D3DDEVTYPE_HAL, &caps))) {
+		return D3DCREATE_SOFTWARE_VERTEXPROCESSING;
+	}
+	if (!(caps.DevCaps & D3DDEVCAPS_HWTRANSFORMANDLIGHT)) {
+		return D3DCREATE_SOFTWARE_VERTEXPROCESSING;
+	}
+	return D3DCREATE_HARDWARE_VERTEXPROCESSING;
+}
+
 struct gxRuntime::GfxMode {
 	D3DDISPLAYMODE mode;
 };
@@ -827,7 +838,8 @@ gxGraphics* gxRuntime::openWindowedGraphics(int w, int h, int d, bool d3d) {
 
 	d3dpp.BackBufferFormat = (mode.Format == D3DFMT_R8G8B8 || mode.Format == D3DFMT_A8R8G8B8 || mode.Format == D3DFMT_X8R8G8B8) ? mode.Format : D3DFMT_X8R8G8B8;
 
-	if (FAILED(this->d3d->CreateDevice(curr_driver->adapter, D3DDEVTYPE_HAL, hwnd, D3DCREATE_HARDWARE_VERTEXPROCESSING, &d3dpp, &d3dDevice))) return 0;
+	DWORD vp_flag = pickVertexProcessingFlag(this->d3d, curr_driver->adapter);
+	if (FAILED(this->d3d->CreateDevice(curr_driver->adapter, D3DDEVTYPE_HAL, hwnd, vp_flag, &d3dpp, &d3dDevice))) return 0;
 
 	if (FAILED(d3dDevice->GetBackBuffer(0, D3DBACKBUFFER_TYPE_MONO, &backBuffer))) {
 		d3dDevice->Release(); d3dDevice = 0;
@@ -875,7 +887,8 @@ gxGraphics* gxRuntime::openExclusiveGraphics(int w, int h, int d, bool d3d) {
 	d3dpp.EnableAutoDepthStencil = FALSE;
 	d3dpp.Flags = D3DPRESENTFLAG_LOCKABLE_BACKBUFFER;
 
-	if (FAILED(this->d3d->CreateDevice(curr_driver->adapter, D3DDEVTYPE_HAL, hwnd, D3DCREATE_HARDWARE_VERTEXPROCESSING, &d3dpp, &d3dDevice))) {
+	DWORD vp_flag = pickVertexProcessingFlag(this->d3d, curr_driver->adapter);
+	if (FAILED(this->d3d->CreateDevice(curr_driver->adapter, D3DDEVTYPE_HAL, hwnd, vp_flag, &d3dpp, &d3dDevice))) {
 		return 0;
 	}
 
