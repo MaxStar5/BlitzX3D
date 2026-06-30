@@ -195,11 +195,11 @@ bool gxGraphics::changeDisplayMode(int width, int height, bool fullscreen, bool 
 	present_params.Windowed = !fullscreen;
 	if (fullscreen) {
 		present_params.FullScreen_RefreshRateInHz = D3DPRESENT_RATE_DEFAULT;
-		present_params.PresentationInterval = D3DPRESENT_INTERVAL_DEFAULT;
+		present_params.PresentationInterval = D3DPRESENT_INTERVAL_IMMEDIATE;
 	}
 	else {
 		present_params.FullScreen_RefreshRateInHz = 0;
-		present_params.PresentationInterval = 0;
+		present_params.PresentationInterval = D3DPRESENT_INTERVAL_IMMEDIATE;
 	}
 
 	HRESULT hr = dir3dDev->Reset(&present_params);
