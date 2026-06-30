@@ -276,6 +276,16 @@ void gxRuntime::forceResume() {
 void gxRuntime::paint() {
 	if (!d3dDevice || !backBuffer) return;
 
+	gxGraphics::DeviceState state = graphics->getDeviceState();
+	if (state == gxGraphics::DEVICE_LOST) {
+		return;
+	}
+	if (state == gxGraphics::DEVICE_NEEDS_RESET) {
+		if (!graphics->restore()) {
+			return;
+		}
+	}
+
 	switch (gfx_mode) {
 	case GMODE_SCALED:
 	case GMODE_FIXED: {
@@ -318,32 +328,20 @@ void gxRuntime::paint() {
 //////////
 // FLIP //
 //////////
+
 void gxRuntime::flip(bool vwait) {
 	if (!graphics || !d3dDevice) return;
 
-	gxCanvas* b = graphics->getBackCanvas();
-	gxCanvas* f = graphics->getFrontCanvas();
-	f->setModify(b->getModify());
-
-	static bool first = true;
-	if (first) {
-		MessageBoxA(NULL, "flip() called - presenting", "Debug", MB_OK);
-		first = false;
+	gxGraphics::DeviceState state = graphics->getDeviceState();
+	if (state == gxGraphics::DEVICE_LOST) {
+		return;
 	}
-
-	HRESULT hr = d3dDevice->Present(NULL, NULL, NULL, NULL);
-	if (FAILED(hr)) {
-		char msg[256];
-		sprintf(msg, "Present failed: 0x%08X", hr);
-		MessageBoxA(NULL, msg, "Error", MB_OK);
-	}
-	else {
-		static bool drawn = false;
-		if (!drawn) {
-			MessageBoxA(NULL, "Present suceeded", "Debug", MB_OK);
-			drawn = true;
+	if (state == gxGraphics::DEVICE_NEEDS_RESET) {
+		if (!graphics->restore()) {
+			return;
 		}
 	}
+	d3dDevice->Present(NULL, NULL, NULL, NULL);
 }
 
 ////////////////

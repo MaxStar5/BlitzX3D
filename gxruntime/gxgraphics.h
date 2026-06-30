@@ -67,6 +67,14 @@ public:
 		GRAPHICS_BORDERLESS = 16
 	};
 
+	enum DeviceState {
+		DEVICE_OK,
+		DEVICE_LOST,
+		DEVICE_NEEDS_RESET
+	};
+
+	DeviceState getDeviceState();
+
 	//MANIPULATORS
 	void vwait();
 	void flip(bool vwait);

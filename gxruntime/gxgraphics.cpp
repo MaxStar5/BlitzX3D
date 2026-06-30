@@ -268,8 +268,16 @@ void gxGraphics::vwait() { // stubby stbu stub
 	// dirDraw->WaitForVerticalBlank(DDWAITVB_BLOCKBEGIN, 0);
 }
 
-void gxGraphics::flip(bool v) {
-	runtime->flip(v);
+gxGraphics::DeviceState gxGraphics::getDeviceState() {
+	if (!dir3dDev) return DEVICE_LOST;
+	HRESULT hr = dir3dDev->TestCooperativeLevel();
+	if (hr == D3DERR_DEVICELOST) return DEVICE_LOST;
+	if (hr == D3DERR_DEVICENOTRESET) return DEVICE_NEEDS_RESET;
+	return DEVICE_OK;
+}
+
+void gxGraphics::flip(bool vwait) {
+	if (runtime) runtime->flip(vwait);
 }
 
 void gxGraphics::copy(gxCanvas* dest, int dx, int dy, int dw, int dh, gxCanvas* src, int sx, int sy, int sw, int sh) {
