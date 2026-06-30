@@ -704,6 +704,19 @@ static bool isRenderTarget(IDirect3DSurface9* s) {
 }
 
 static void cpuBlit(gxCanvas* dest, const RECT& dest_r, gxCanvas* src, const RECT& src_r, bool solid) {
+    IDirect3DDevice9* dev = dest->graphics->dir3dDev;
+    if (dev) {
+        RECT srcRect = { src_r.left, src_r.top, src_r.right, src_r.bottom };
+        RECT destRect = { dest_r.left, dest_r.top, dest_r.right, dest_r.bottom };
+        HRESULT hr = dev->StretchRect(src->getSurface(), &srcRect,
+            dest->getSurface(), &destRect,
+            D3DTEXF_LINEAR);
+        if (SUCCEEDED(hr)) {
+            dest->damage(dest_r);
+            return;
+        }
+    }
+
     int dw = dest_r.right - dest_r.left;
     int dh = dest_r.bottom - dest_r.top;
     int sw = src_r.right - src_r.left;
@@ -712,7 +725,10 @@ static void cpuBlit(gxCanvas* dest, const RECT& dest_r, gxCanvas* src, const REC
 
     D3DLOCKED_RECT srcLR, dstLR;
     if (FAILED(src->surf->LockRect(&srcLR, nullptr, D3DLOCK_READONLY))) return;
-    if (FAILED(dest->surf->LockRect(&dstLR, nullptr, 0))) { src->surf->UnlockRect(); return; }
+    if (FAILED(dest->surf->LockRect(&dstLR, nullptr, 0))) {
+        src->surf->UnlockRect();
+        return;
+    }
 
     const PixelFormat& sf = src->format;
     const PixelFormat& df = dest->format;
@@ -721,22 +737,35 @@ static void cpuBlit(gxCanvas* dest, const RECT& dest_r, gxCanvas* src, const REC
     unsigned maskRGB = solid ? ~0u : (sf.toARGB(src->mask_surf) & 0x00ffffffu);
     bool doMask = (maskRGB != ~0u);
 
-    for (int y = 0; y < dh; ++y) {
-        int sy = stretch ? (y * sh / dh) : y;
-        const unsigned char* srow = (const unsigned char*)srcLR.pBits
-            + (src_r.top + sy) * srcLR.Pitch + src_r.left * sp;
-        unsigned char* drow = (unsigned char*)dstLR.pBits
-            + (dest_r.top + y) * dstLR.Pitch + dest_r.left * dp;
-        for (int x = 0; x < dw; ++x) {
-            int sx = stretch ? (x * sw / dw) : x;
-            unsigned argb = sf.toARGB(sf.getPixel((void*)(srow + sx * sp)));
-            if (doMask && (argb & 0x00ffffffu) == maskRGB) continue;
-            df.setPixel(drow + x * dp, df.fromARGB(argb));
+    if (!stretch && !doMask && sp == dp && sf.getDepth() == df.getDepth()) {
+        int rowBytes = dw * sp;
+        for (int y = 0; y < dh; ++y) {
+            const unsigned char* srow = (const unsigned char*)srcLR.pBits
+                + (src_r.top + y) * srcLR.Pitch + src_r.left * sp;
+            unsigned char* drow = (unsigned char*)dstLR.pBits
+                + (dest_r.top + y) * dstLR.Pitch + dest_r.left * dp;
+            memcpy(drow, srow, rowBytes);
+        }
+    }
+    else {
+        for (int y = 0; y < dh; ++y) {
+            int sy = stretch ? (y * sh / dh) : y;
+            const unsigned char* srow = (const unsigned char*)srcLR.pBits
+                + (src_r.top + sy) * srcLR.Pitch + src_r.left * sp;
+            unsigned char* drow = (unsigned char*)dstLR.pBits
+                + (dest_r.top + y) * dstLR.Pitch + dest_r.left * dp;
+            for (int x = 0; x < dw; ++x) {
+                int sx = stretch ? (x * sw / dw) : x;
+                unsigned argb = sf.toARGB(sf.getPixel((void*)(srow + sx * sp)));
+                if (doMask && (argb & 0x00ffffffu) == maskRGB) continue;
+                df.setPixel(drow + x * dp, df.fromARGB(argb));
+            }
         }
     }
 
     dest->surf->UnlockRect();
     src->surf->UnlockRect();
+    dest->damage(dest_r);
 }
 
 void gxCanvas::blit(int x, int y, gxCanvas* src, int src_x, int src_y,

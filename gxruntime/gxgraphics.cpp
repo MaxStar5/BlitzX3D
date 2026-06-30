@@ -273,8 +273,8 @@ void gxGraphics::flip(bool v) {
 }
 
 void gxGraphics::copy(gxCanvas* dest, int dx, int dy, int dw, int dh, gxCanvas* src, int sx, int sy, int sw, int sh) {
-	RECT r = { dx,dy,dx + dw,dy + dh };
-	ddUtil::copy(dest->getSurface(), dx, dy, dw, dh, src->getSurface(), sx, sy, sw, sh);
+	ddUtil::copy(dir3dDev, dest->getSurface(), dx, dy, dw, dh, src->getSurface(), sx, sy, sw, sh);
+	RECT r = { dx, dy, dx + dw, dy + dh };
 	dest->damage(r);
 }
 

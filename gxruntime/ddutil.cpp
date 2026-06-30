@@ -143,15 +143,22 @@ void ddUtil::buildMipMaps(IDirect3DTexture9* tex) {
     }
 }
 
-void ddUtil::copy(IDirect3DSurface9* dest_surf, int dx, int dy, int dw, int dh,
-    IDirect3DSurface9* src_surf, int sx, int sy, int sw, int sh) {
+void ddUtil::copy(IDirect3DDevice9* dev, IDirect3DSurface9* dest_surf, int dx, int dy, int dw, int dh, IDirect3DSurface9* src_surf, int sx, int sy, int sw, int sh) {
+    RECT srcRect = { sx, sy, sx + sw, sy + sh };
+    RECT destRect = { dx, dy, dx + dw, dy + dh };
+    HRESULT hr = dev->StretchRect(src_surf, &srcRect, dest_surf, &destRect, D3DTEXF_LINEAR);
+    if (SUCCEEDED(hr)) return;
+
     D3DLOCKED_RECT src_lr, dst_lr;
     D3DSURFACE_DESC src_desc, dst_desc;
     src_surf->GetDesc(&src_desc);
     dest_surf->GetDesc(&dst_desc);
 
     if (FAILED(src_surf->LockRect(&src_lr, nullptr, D3DLOCK_READONLY))) return;
-    if (FAILED(dest_surf->LockRect(&dst_lr, nullptr, 0))) { src_surf->UnlockRect(); return; }
+    if (FAILED(dest_surf->LockRect(&dst_lr, nullptr, 0))) {
+        src_surf->UnlockRect();
+        return;
+    }
 
     PixelFormat src_fmt(src_desc.Format);
     PixelFormat dst_fmt(dst_desc.Format);

@@ -8,7 +8,7 @@ class gxGraphics;
 struct ddUtil {
 
 	static void buildMipMaps(IDirect3DTexture9* tex);
-	static void copy(IDirect3DSurface9* dest, int dx, int dy, int dw, int dh, IDirect3DSurface9* src, int sx, int sy, int sw, int sh);
+    static void copy(IDirect3DDevice9* dev, IDirect3DSurface9* dest, int dx, int dy, int dw, int dh, IDirect3DSurface9* src, int sx, int sy, int sw, int sh);
 
     // Display canvases
     static IDirect3DSurface9* createDisplaySurface(int w, int h, gxGraphics* gfx);
