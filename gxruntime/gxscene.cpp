@@ -35,6 +35,8 @@ gxScene::gxScene(gxGraphics* g, gxCanvas* t) :
 	memset(d3d_rs, 0x55, sizeof(d3d_rs));
 	memset(d3d_tss, 0x55, sizeof(d3d_tss));
 	memset(d3d_samp, 0x55, sizeof(d3d_samp));
+	memset(&lastRenderState, 0, sizeof(lastRenderState));
+	lastRenderStateValid = false;
 
 	//nomalize normals
 	setRS(D3DRS_NORMALIZENORMALS, TRUE);
@@ -490,6 +492,10 @@ void gxScene::setWorldMatrix(const Matrix* m) {
 }
 
 void gxScene::setRenderState(const RenderState& rs) {
+	if (lastRenderStateValid && memcmp(&rs, &lastRenderState, sizeof(RenderState)) == 0) {
+		return;
+	}
+
 	bool setmat = false;
 	if (memcmp(rs.color, &material.Diffuse.r, 12)) {
 		memcpy(&material.Diffuse.r, rs.color, 12);
@@ -616,6 +622,8 @@ void gxScene::setRenderState(const RenderState& rs) {
 		setTSS(n_texs, D3DTSS_ALPHAOP, D3DTOP_DISABLE);
 		dir3dDev->SetTexture(n_texs, 0);
 	}
+	lastRenderState = rs;
+	lastRenderStateValid = true;
 }
 
 bool gxScene::begin(const std::vector<gxLight*>& lights) {

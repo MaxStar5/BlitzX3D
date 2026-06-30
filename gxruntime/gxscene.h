@@ -153,6 +153,9 @@ private:
 	int d3d_tss[8][32];
 	int d3d_samp[8][16];
 
+	RenderState lastRenderState;
+	bool lastRenderStateValid;
+
 	void setRS(int n, int t);
 	void setTSS(int n, int s, int t);
 	void setSamp(int n, int s, int t);
