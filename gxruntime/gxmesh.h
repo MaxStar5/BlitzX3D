@@ -1,7 +1,7 @@
 #ifndef GXMESH_H
 #define GXMESH_H
 
-#include <d3d8.h>
+#include <d3d9.h>
 
 class gxGraphics;
 
@@ -14,7 +14,7 @@ public:
         float tex_coords[4];   // 2 sets x 2 floats
     };
 
-    gxMesh(gxGraphics* graphics, IDirect3DVertexBuffer8* verts, IDirect3DIndexBuffer8* indices,
+    gxMesh(gxGraphics* graphics, IDirect3DVertexBuffer9* verts, IDirect3DIndexBuffer9* indices,
         int max_verts, int max_tris);
     ~gxMesh();
 
@@ -32,8 +32,8 @@ public:
 
 private:
     gxGraphics* graphics;
-    IDirect3DVertexBuffer8* vertex_buff;
-    IDirect3DIndexBuffer8* index_buff;
+    IDirect3DVertexBuffer9* vertex_buff;
+    IDirect3DIndexBuffer9* index_buff;
 
     int  max_verts, max_tris;
     bool mesh_dirty;

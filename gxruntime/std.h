@@ -26,6 +26,6 @@
 
 #include <math.h>
 #include <Windows.h>
-#include <d3d8.h>
+#include <d3d9.h>
 
 #endif

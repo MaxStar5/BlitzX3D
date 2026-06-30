@@ -2,7 +2,7 @@
 #define GXRUNTIME_H
 
 #include <Windows.h>
-#include <d3d8.h>
+#include <d3d9.h>
 #include <string>
 #include <vector>
 #include <intrin.h>
@@ -26,10 +26,10 @@ public:
     gxGraphics* graphics;
     gxFileSystem* fileSystem;
 
-    IDirect3D8* d3d;
-    IDirect3DDevice8* d3dDevice;
-    IDirect3DSurface8* backBuffer;
-    IDirect3DSurface8* frontBuffer;
+    IDirect3D9* d3d;
+    IDirect3DDevice9* d3dDevice;
+    IDirect3DSurface9* backBuffer;
+    IDirect3DSurface9* frontBuffer;
     D3DPRESENT_PARAMETERS d3dpp;
 
     float scale_x = .0f, scale_y = .0f;

@@ -17,8 +17,8 @@ static void DebugMsg(const std::string& msg) {
 	MessageBoxA(NULL, msg.c_str(), "Graphics Debug", MB_OK);
 }
 
-static DWORD pickVertexProcessingFlag(IDirect3D8* d3d, UINT adapter) {
-	D3DCAPS8 caps;
+static DWORD pickVertexProcessingFlag(IDirect3D9* d3d, UINT adapter) {
+	D3DCAPS9 caps;
 	if (FAILED(d3d->GetDeviceCaps(adapter, D3DDEVTYPE_HAL, &caps))) {
 		return D3DCREATE_SOFTWARE_VERTEXPROCESSING;
 	}
@@ -33,7 +33,7 @@ struct gxRuntime::GfxMode {
 };
 
 struct gxRuntime::GfxDriver {
-	D3DADAPTER_IDENTIFIER8 identifier;
+	D3DADAPTER_IDENTIFIER9 identifier;
 	std::vector<GfxMode*> modes;
 	UINT adapter;
 };
@@ -130,9 +130,9 @@ gxRuntime::gxRuntime(HINSTANCE hi, const std::string& cl, HWND hw) :
 
 	FreeImage_Initialise(true);
 
-	d3d = Direct3DCreate8(D3D_SDK_VERSION);
+	d3d = Direct3DCreate9(D3D_SDK_VERSION);
 	if (!d3d) {
-		debugLog("Direct3D8 not available");
+		debugLog("Direct3D9 not available");
 	}
 
 	enumGfx();
@@ -281,7 +281,7 @@ void gxRuntime::paint() {
 	case GMODE_FIXED: {
 		if (!graphics) break;
 		gxCanvas* f = graphics->getFrontCanvas();
-		IDirect3DSurface8* canvasSurf = f->getSurface();
+		IDirect3DSurface9* canvasSurf = f->getSurface();
 
 		RECT src, dest;
 		GetClientRect(hwnd, &dest);
@@ -289,9 +289,22 @@ void gxRuntime::paint() {
 		src.right = (gfx_mode == GMODE_SCALED) ? graphics->getWidth() : (dest.right - dest.left);
 		src.bottom = (gfx_mode == GMODE_SCALED) ? graphics->getHeight() : (dest.bottom - dest.top);
 
-		// D3D8 has no StretchRect..?
-		POINT pt = { dest.left, dest.top };
-		d3dDevice->CopyRects(canvasSurf, &src, 1, backBuffer, &pt);
+		if (gfx_mode == GMODE_FIXED) {
+			POINT pt = { dest.left, dest.top };
+			d3dDevice->UpdateSurface(canvasSurf, &src, backBuffer, &pt);
+		}
+		else {
+			IDirect3DSurface9* stretchSrc = nullptr;
+			D3DSURFACE_DESC desc;
+			canvasSurf->GetDesc(&desc);
+			if (SUCCEEDED(d3dDevice->CreateRenderTarget(desc.Width, desc.Height, desc.Format, D3DMULTISAMPLE_NONE, 0, FALSE, &stretchSrc, nullptr))) {
+				POINT zero = { 0, 0 };
+				RECT full = { 0, 0, (LONG)desc.Width, (LONG)desc.Height };
+				d3dDevice->UpdateSurface(canvasSurf, &full, stretchSrc, &zero);
+				d3dDevice->StretchRect(stretchSrc, &src, backBuffer, &dest, D3DTEXF_LINEAR);
+				stretchSrc->Release();
+			}
+		}
 		d3dDevice->Present(NULL, NULL, NULL, NULL);
 		break;
 	}
@@ -841,7 +854,7 @@ gxGraphics* gxRuntime::openWindowedGraphics(int w, int h, int d, bool d3d) {
 	DWORD vp_flag = pickVertexProcessingFlag(this->d3d, curr_driver->adapter);
 	if (FAILED(this->d3d->CreateDevice(curr_driver->adapter, D3DDEVTYPE_HAL, hwnd, vp_flag, &d3dpp, &d3dDevice))) return 0;
 
-	if (FAILED(d3dDevice->GetBackBuffer(0, D3DBACKBUFFER_TYPE_MONO, &backBuffer))) {
+	if (FAILED(d3dDevice->GetBackBuffer(0, 0, D3DBACKBUFFER_TYPE_MONO, &backBuffer))) {
 		d3dDevice->Release(); d3dDevice = 0;
 		return 0;
 	}
@@ -892,7 +905,7 @@ gxGraphics* gxRuntime::openExclusiveGraphics(int w, int h, int d, bool d3d) {
 		return 0;
 	}
 
-	if (FAILED(d3dDevice->GetBackBuffer(0, D3DBACKBUFFER_TYPE_MONO, &backBuffer))) {
+	if (FAILED(d3dDevice->GetBackBuffer(0, 0, D3DBACKBUFFER_TYPE_MONO, &backBuffer))) {
 		d3dDevice->Release();
 		d3dDevice = 0;
 		return 0;
@@ -931,7 +944,7 @@ gxGraphics* gxRuntime::openGraphics(int w, int h, int d, int driver, int flags) 
 	}
 
 	if (!this->d3d) {
-		DebugMsg("ERROR: Direct3D8 object is null! Direct3DCreate8 failed in constructor.");
+		DebugMsg("ERROR: Direct3D9 object is null! Direct3DCreate9 failed in constructor.");
 		busy = false;
 		return 0;
 	}
@@ -1037,7 +1050,7 @@ bool gxRuntime::graphicsLost() {
 	if (hr == D3DERR_DEVICELOST) return true;
 	if (hr == D3DERR_DEVICENOTRESET) {
 		d3dDevice->Reset(&d3dpp);
-		d3dDevice->GetBackBuffer(0, D3DBACKBUFFER_TYPE_MONO, &backBuffer);
+		d3dDevice->GetBackBuffer(0, 0, D3DBACKBUFFER_TYPE_MONO, &backBuffer);
 	}
 	return false;
 }
@@ -1077,20 +1090,19 @@ void gxRuntime::closeFileSystem(gxFileSystem* f) {
 void gxRuntime::enumGfx() {
 	denumGfx();
 	if (!d3d) return;
+	static const D3DFORMAT kFormats[] = { D3DFMT_X8R8G8B8, D3DFMT_R5G6B5, D3DFMT_A8R8G8B8 };
 	UINT adapterCount = d3d->GetAdapterCount();
 	for (UINT i = 0; i < adapterCount; ++i) {
-		D3DADAPTER_IDENTIFIER8 id;
+		D3DADAPTER_IDENTIFIER9 id;
 		if (SUCCEEDED(d3d->GetAdapterIdentifier(i, 0, &id))) {
 			GfxDriver* d = new GfxDriver;
 			d->adapter = i;
 			d->identifier = id;
-			UINT modeCount = d3d->GetAdapterModeCount(i);
-			for (UINT j = 0; j < modeCount; ++j) {
-				D3DDISPLAYMODE mode;
-				if (SUCCEEDED(d3d->EnumAdapterModes(i, j, &mode))) {
-					if (mode.Format == D3DFMT_X8R8G8B8 ||
-						mode.Format == D3DFMT_R5G6B5 ||
-						mode.Format == D3DFMT_A8R8G8B8) {
+			for (D3DFORMAT fmt : kFormats) {
+				UINT modeCount = d3d->GetAdapterModeCount(i, fmt);
+				for (UINT j = 0; j < modeCount; ++j) {
+					D3DDISPLAYMODE mode;
+					if (SUCCEEDED(d3d->EnumAdapterModes(i, fmt, j, &mode))) {
 						GfxMode* m = new GfxMode;
 						m->mode = mode;
 						d->modes.push_back(m);

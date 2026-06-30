@@ -9,9 +9,9 @@ class gxGraphics;
 
 class gxCanvas {
 public:
-	gxCanvas(gxGraphics* g, IDirect3DSurface8* surf, int flags);
-	gxCanvas(gxGraphics* g, IDirect3DTexture8* tex, int flags);
-	gxCanvas(gxGraphics* g, IDirect3DCubeTexture8* cube_tex, int flags);
+	gxCanvas(gxGraphics* g, IDirect3DSurface9* surf, int flags);
+	gxCanvas(gxGraphics* g, IDirect3DTexture9* tex, int flags);
+	gxCanvas(gxGraphics* g, IDirect3DCubeTexture9* cube_tex, int flags);
 	~gxCanvas();
 
 	gxGraphics* graphics;
@@ -19,13 +19,13 @@ public:
 	void backup();
 	void restore();
 
-	IDirect3DSurface8* getSurface()  const;
-	IDirect3DBaseTexture8* getTexture() const;
+	IDirect3DSurface9* getSurface()  const;
+	IDirect3DBaseTexture9* getTexture() const;
 
 	mutable int mod_cnt;
 	mutable bool mipmapNeeded;
 
-	mutable IDirect3DTexture8* blit_tex;
+	mutable IDirect3DTexture9* blit_tex;
 	mutable int blit_tex_mod_cnt;
 	mutable unsigned blit_tex_mask;
 
@@ -45,19 +45,19 @@ public:
 	bool clip(RECT* d, RECT* s) const;
 	void damage(const RECT& r)  const;
 
-	IDirect3DSurface8* surf;             // the "active" surf
-	IDirect3DSurface8* z_surf;           // depth/stencil surf
+	IDirect3DSurface9* surf;             // the "active" surf
+	IDirect3DSurface9* z_surf;           // depth/stencil surf
 
 private:
 	int   flags, cube_mode;
 
-	IDirect3DSurface8* plain_surf;   // non text offscreen surf
-	IDirect3DTexture8* tex;
-	IDirect3DCubeTexture8* cube_tex;
+	IDirect3DSurface9* plain_surf;   // non text offscreen surf
+	IDirect3DTexture9* tex;
+	IDirect3DCubeTexture9* cube_tex;
 
-	IDirect3DSurface8* cube_surfs[6];
+	IDirect3DSurface9* cube_surfs[6];
 
-	mutable IDirect3DSurface8* t_surf;
+	mutable IDirect3DSurface9* t_surf;
 
 	mutable int locked_pitch, locked_cnt, lock_mod_cnt, remip_cnt;
 	mutable unsigned char* locked_surf;
@@ -162,7 +162,7 @@ public:
 	unsigned getMask()const;
 	unsigned getColor()const;
 	unsigned getClsColor()const;
-	IDirect3DBaseTexture8* getTexSurface() const;
+	IDirect3DBaseTexture9* getTexSurface() const;
 	void setMipmapNeeded(bool needed) const { mipmapNeeded = needed; }
 };
 

@@ -6,7 +6,7 @@
 extern gxRuntime* gx_runtime;
 static Debugger* debugger;
 
-gxGraphics::gxGraphics(gxRuntime* rt, IDirect3DDevice8* dev, IDirect3DSurface8* front, IDirect3DSurface8* back, bool d3d) : runtime(rt), dir3dDev(dev), frontBuffer(front), backBuffer(back), gfx_lost(false), dummy_mesh(0) {
+gxGraphics::gxGraphics(gxRuntime* rt, IDirect3DDevice9* dev, IDirect3DSurface9* front, IDirect3DSurface9* back, bool d3d) : runtime(rt), dir3dDev(dev), frontBuffer(front), backBuffer(back), gfx_lost(false), dummy_mesh(0) {
 
 	if (dir3dDev) dir3dDev->AddRef();
 	if (frontBuffer) frontBuffer->AddRef();
@@ -43,7 +43,7 @@ gxGraphics::gxGraphics(gxRuntime* rt, IDirect3DDevice8* dev, IDirect3DSurface8* 
 	front_canvas->setFont(def_font);
 	back_canvas->setFont(def_font);
 
-	D3DCAPS8 caps;
+	D3DCAPS9 caps;
 	if (dir3dDev && SUCCEEDED(dir3dDev->GetDeviceCaps(&caps))) {
 		// simple for now, we should probably enumerate!!
 		zbuffFmt = D3DFMT_D16;
@@ -109,8 +109,8 @@ bool gxGraphics::restore() {
 		hr = dir3dDev->Reset(&present_params);
 		if (FAILED(hr)) return false;
 
-		IDirect3DSurface8* newBack = nullptr;
-		hr = dir3dDev->GetBackBuffer(0, D3DBACKBUFFER_TYPE_MONO, &newBack);
+		IDirect3DSurface9* newBack = nullptr;
+		hr = dir3dDev->GetBackBuffer(0, 0, D3DBACKBUFFER_TYPE_MONO, &newBack);
 		if (FAILED(hr) || !newBack) return false;
 
 		if (runtime->backBuffer) runtime->backBuffer->Release();
@@ -195,11 +195,11 @@ bool gxGraphics::changeDisplayMode(int width, int height, bool fullscreen, bool 
 	present_params.Windowed = !fullscreen;
 	if (fullscreen) {
 		present_params.FullScreen_RefreshRateInHz = D3DPRESENT_RATE_DEFAULT;
-		present_params.FullScreen_PresentationInterval = D3DPRESENT_INTERVAL_DEFAULT;
+		present_params.PresentationInterval = D3DPRESENT_INTERVAL_DEFAULT;
 	}
 	else {
 		present_params.FullScreen_RefreshRateInHz = 0;
-		present_params.FullScreen_PresentationInterval = 0;
+		present_params.PresentationInterval = 0;
 	}
 
 	HRESULT hr = dir3dDev->Reset(&present_params);
@@ -210,8 +210,8 @@ bool gxGraphics::changeDisplayMode(int width, int height, bool fullscreen, bool 
 		return false;
 	}
 
-	IDirect3DSurface8* newBack = nullptr;
-	hr = dir3dDev->GetBackBuffer(0, D3DBACKBUFFER_TYPE_MONO, &newBack);
+	IDirect3DSurface9* newBack = nullptr;
+	hr = dir3dDev->GetBackBuffer(0, 0, D3DBACKBUFFER_TYPE_MONO, &newBack);
 	if (FAILED(hr) || !newBack) {
 		runtime->debugLog("GetBackBuffer failed");
 		return false;
@@ -298,14 +298,14 @@ void gxGraphics::closeMovie(gxMovie* m) {
 
 gxCanvas* gxGraphics::createCanvas(int w, int h, int flags) {
 	if (flags & gxCanvas::CANVAS_TEXTURE) {
-		IDirect3DTexture8* tex = ddUtil::createTextureSurface(w, h, flags, this);
+		IDirect3DTexture9* tex = ddUtil::createTextureSurface(w, h, flags, this);
 		if (!tex) return nullptr;
 		gxCanvas* c = new gxCanvas(this, tex, flags);
 		canvas_set.insert(c);
 		c->cls();
 		return c;
 	}
-	IDirect3DSurface8* surf = ddUtil::createDisplaySurface(w, h, this);
+	IDirect3DSurface9* surf = ddUtil::createDisplaySurface(w, h, this);
 	if (!surf) return nullptr;
 	gxCanvas* c = new gxCanvas(this, surf, flags);
 	canvas_set.insert(c);
@@ -315,13 +315,13 @@ gxCanvas* gxGraphics::createCanvas(int w, int h, int flags) {
 
 gxCanvas* gxGraphics::loadCanvas(const std::string& f, int flags) {
 	if (flags & gxCanvas::CANVAS_TEXTURE) {
-		IDirect3DTexture8* tex = ddUtil::loadTextureSurface(f, flags, this);
+		IDirect3DTexture9* tex = ddUtil::loadTextureSurface(f, flags, this);
 		if (!tex) return nullptr;
 		gxCanvas* c = new gxCanvas(this, tex, flags);
 		canvas_set.insert(c);
 		return c;
 	}
-	IDirect3DSurface8* surf = ddUtil::loadDisplaySurface(f, flags, this);
+	IDirect3DSurface9* surf = ddUtil::loadDisplaySurface(f, flags, this);
 	if (!surf) return nullptr;
 	gxCanvas* c = new gxCanvas(this, surf, flags);
 	canvas_set.insert(c);
@@ -418,11 +418,11 @@ gxMesh* gxGraphics::createMesh(int max_verts, int max_tris, int flags) {
 	static const DWORD VTXFMT = D3DFVF_XYZ | D3DFVF_NORMAL | D3DFVF_DIFFUSE | D3DFVF_TEX2 |
 		D3DFVF_TEXCOORDSIZE2(0) | D3DFVF_TEXCOORDSIZE2(1);
 	DWORD usage = D3DUSAGE_WRITEONLY;
-	IDirect3DVertexBuffer8* vb = nullptr;
-	if (FAILED(dir3dDev->CreateVertexBuffer(max_verts * sizeof(gxMesh::dxVertex), usage, VTXFMT, D3DPOOL_MANAGED, &vb)))
+	IDirect3DVertexBuffer9* vb = nullptr;
+	if (FAILED(dir3dDev->CreateVertexBuffer(max_verts * sizeof(gxMesh::dxVertex), usage, VTXFMT, D3DPOOL_MANAGED, &vb, nullptr)))
 		return nullptr;
-	IDirect3DIndexBuffer8* ib = nullptr;
-	if (FAILED(dir3dDev->CreateIndexBuffer(max_tris * 3 * sizeof(WORD), usage, D3DFMT_INDEX16, D3DPOOL_MANAGED, &ib))) {
+	IDirect3DIndexBuffer9* ib = nullptr;
+	if (FAILED(dir3dDev->CreateIndexBuffer(max_tris * 3 * sizeof(WORD), usage, D3DFMT_INDEX16, D3DPOOL_MANAGED, &ib, nullptr))) {
 		vb->Release();
 		return nullptr;
 	}

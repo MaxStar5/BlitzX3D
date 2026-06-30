@@ -6,7 +6,7 @@
 
 #include <set>
 #include <string>
-#include <d3d8.h>
+#include <d3d9.h>
 
 #include "ddutil.h"
 
@@ -20,10 +20,10 @@ class gxRuntime;
 
 class gxGraphics {
 public:
-	IDirect3DDevice8* dir3dDev;
-	IDirect3DSurface8* frontBuffer;
-	IDirect3DSurface8* backBuffer;
-	IDirect3D8* dir3d;
+	IDirect3DDevice9* dir3dDev;
+	IDirect3DSurface9* frontBuffer;
+	IDirect3DSurface9* backBuffer;
+	IDirect3D9* dir3d;
 
 	D3DFORMAT           zbuffFmt;
 	D3DPRESENT_PARAMETERS present_params;
@@ -32,7 +32,7 @@ public:
 
 	bool running_on_wine;
 
-	gxGraphics(gxRuntime* runtime, IDirect3DDevice8* device, IDirect3DSurface8* front, IDirect3DSurface8* back, bool d3d);
+	gxGraphics(gxRuntime* runtime, IDirect3DDevice9* device, IDirect3DSurface9* front, IDirect3DSurface9* back, bool d3d);
 	~gxGraphics();
 
 	bool restore();

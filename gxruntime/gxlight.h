@@ -2,7 +2,7 @@
 #define GXLIGHT_H
 
 #include <cstring>
-#include <d3d8.h>
+#include <d3d9.h>
 
 class gxScene;
 
@@ -11,7 +11,7 @@ public:
 	gxLight(gxScene* scene, int type);
 	~gxLight();
 
-	D3DLIGHT8 d3d_light;
+	D3DLIGHT9 d3d_light;
 
 private:
 	gxScene* scene;

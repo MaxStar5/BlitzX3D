@@ -64,8 +64,8 @@ static bool hasRealAlpha(FIBITMAP* fib) {
     return FreeImage_GetColorType(fib) == FIC_RGBALPHA;
 }
 
-static void adjustTexSize(int* width, int* height, IDirect3DDevice8* dev) {
-    D3DCAPS8 caps;
+static void adjustTexSize(int* width, int* height, IDirect3DDevice9* dev) {
+    D3DCAPS9 caps;
     if (FAILED(dev->GetDeviceCaps(&caps))) {
         *width = *height = 256;
         return;
@@ -100,7 +100,7 @@ static void adjustTexSize(int* width, int* height, IDirect3DDevice8* dev) {
     *height = h;
 }
 
-void ddUtil::buildMipMaps(IDirect3DTexture8* tex) {
+void ddUtil::buildMipMaps(IDirect3DTexture9* tex) {
     if (!tex) return;
     DWORD levels = tex->GetLevelCount();
     if (levels <= 1) return;
@@ -143,8 +143,8 @@ void ddUtil::buildMipMaps(IDirect3DTexture8* tex) {
     }
 }
 
-void ddUtil::copy(IDirect3DSurface8* dest_surf, int dx, int dy, int dw, int dh,
-    IDirect3DSurface8* src_surf, int sx, int sy, int sw, int sh) {
+void ddUtil::copy(IDirect3DSurface9* dest_surf, int dx, int dy, int dw, int dh,
+    IDirect3DSurface9* src_surf, int sx, int sy, int sw, int sh) {
     D3DLOCKED_RECT src_lr, dst_lr;
     D3DSURFACE_DESC src_desc, dst_desc;
     src_surf->GetDesc(&src_desc);
@@ -172,14 +172,14 @@ void ddUtil::copy(IDirect3DSurface8* dest_surf, int dx, int dy, int dw, int dh,
     src_surf->UnlockRect();
 }
 
-IDirect3DSurface8* ddUtil::createDisplaySurface(int w, int h, gxGraphics* gfx) {
-    IDirect3DSurface8* surf = nullptr;
-    gfx->dir3dDev->CreateImageSurface(w, h, D3DFMT_A8R8G8B8, &surf);
+IDirect3DSurface9* ddUtil::createDisplaySurface(int w, int h, gxGraphics* gfx) {
+    IDirect3DSurface9* surf = nullptr;
+    gfx->dir3dDev->CreateOffscreenPlainSurface(w, h, D3DFMT_A8R8G8B8, D3DPOOL_SYSTEMMEM, &surf, nullptr);
     return surf;
 }
 
-IDirect3DTexture8* ddUtil::createTextureSurface(int w, int h, int flags, gxGraphics* gfx) {
-    IDirect3DDevice8* dev = gfx->dir3dDev;
+IDirect3DTexture9* ddUtil::createTextureSurface(int w, int h, int flags, gxGraphics* gfx) {
+    IDirect3DDevice9* dev = gfx->dir3dDev;
     adjustTexSize(&w, &h, dev);
 
     bool hasAlpha = (flags & gxCanvas::CANVAS_TEX_ALPHA) != 0;
@@ -191,8 +191,8 @@ IDirect3DTexture8* ddUtil::createTextureSurface(int w, int h, int flags, gxGraph
     if (flags & gxCanvas::CANVAS_TEX_HICOLOR) fmt = D3DFMT_A4R4G4B4;
 
     UINT mipLevels = hasMips ? 0 : 1;
-    IDirect3DTexture8* tex = nullptr;
-    dev->CreateTexture(w, h, mipLevels, 0, fmt, D3DPOOL_MANAGED, &tex);
+    IDirect3DTexture9* tex = nullptr;
+    dev->CreateTexture(w, h, mipLevels, 0, fmt, D3DPOOL_MANAGED, &tex, nullptr);
     return tex;
 }
 
@@ -222,7 +222,7 @@ static void buildAlpha(FIBITMAP* fib, BYTE* bits, int pitch, int w, int h, bool 
     }
 }
 
-IDirect3DSurface8* ddUtil::loadDisplaySurface(const std::string& file, int flags, gxGraphics* gfx) {
+IDirect3DSurface9* ddUtil::loadDisplaySurface(const std::string& file, int flags, gxGraphics* gfx) {
     g_lastImageError.clear();
 
     FREE_IMAGE_FORMAT fif = FreeImage_GetFileType(file.c_str(), 0);
@@ -245,9 +245,9 @@ IDirect3DSurface8* ddUtil::loadDisplaySurface(const std::string& file, int flags
     int w = FreeImage_GetWidth(fib32);
     int h = FreeImage_GetHeight(fib32);
 
-    IDirect3DSurface8* surf = nullptr;
-    if (FAILED(gfx->dir3dDev->CreateImageSurface(w, h, D3DFMT_A8R8G8B8, &surf))) {
-        g_lastImageError = "CreateImageSurface failed: " + file;
+    IDirect3DSurface9* surf = nullptr;
+    if (FAILED(gfx->dir3dDev->CreateOffscreenPlainSurface(w, h, D3DFMT_A8R8G8B8, D3DPOOL_SYSTEMMEM, &surf, nullptr))) {
+        g_lastImageError = "CreateOffscreenPlainSurface failed: " + file;
         FreeImage_Unload(fib32);
         return nullptr;
     }
@@ -302,7 +302,7 @@ IDirect3DSurface8* ddUtil::loadDisplaySurface(const std::string& file, int flags
     return surf;
 }
 
-IDirect3DTexture8* ddUtil::loadTextureSurface(const std::string& file, int flags, gxGraphics* gfx) {
+IDirect3DTexture9* ddUtil::loadTextureSurface(const std::string& file, int flags, gxGraphics* gfx) {
     g_lastImageError.clear();
 
     FREE_IMAGE_FORMAT fif = FreeImage_GetFileType(file.c_str(), 0);
@@ -337,8 +337,8 @@ IDirect3DTexture8* ddUtil::loadTextureSurface(const std::string& file, int flags
 
     UINT mipLevels = hasMips ? 0 : 1;
 
-    IDirect3DTexture8* tex = nullptr;
-    HRESULT hr = gfx->dir3dDev->CreateTexture(adjW, adjH, mipLevels, 0, fmt, D3DPOOL_MANAGED, &tex);
+    IDirect3DTexture9* tex = nullptr;
+    HRESULT hr = gfx->dir3dDev->CreateTexture(adjW, adjH, mipLevels, 0, fmt, D3DPOOL_MANAGED, &tex, nullptr);
     if (FAILED(hr)) {
         g_lastImageError = "CreateTexture failed: " + file;
         FreeImage_Unload(fib32);

@@ -22,12 +22,19 @@ void gxScene::setTSS(int n, int s, int t) {
 	d3d_tss[n][s] = t;
 }
 
+void gxScene::setSamp(int n, int s, int t) {
+	if (d3d_samp[n][s] == t) return;
+	dir3dDev->SetSamplerState(n, (D3DSAMPLERSTATETYPE)s, t);
+	d3d_samp[n][s] = t;
+}
+
 gxScene::gxScene(gxGraphics* g, gxCanvas* t) :
 	graphics(g), target(t), dir3dDev(g->dir3dDev),
 	n_texs(0), tris_drawn(0) {
 
 	memset(d3d_rs, 0x55, sizeof(d3d_rs));
 	memset(d3d_tss, 0x55, sizeof(d3d_tss));
+	memset(d3d_samp, 0x55, sizeof(d3d_samp));
 
 	//nomalize normals
 	setRS(D3DRS_NORMALIZENORMALS, TRUE);
@@ -54,7 +61,7 @@ gxScene::gxScene(gxGraphics* g, gxCanvas* t) :
 	caps_level = 100;
 	max_lights = 8;
 
-	D3DCAPS8 caps8;
+	D3DCAPS9 caps8;
 	if (SUCCEEDED(dir3dDev->GetDeviceCaps(&caps8))) {
 		DWORD rasterCaps = caps8.RasterCaps;
 
@@ -88,9 +95,9 @@ gxScene::gxScene(gxGraphics* g, gxCanvas* t) :
 		setTSS(n, D3DTSS_COLORARG2, D3DTA_CURRENT);
 		setTSS(n, D3DTSS_ALPHAARG1, D3DTA_TEXTURE);
 		setTSS(n, D3DTSS_ALPHAARG2, D3DTA_CURRENT);
-		setTSS(n, D3DTSS_MINFILTER, D3DTEXF_LINEAR);
-		setTSS(n, D3DTSS_MAGFILTER, D3DTEXF_LINEAR);
-		setTSS(n, D3DTSS_MIPFILTER, D3DTEXF_LINEAR);
+		setSamp(n, D3DSAMP_MINFILTER, D3DTEXF_LINEAR);
+		setSamp(n, D3DSAMP_MAGFILTER, D3DTEXF_LINEAR);
+		setSamp(n, D3DSAMP_MIPFILTER, D3DTEXF_LINEAR);
 	}
 	setHWMultiTex(true);
 
@@ -148,8 +155,8 @@ void gxScene::setTexState(int n, const TexState& state, bool tex_blend) {
 	dir3dDev->SetTexture(n, state.canvas->getTexSurface());
 
 	//set addressing modes
-	setTSS(n, D3DTSS_ADDRESSU, (flags & gxCanvas::CANVAS_TEX_CLAMPU) ? D3DTADDRESS_CLAMP : D3DTADDRESS_WRAP);
-	setTSS(n, D3DTSS_ADDRESSV, (flags & gxCanvas::CANVAS_TEX_CLAMPV) ? D3DTADDRESS_CLAMP : D3DTADDRESS_WRAP);
+	setSamp(n, D3DSAMP_ADDRESSU, (flags & gxCanvas::CANVAS_TEX_CLAMPU) ? D3DTADDRESS_CLAMP : D3DTADDRESS_WRAP);
+	setSamp(n, D3DSAMP_ADDRESSV, (flags & gxCanvas::CANVAS_TEX_CLAMPV) ? D3DTADDRESS_CLAMP : D3DTADDRESS_WRAP);
 
 	switch(flags & (
 		gxCanvas::CANVAS_TEX_POINT |
@@ -157,30 +164,30 @@ void gxScene::setTexState(int n, const TexState& state, bool tex_blend) {
 		gxCanvas::CANVAS_TEX_NOFILTER |
 		gxCanvas::CANVAS_TEX_ANISOTROPIC)) {
 		case gxCanvas::CANVAS_TEX_POINT:
-			setTSS(n, D3DTSS_MINFILTER, D3DTEXF_POINT);
-			setTSS(n, D3DTSS_MAGFILTER, D3DTEXF_POINT);
-			setTSS(n, D3DTSS_MIPFILTER, D3DTEXF_POINT);
+			setSamp(n, D3DSAMP_MINFILTER, D3DTEXF_POINT);
+			setSamp(n, D3DSAMP_MAGFILTER, D3DTEXF_POINT);
+			setSamp(n, D3DSAMP_MIPFILTER, D3DTEXF_POINT);
 			break;
 		case gxCanvas::CANVAS_TEX_BILINEAR:
-			setTSS(n, D3DTSS_MINFILTER, D3DTEXF_LINEAR);
-			setTSS(n, D3DTSS_MAGFILTER, D3DTEXF_LINEAR);
-			setTSS(n, D3DTSS_MIPFILTER, D3DTEXF_POINT);
+			setSamp(n, D3DSAMP_MINFILTER, D3DTEXF_LINEAR);
+			setSamp(n, D3DSAMP_MAGFILTER, D3DTEXF_LINEAR);
+			setSamp(n, D3DSAMP_MIPFILTER, D3DTEXF_POINT);
 			break;
 		case gxCanvas::CANVAS_TEX_NOFILTER:
-			setTSS(n, D3DTSS_MINFILTER, D3DTEXF_POINT);
-			setTSS(n, D3DTSS_MAGFILTER, D3DTEXF_POINT);
-			setTSS(n, D3DTSS_MIPFILTER, D3DTEXF_NONE);
+			setSamp(n, D3DSAMP_MINFILTER, D3DTEXF_POINT);
+			setSamp(n, D3DSAMP_MAGFILTER, D3DTEXF_POINT);
+			setSamp(n, D3DSAMP_MIPFILTER, D3DTEXF_NONE);
 			break;
 		case gxCanvas::CANVAS_TEX_ANISOTROPIC:
-			setTSS(n, D3DTSS_MINFILTER, D3DTEXF_ANISOTROPIC);
-			setTSS(n, D3DTSS_MAGFILTER, D3DTEXF_ANISOTROPIC);
-			setTSS(n, D3DTSS_MIPFILTER, D3DTEXF_LINEAR);
-			setTSS(n, D3DTSS_MAXANISOTROPY, (textureAnisotropic > 0) ? textureAnisotropic : 1);
+			setSamp(n, D3DSAMP_MINFILTER, D3DTEXF_ANISOTROPIC);
+			setSamp(n, D3DSAMP_MAGFILTER, D3DTEXF_ANISOTROPIC);
+			setSamp(n, D3DSAMP_MIPFILTER, D3DTEXF_LINEAR);
+			setSamp(n, D3DSAMP_MAXANISOTROPY, (textureAnisotropic > 0) ? textureAnisotropic : 1);
 			break;
 		default:
-			setTSS(n, D3DTSS_MINFILTER, D3DTEXF_LINEAR);
-			setTSS(n, D3DTSS_MAGFILTER, D3DTEXF_LINEAR);
-			setTSS(n, D3DTSS_MIPFILTER, D3DTEXF_LINEAR);
+			setSamp(n, D3DSAMP_MINFILTER, D3DTEXF_LINEAR);
+			setSamp(n, D3DSAMP_MAGFILTER, D3DTEXF_LINEAR);
+			setSamp(n, D3DSAMP_MIPFILTER, D3DTEXF_LINEAR);
 	}
 
 	//texgen
@@ -624,7 +631,7 @@ bool gxScene::begin(const std::vector<gxLight*>& lights) {
 		setTSS(n, D3DTSS_COLOROP, D3DTOP_DISABLE);
 		setTSS(n, D3DTSS_ALPHAOP, D3DTOP_DISABLE);
 		dir3dDev->SetTexture(n, 0);
-		setTSS(n, D3DTSS_MIPMAPLODBIAS, textureLodBias);
+		setSamp(n, D3DSAMP_MIPMAPLODBIAS, textureLodBias);
 	}
 
 	//set light states
@@ -641,7 +648,8 @@ bool gxScene::begin(const std::vector<gxLight*>& lights) {
 	setLights();
 
 	if (target->z_surf) {
-		dir3dDev->SetRenderTarget(target->surf, target->z_surf);
+		dir3dDev->SetRenderTarget(0, target->surf);
+		dir3dDev->SetDepthStencilSurface(target->z_surf);
 	}
 
 	dir3dDev->SetViewport(&viewport);
