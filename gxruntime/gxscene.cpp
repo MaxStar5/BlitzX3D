@@ -493,7 +493,16 @@ void gxScene::setWorldMatrix(const Matrix* m) {
 
 void gxScene::setRenderState(const RenderState& rs) {
 	if (lastRenderStateValid && memcmp(&rs, &lastRenderState, sizeof(RenderState)) == 0) {
-		return;
+		bool hasTexture = false;
+		for (int k = 0; k < MAX_TEXTURES; ++k) {
+			if (rs.tex_states[k].canvas) {
+				hasTexture = true;
+				break;
+			}
+		}
+		if (!hasTexture) {
+			return;
+		}
 	}
 
 	bool setmat = false;
