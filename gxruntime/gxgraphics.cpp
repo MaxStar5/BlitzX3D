@@ -247,6 +247,14 @@ bool gxGraphics::changeDisplayMode(int width, int height, bool fullscreen, bool 
 	updateCanvas(front_canvas);
 	updateCanvas(back_canvas);
 
+	for (auto it = mesh_set.begin(); it != mesh_set.end(); ++it) {
+		(*it)->restore();
+	}
+	for (auto font : font_set) {
+		for (auto atlas : font->atlases) atlas->restore();
+		if (font->tempCanvas) font->tempCanvas->restore();
+	}
+
 	InvalidateRect(hwnd, nullptr, FALSE);
 
 	return true;

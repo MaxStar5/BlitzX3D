@@ -27,12 +27,9 @@ bool gxMesh::lock(bool all) {
         DWORD vflags = D3DLOCK_NOSYSLOCK | (all ? D3DLOCK_DISCARD : D3DLOCK_NOOVERWRITE);
         void* ptr = nullptr;
         if (FAILED(vertex_buff->Lock(0, 0, &ptr, vflags))) {
-            static dxVertex err_verts[32768];
-            locked_verts = err_verts;
+            return false;
         }
-        else {
-            locked_verts = reinterpret_cast<dxVertex*>(ptr);
-        }
+        locked_verts = reinterpret_cast<dxVertex*>(ptr);
     }
 
     // lock index buffer
@@ -40,12 +37,10 @@ bool gxMesh::lock(bool all) {
         DWORD iflags = D3DLOCK_NOSYSLOCK | (all ? D3DLOCK_DISCARD : D3DLOCK_NOOVERWRITE);
         void* ptr = nullptr;
         if (FAILED(index_buff->Lock(0, 0, &ptr, iflags))) {
-            static WORD err_indices[32768 * 3];
-            locked_indices = err_indices;
+            if (locked_verts) { vertex_buff->Unlock(); locked_verts = nullptr; }
+            return false;
         }
-        else {
-            locked_indices = reinterpret_cast<WORD*>(ptr);
-        }
+        locked_indices = reinterpret_cast<WORD*>(ptr);
     }
 
     mesh_dirty = false;
