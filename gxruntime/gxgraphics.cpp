@@ -434,11 +434,15 @@ gxMesh* gxGraphics::createMesh(int max_verts, int max_tris, int flags) {
 	static const DWORD VTXFMT = D3DFVF_XYZ | D3DFVF_NORMAL | D3DFVF_DIFFUSE | D3DFVF_TEX2 |
 		D3DFVF_TEXCOORDSIZE2(0) | D3DFVF_TEXCOORDSIZE2(1);
 	DWORD usage = D3DUSAGE_WRITEONLY;
+
+	int safe_verts = max_verts > 0 ? max_verts : 1;
+	int safe_tris = max_tris > 0 ? max_tris : 1;
+
 	IDirect3DVertexBuffer9* vb = nullptr;
-	if (FAILED(dir3dDev->CreateVertexBuffer(max_verts * sizeof(gxMesh::dxVertex), usage, VTXFMT, D3DPOOL_MANAGED, &vb, nullptr)))
+	if (FAILED(dir3dDev->CreateVertexBuffer(safe_verts * sizeof(gxMesh::dxVertex), usage, VTXFMT, D3DPOOL_MANAGED, &vb, nullptr)))
 		return nullptr;
 	IDirect3DIndexBuffer9* ib = nullptr;
-	if (FAILED(dir3dDev->CreateIndexBuffer(max_tris * 3 * sizeof(WORD), usage, D3DFMT_INDEX16, D3DPOOL_MANAGED, &ib, nullptr))) {
+	if (FAILED(dir3dDev->CreateIndexBuffer(safe_tris * 3 * sizeof(WORD), usage, D3DFMT_INDEX16, D3DPOOL_MANAGED, &ib, nullptr))) {
 		vb->Release();
 		return nullptr;
 	}

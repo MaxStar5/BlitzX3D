@@ -101,7 +101,7 @@ gxMesh* Surface::getMesh() {
 		mesh = gx_graphics->createMesh(mesh_vs, mesh_ts, 0);
 	}
 
-	if (!mesh->lock(true)) {
+	if (!mesh || !mesh->lock(true)) {
 		valid_vs = start_vs;
 		valid_ts = start_ts;
 		return mesh;
