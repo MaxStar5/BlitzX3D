@@ -56,6 +56,20 @@ static bool clip(const RECT& viewport, RECT* d, RECT* s) {
     return true;
 }
 
+struct FillModeGuard {
+    IDirect3DDevice9* dev;
+    DWORD oldMode;
+    FillModeGuard(IDirect3DDevice9* d) : dev(d) {
+        if (dev) {
+            dev->GetRenderState(D3DRS_FILLMODE, &oldMode);
+            dev->SetRenderState(D3DRS_FILLMODE, D3DFILL_SOLID);
+        }
+    }
+    ~FillModeGuard() {
+        if (dev) dev->SetRenderState(D3DRS_FILLMODE, oldMode);
+    }
+};
+
 class FillRectGuard {
     IDirect3DDevice9* dev;
     IDirect3DSurface9* oldRT;
@@ -788,6 +802,7 @@ void gxCanvas::blit(int x, int y, gxCanvas* src, int src_x, int src_y,
 
     IDirect3DDevice9* dev = graphics->dir3dDev;
     if (!dev) return;
+    FillModeGuard guard(dev);
 
     unsigned maskRGB = solid ? ~0u : (src->format.toARGB(src->mask_surf) & 0x00ffffffu);
     IDirect3DTexture9* blitTex = getOrBuildBlitTex(dev, src, maskRGB);
@@ -843,6 +858,7 @@ void gxCanvas::blitstretch(int x, int y, int w, int h,
 
     IDirect3DDevice9* dev = graphics->dir3dDev;
     if (!dev) return;
+    FillModeGuard guard(dev);
 
     unsigned maskRGB = solid ? ~0u : (src->format.toARGB(src->mask_surf) & 0x00ffffffu);
     IDirect3DTexture9* blitTex = getOrBuildBlitTex(dev, src, maskRGB);
@@ -887,6 +903,7 @@ void gxCanvas::blitAlpha(int x, int y, gxCanvas* src,
 
     IDirect3DDevice9* dev = graphics->dir3dDev;
     if (!dev) return;
+    FillModeGuard guard(dev);
 
     IDirect3DBaseTexture9* tex = src->getTexture();
     if (!tex) {
