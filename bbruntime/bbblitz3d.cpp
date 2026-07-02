@@ -2030,13 +2030,13 @@ int  bbActiveTextures() {
 }
 
 void blitz3d_open() {
-	MessageBoxA(NULL, "blitz3d_open: entered", "Debug", MB_OK);
+	// MessageBoxA(NULL, "blitz3d_open: entered", "Debug", MB_OK);
 	gx_scene = gx_graphics->createScene(0);
-	MessageBoxA(NULL, "blitz3d_open: after createScene", "Debug", MB_OK);
+	// MessageBoxA(NULL, "blitz3d_open: after createScene", "Debug", MB_OK);
 	if (!gx_scene) RTEX(MultiLang::unable_create_gxscene_instance);
-	MessageBoxA(NULL, "blitz3d_open: scene valid", "Debug", MB_OK);
+	// MessageBoxA(NULL, "blitz3d_open: scene valid", "Debug", MB_OK);
 	world = new World();
-	MessageBoxA(NULL, "blitz3d_open: after new World", "Debug", MB_OK);
+	// MessageBoxA(NULL, "blitz3d_open: after new World", "Debug", MB_OK);
 	::projected = Vector();
 	picked.collision = Collision();
 	picked.with = 0; picked.coords = Vector();

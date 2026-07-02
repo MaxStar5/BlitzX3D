@@ -10,11 +10,11 @@
 #include <sstream>
 
 static void DebugMsg(const char* msg) {
-	MessageBoxA(NULL, msg, "Graphics Debug", MB_OK);
+	// MessageBoxA(NULL, msg, "Graphics Debug", MB_OK);
 }
 
 static void DebugMsg(const std::string& msg) {
-	MessageBoxA(NULL, msg.c_str(), "Graphics Debug", MB_OK);
+	// MessageBoxA(NULL, msg.c_str(), "Graphics Debug", MB_OK);
 }
 
 static DWORD pickVertexProcessingFlag(IDirect3D9* d3d, UINT adapter) {

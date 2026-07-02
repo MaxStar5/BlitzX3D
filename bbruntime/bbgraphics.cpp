@@ -542,17 +542,17 @@ void bbBufferDirty(gxCanvas* c)
 }
 
 static void graphics(int w, int h, int d, int flags) {
-    MessageBoxA(NULL, "graphics(): entered", "Debug", MB_OK);
+    // MessageBoxA(NULL, "graphics(): entered", "Debug", MB_OK);
     freeGraphics(false);
-    MessageBoxA(NULL, "graphics(): after freeGraphics", "Debug", MB_OK);
+    // MessageBoxA(NULL, "graphics(): after freeGraphics", "Debug", MB_OK);
     gx_runtime->closeGraphics(gx_graphics);
-    MessageBoxA(NULL, "graphics(): after closeGraphics", "Debug", MB_OK);
+    // MessageBoxA(NULL, "graphics(): after closeGraphics", "Debug", MB_OK);
     gx_graphics = gx_runtime->openGraphics(w, h, d, gx_driver, flags);
-    MessageBoxA(NULL, "graphics(): after openGraphics", "Debug", MB_OK);
+    // MessageBoxA(NULL, "graphics(): after openGraphics", "Debug", MB_OK);
     if (!gx_runtime->idle()) RTEX(0);
-    MessageBoxA(NULL, "graphics(): after idle", "Debug", MB_OK);
+    // MessageBoxA(NULL, "graphics(): after idle", "Debug", MB_OK);
     if (!gx_graphics) RTEX(MultiLang::unable_create_gxgraphics_instance);
-    MessageBoxA(NULL, "graphics(): gx_graphics valid", "Debug", MB_OK);
+    // MessageBoxA(NULL, "graphics(): gx_graphics valid", "Debug", MB_OK);
 
     for (bbImage* img : image_set) {
         img->restoreToDevice();
@@ -562,11 +562,11 @@ static void graphics(int w, int h, int d, int flags) {
     curr_color = 0xffffffff;
     curr_font = gx_graphics->getDefaultFont();
 
-    MessageBoxA(NULL, "graphics(): after getDefaultFont", "Debug", MB_OK);
+    // MessageBoxA(NULL, "graphics(): after getDefaultFont", "Debug", MB_OK);
     gxCanvas* buff = (flags & gxGraphics::GRAPHICS_3D) ? gx_graphics->getBackCanvas() : gx_graphics->getFrontCanvas();
-    MessageBoxA(NULL, "graphics(): before bbSetBuffer", "Debug", MB_OK);
+    // MessageBoxA(NULL, "graphics(): before bbSetBuffer", "Debug", MB_OK);
     bbSetBuffer(buff);
-    MessageBoxA(NULL, "graphics(): after bbSetBuffer", "Debug", MB_OK);
+    // MessageBoxA(NULL, "graphics(): after bbSetBuffer", "Debug", MB_OK);
 }
 
 void bbGraphics(int w, int h, int d, int mode)
@@ -1013,7 +1013,7 @@ bbImage* bbLoadAnimImage(BBStr* s, int w, int h, int first, int cnt) {
 
     gxCanvas* pic = gx_graphics->loadCanvas(t, gxCanvas::CANVAS_TEXTURE);
     if (!pic) {
-        MessageBoxA(NULL, "loadCanvas (CANVAS_TEXTURE) failed", "LoadAnimImage", MB_OK);
+        // MessageBoxA(NULL, "loadCanvas (CANVAS_TEXTURE) failed", "LoadAnimImage", MB_OK);
         return 0;
     }
 

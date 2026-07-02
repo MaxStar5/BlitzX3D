@@ -190,7 +190,7 @@ static void _cdecl seTranslator(unsigned int u, EXCEPTION_POINTERS* pExp) {
 
 		char msg[512];
 		sprintf_s(msg, sizeof(msg), "A crash has occurred.\n\nThe log and dump files have been saved to:\n%s\n\n" "Please send this file to krimbopple for debugging.", logPath);
-		MessageBoxA(NULL, msg, "Blitz Runtime Error", MB_OK | MB_ICONERROR);
+		// MessageBoxA(NULL, msg, "Blitz Runtime Error", MB_OK | MB_ICONERROR);
 	}
 
 	switch (u) {

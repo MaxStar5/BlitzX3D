@@ -276,7 +276,7 @@ int  gxScene::gfxDriverCaps3D() {
 void gxScene::setZMode() {
 	switch(zmode) {
 		case ZMODE_NORMAL:
-			setRS(D3DRS_ZENABLE, wbuffer ? D3DZB_USEW : D3DZB_TRUE);
+			setRS(D3DRS_ZENABLE, D3DZB_TRUE);
 			setRS(D3DRS_ZWRITEENABLE, true);
 			break;
 		case ZMODE_DISABLE:
@@ -284,7 +284,7 @@ void gxScene::setZMode() {
 			setRS(D3DRS_ZWRITEENABLE, false);
 			break;
 		case ZMODE_CMPONLY:
-			setRS(D3DRS_ZENABLE, wbuffer ? D3DZB_USEW : D3DZB_TRUE);
+			setRS(D3DRS_ZENABLE, D3DZB_TRUE);
 			setRS(D3DRS_ZWRITEENABLE, false);
 			break;
 	}

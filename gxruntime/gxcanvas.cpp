@@ -377,7 +377,7 @@ bool gxCanvas::attachZBuffer() {
     if (FAILED(hr) || !z_surf) {
         char buf[256];
         sprintf(buf, "CreateDepthStencilSurface failed: 0x%08X", hr);
-        MessageBoxA(NULL, buf, "Error", MB_OK);
+        // MessageBoxA(NULL, buf, "Error", MB_OK);
         return false;
     }
     return true;

@@ -13,10 +13,10 @@ gxGraphics::gxGraphics(gxRuntime* rt, IDirect3DDevice9* dev, IDirect3DSurface9* 
 	if (backBuffer) backBuffer->AddRef();
 
 	front_canvas = new gxCanvas(this, frontBuffer, 0);
-	MessageBoxA(NULL, "front_canvas created", "Debug", MB_OK);
+	// MessageBoxA(NULL, "front_canvas created", "Debug", MB_OK);
 
 	if (!backBuffer) {
-		MessageBoxA(NULL, "backBuffer is NULL!", "Error", MB_OK);
+		// MessageBoxA(NULL, "backBuffer is NULL!", "Error", MB_OK);
 		return;
 	}
 
@@ -25,11 +25,11 @@ gxGraphics::gxGraphics(gxRuntime* rt, IDirect3DDevice9* dev, IDirect3DSurface9* 
 	if (FAILED(hr)) {
 		char buf[256];
 		sprintf(buf, "backBuffer->GetDesc failed: 0x%08X", hr);
-		MessageBoxA(NULL, buf, "Error", MB_OK);
+		// MessageBoxA(NULL, buf, "Error", MB_OK);
 	}
 
 	back_canvas = new gxCanvas(this, backBuffer, 0);
-	MessageBoxA(NULL, "back_canvas created", "Debug", MB_OK);
+	// MessageBoxA(NULL, "back_canvas created", "Debug", MB_OK);
 
 	front_canvas->cls();
 	back_canvas->cls();
@@ -407,7 +407,7 @@ gxScene* gxGraphics::createScene(int flags) {
 		}
 	}
 	if (!zOk) {
-		MessageBoxA(NULL, "createScene: Failed to attach any Z-buffer", "Error", MB_OK);
+		// MessageBoxA(NULL, "createScene: Failed to attach any Z-buffer", "Error", MB_OK);
 		return 0;
 	}
 
