@@ -17,6 +17,7 @@
 #include "gxmovie.h"
 
 class gxRuntime;
+class gxEffect;
 
 class gxGraphics {
 public:
@@ -53,6 +54,7 @@ private:
 	std::set<gxScene*> scene_set;
 	std::set<gxMovie*> movie_set;
 	std::set<std::string> font_res;
+	std::set<gxEffect*> effect_set;
 
 	// DDGAMMARAMP _gammaRamp;
 	// IDirectDrawGammaControl* _gamma;
@@ -74,6 +76,11 @@ public:
 	};
 
 	DeviceState getDeviceState();
+
+	// i wonder what this is for
+	gxEffect* createEffect(const std::string& filename);
+	gxEffect* verifyEffect(gxEffect* e);
+	void freeEffect(gxEffect* e);
 
 	//MANIPULATORS
 	void vwait();

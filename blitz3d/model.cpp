@@ -10,6 +10,7 @@ class Model::MeshQueue {
 	};
 	int fv, vc, ft, tc;
 	Brush brush;
+	gxEffect* effect;
 	int q_type;
 
 	static MeshQueue* pool;
@@ -17,8 +18,8 @@ class Model::MeshQueue {
 public:
 	MeshQueue() {}
 
-	MeshQueue(gxMesh* m, int fv, int vc, int ft, int tc, const Brush& b) :
-		mesh(m), fv(fv), vc(vc), ft(ft), tc(tc), brush(b) {
+	MeshQueue(gxMesh* m, int fv, int vc, int ft, int tc, const Brush& b, gxEffect* e = nullptr) :
+		mesh(m), fv(fv), vc(vc), ft(ft), tc(tc), brush(b), effect(e) {
 		int n = brush.getBlend();
 		q_type = (n == gxScene::BLEND_REPLACE) ? QUEUE_OPAQUE : QUEUE_TRANSPARENT;
 	}
@@ -28,6 +29,7 @@ public:
 	}
 	void render() {
 		gx_scene->setRenderState(brush.getRenderState());
+		gx_scene->setEffect(effect);
 		gx_scene->render(mesh, fv, vc, ft, tc);
 	}
 	void* operator new(size_t sz) {
@@ -76,6 +78,7 @@ bool Model::beginRender(float t) {
 		//
 		tweened_alpha = (tweened_alpha - captured_alpha) * t + captured_alpha;
 	}
+	renderEffect = entityEffect ? entityEffect : brush.getEffect();
 	return tweened_alpha > 0;
 }
 
@@ -111,11 +114,11 @@ void Model::enqueue(MeshQueue* q) {
 }
 
 void Model::enqueue(gxMesh* mesh, int fv, int vc, int ft, int tc) {
-	enqueue(new MeshQueue(mesh, fv, vc, ft, tc, render_brush));
+	enqueue(new MeshQueue(mesh, fv, vc, ft, tc, render_brush, renderEffect));
 }
 
 void Model::enqueue(gxMesh* mesh, int fv, int vc, int ft, int tc, const Brush& brush) {
-	enqueue(new MeshQueue(mesh, fv, vc, ft, tc, brush));
+	enqueue(new MeshQueue(mesh, fv, vc, ft, tc, brush, renderEffect));
 }
 
 void Model::renderQueue(int type) {
@@ -125,4 +128,12 @@ void Model::renderQueue(int type) {
 		q->render();
 		delete q;
 	}
+}
+
+void Model::setEffect(gxEffect* e) {
+	entityEffect = e;
+}
+
+gxEffect* Model::getEffect() const {
+	return entityEffect;
 }

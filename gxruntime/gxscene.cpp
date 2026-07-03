@@ -2,6 +2,7 @@
 #include "gxscene.h"
 #include "gxgraphics.h"
 #include "gxruntime.h"
+#include "gxeffect.h"
 
 static bool can_wb;
 static int  hw_tex_stages, tex_stages;
@@ -31,6 +32,11 @@ void gxScene::setSamp(int n, int s, int t) {
 gxScene::gxScene(gxGraphics* g, gxCanvas* t) :
 	graphics(g), target(t), dir3dDev(g->dir3dDev),
 	n_texs(0), tris_drawn(0) {
+
+	currentEffect = nullptr;
+	D3DXMatrixIdentity(&currentWorld);
+	D3DXMatrixIdentity(&currentView);
+	D3DXMatrixIdentity(&currentProj);
 
 	memset(d3d_rs, 0x55, sizeof(d3d_rs));
 	memset(d3d_tss, 0x55, sizeof(d3d_tss));
@@ -146,6 +152,14 @@ gxScene::gxScene(gxGraphics* g, gxCanvas* t) :
 
 gxScene::~gxScene() {
 	while(_allLights.size()) freeLight(*_allLights.begin());
+}
+
+void gxScene::setEffect(gxEffect* e) {
+	currentEffect = e;
+}
+
+gxEffect* gxScene::getEffect() const {
+	return currentEffect;
 }
 
 void gxScene::setTexState(int n, const TexState& state, bool tex_blend) {
@@ -415,6 +429,7 @@ void gxScene::setOrthoProj(float nr, float fr, float w, float h) {
 	projmatrix._34 = 0;
 	projmatrix._43 = -Q * nr;
 	projmatrix._44 = 1;
+	currentProj = projmatrix;
 	dir3dDev->SetTransform(D3DTS_PROJECTION, &projmatrix);
 }
 
@@ -430,6 +445,7 @@ void gxScene::setPerspProj(float nr, float fr, float w, float h) {
 	projmatrix._34 = 1;
 	projmatrix._43 = -Q * nr;
 	projmatrix._44 = 0;
+	currentProj = projmatrix;
 	dir3dDev->SetTransform(D3DTS_PROJECTION, &projmatrix);
 }
 
@@ -468,12 +484,14 @@ void gxScene::setViewMatrix(const Matrix* m) {
 		memcpy(&viewmatrix._21, m->elements[1], 12);
 		memcpy(&viewmatrix._31, m->elements[2], 12);
 		memcpy(&viewmatrix._41, m->elements[3], 12);
+		currentView = viewmatrix;
 		inv_viewmatrix._11 = viewmatrix._11; inv_viewmatrix._21 = viewmatrix._12; inv_viewmatrix._31 = viewmatrix._13;
 		inv_viewmatrix._12 = viewmatrix._21; inv_viewmatrix._22 = viewmatrix._22; inv_viewmatrix._32 = viewmatrix._23;
 		inv_viewmatrix._13 = viewmatrix._31; inv_viewmatrix._23 = viewmatrix._32; inv_viewmatrix._33 = viewmatrix._33;
 		inv_viewmatrix._44 = viewmatrix._44;
 	}
 	else {
+		D3DXMatrixIdentity(&currentView);
 		viewmatrix = inv_viewmatrix = nullmatrix;
 	}
 
@@ -481,17 +499,23 @@ void gxScene::setViewMatrix(const Matrix* m) {
 }
 
 void gxScene::setWorldMatrix(const Matrix* m) {
-	if(m) {
-		memcpy(&worldmatrix._11, m->elements[0], 12);
-		memcpy(&worldmatrix._21, m->elements[1], 12);
-		memcpy(&worldmatrix._31, m->elements[2], 12);
-		memcpy(&worldmatrix._41, m->elements[3], 12);
+	if (m) {
+		memcpy(&currentWorld._11, m->elements[0], 12);
+		memcpy(&currentWorld._21, m->elements[1], 12);
+		memcpy(&currentWorld._31, m->elements[2], 12);
+		memcpy(&currentWorld._41, m->elements[3], 12);
+		worldmatrix = currentWorld;
 	}
-	else worldmatrix = nullmatrix;
+	else {
+		D3DXMatrixIdentity(&currentWorld);
+		worldmatrix = nullmatrix;
+	}
 	dir3dDev->SetTransform(D3DTS_WORLD, &worldmatrix);
 }
 
 void gxScene::setRenderState(const RenderState& rs) {
+	setEffect(rs.effect);
+
 	if (lastRenderStateValid && memcmp(&rs, &lastRenderState, sizeof(RenderState)) == 0) {
 		bool hasTexture = false;
 		for (int k = 0; k < MAX_TEXTURES; ++k) {
@@ -687,9 +711,24 @@ void gxScene::clear(const float rgb[3], float alpha, float z, bool clear_argb, b
 	dir3dDev->Clear(0, 0, flags, argb, z, 0);
 }
 
-void gxScene::render(gxMesh* m, int first_vert, int vert_cnt, int first_tri, int tri_cnt) {
+void gxScene::render(gxMesh* mesh, int first_vert, int vert_cnt, int first_tri, int tri_cnt) {
+	if (currentEffect) {
+		UINT passes;
+		if (currentEffect->begin(&passes)) {
+			currentEffect->setAutoMatrices(currentWorld, currentView, currentProj);
+			for (UINT p = 0; p < passes; ++p) {
+				if (currentEffect->beginPass(p)) {
+					mesh->render(first_vert, vert_cnt, first_tri, tri_cnt);
+					currentEffect->endPass();
+				}
+			}
+			currentEffect->end();
+		}
+		tris_drawn += tri_cnt;
+		return;
+	}
 
-	m->render(first_vert, vert_cnt, first_tri, tri_cnt);
+	mesh->render(first_vert, vert_cnt, first_tri, tri_cnt);
 	tris_drawn += tri_cnt;
 	if(n_texs <= tex_stages) return;
 
@@ -720,7 +759,7 @@ void gxScene::render(gxMesh* m, int first_vert, int vert_cnt, int first_tri, int
 				break;
 		}
 		setTexState(0, state, false);
-		m->render(first_vert, vert_cnt, first_tri, tri_cnt);
+		mesh->render(first_vert, vert_cnt, first_tri, tri_cnt);
 		tris_drawn += tri_cnt;
 	}
 

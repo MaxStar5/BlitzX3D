@@ -57,7 +57,10 @@ public:
 	virtual void setBlend(int n) { brush.setBlend(n); w_brush = true; }
 	virtual void setFX(int n) { brush.setFX(n); w_brush = true; }
 
+	void setEffect(gxEffect* effect);
+
 	const Brush& getBrush()const { return brush; }
+	gxEffect* getEffect() const;
 
 	void setRenderSpace(int n) { space = n; }
 	int getRenderSpace()const { return space; }
@@ -86,6 +89,9 @@ private:
 	std::vector<MeshQueue*> queues[2];
 
 	void enqueue(MeshQueue* q);
+
+	gxEffect* entityEffect;
+	gxEffect* renderEffect;
 };
 
 #endif
