@@ -10,7 +10,7 @@
 class gxCanvas;
 class gxGraphics;
 
-typedef IDirectDrawSurface7 ddSurf;
+// typedef IDirectDrawSurface7 ddSurf;
 
 class gxFont {
 public:
@@ -22,6 +22,7 @@ public:
 	int charWidth(int c);
 	int charAdvance(int c);
 	int stringWidth(const std::string& text);
+	void setSmooth(bool enable) { smooth = enable; }
 
 	//ACCESSORS
 	int getWidth()const;							//width of widest char
@@ -32,6 +33,8 @@ public:
 
 	std::vector<gxCanvas*> atlases;
 
+	gxCanvas* tempCanvas;
+
 	enum {
 		FONT_BOLD = 1,
 		FONT_ITALIC = 2,
@@ -41,6 +44,7 @@ public:
 	bool bold;
 	bool italic;
 	bool underlined;
+	bool smooth;
 private:
 	float getBaselinePosition()const;
 	float getUnderlinePosition()const;
@@ -58,8 +62,6 @@ private:
 		int horizontalAdvance;
 		int srcRect[4];
 	};
-
-	gxCanvas* tempCanvas;
 
 	const int atlasDims = 1024;
 	void renderAtlas(int chr);

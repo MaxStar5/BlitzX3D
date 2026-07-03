@@ -85,6 +85,7 @@ gxMesh* Surface::getMesh() {
 
 	if(valid_vs == vertices.size() && valid_ts == triangles.size()) return mesh;
 
+	int start_vs = valid_vs, start_ts = valid_ts;
 	valid_vs = valid_ts = 0;
 
 	if(mesh_vs < vertices.size() || mesh_ts < triangles.size()) {
@@ -100,8 +101,12 @@ gxMesh* Surface::getMesh() {
 		mesh = gx_graphics->createMesh(mesh_vs, mesh_ts, 0);
 	}
 
-	mesh->lock(true);
-	for(; valid_vs < vertices.size(); ++valid_vs) {
+	if (!mesh || !mesh->lock(true)) {
+		valid_vs = start_vs;
+		valid_ts = start_ts;
+		return mesh;
+	}
+	for (; valid_vs < vertices.size(); ++valid_vs) {
 		mesh->setVertex(valid_vs, &vertices[valid_vs]);
 	}
 	for(; valid_ts < triangles.size(); ++valid_ts) {

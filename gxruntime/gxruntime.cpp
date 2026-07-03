@@ -1,19 +1,41 @@
 #include "std.h"
 #include "gxruntime.h"
 #include "zmouse.h"
+#include <shellapi.h>
 
 #include "../gxruntime/gxutf8.h"
 
 #include "../freeimage/freeimage.h"
 
+#include <sstream>
+
+static void DebugMsg(const char* msg) {
+	// MessageBoxA(NULL, msg, "Graphics Debug", MB_OK);
+}
+
+static void DebugMsg(const std::string& msg) {
+	// MessageBoxA(NULL, msg.c_str(), "Graphics Debug", MB_OK);
+}
+
+static DWORD pickVertexProcessingFlag(IDirect3D9* d3d, UINT adapter) {
+	D3DCAPS9 caps;
+	if (FAILED(d3d->GetDeviceCaps(adapter, D3DDEVTYPE_HAL, &caps))) {
+		return D3DCREATE_SOFTWARE_VERTEXPROCESSING;
+	}
+	if (!(caps.DevCaps & D3DDEVCAPS_HWTRANSFORMANDLIGHT)) {
+		return D3DCREATE_SOFTWARE_VERTEXPROCESSING;
+	}
+	return D3DCREATE_HARDWARE_VERTEXPROCESSING;
+}
+
 struct gxRuntime::GfxMode {
-	DDSURFACEDESC2 desc;
+	D3DDISPLAYMODE mode;
 };
+
 struct gxRuntime::GfxDriver {
-	GUID* guid;
-	std::string name;
+	D3DADAPTER_IDENTIFIER9 identifier;
 	std::vector<GfxMode*> modes;
-	D3DDEVICEDESC7 d3d_desc;
+	UINT adapter;
 };
 
 static const int static_ws = WS_VISIBLE | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX;
@@ -24,7 +46,7 @@ static std::string app_close;
 static gxRuntime* runtime;
 static bool busy, suspended;
 static volatile bool run_flag;
-static DDSURFACEDESC2 desktop_desc;
+static Debugger* debugger;
 
 typedef int(_stdcall* LibFunc)(const void* in, int in_sz, void* out, int out_sz);
 
@@ -52,15 +74,9 @@ static bool auto_suspend;
 //for modes 1 and 2
 static int mod_cnt;
 static MMRESULT timerID;
-static IDirectDrawClipper* clipper;
-static IDirectDrawSurface7* primSurf;
-static Debugger* debugger;
-
 static std::set<gxTimer*> timers;
 
-enum {
-	WM_STOP = WM_APP + 1, WM_RUN, WM_END
-};
+enum { WM_STOP = WM_APP + 1, WM_RUN, WM_END };
 
 ////////////////////
 // STATIC STARTUP //
@@ -71,9 +87,7 @@ gxRuntime* gxRuntime::openRuntime(HINSTANCE hinst, const std::string& cmd_line, 
 	//create debugger
 	debugger = d;
 
-	//create WNDCLASS
-	WNDCLASS wndclass;
-	memset(&wndclass, 0, sizeof(wndclass));
+	WNDCLASS wndclass = { 0 };
 	wndclass.style = CS_HREDRAW | CS_VREDRAW | CS_OWNDC;
 	wndclass.lpfnWndProc = ::windowProc;
 	wndclass.hInstance = hinst;
@@ -83,15 +97,10 @@ gxRuntime* gxRuntime::openRuntime(HINSTANCE hinst, const std::string& cmd_line, 
 	RegisterClass(&wndclass);
 
 	gfx_mode = GMODE_NONE;
-	clipper = 0; primSurf = 0;
 	busy = suspended = false;
 	run_flag = true;
 
-	const char* app_t = " ";
-	int ws = WS_CAPTION, ws_ex = 0;
-
-	HWND hwnd = CreateWindowEx(ws_ex, "Blitz Runtime Class", app_t, ws, 0, 0, 0, 0, 0, 0, 0, 0);
-
+	HWND hwnd = CreateWindowEx(0, "Blitz Runtime Class", " ", WS_CAPTION, 0, 0, 0, 0, 0, 0, 0, 0);
 	UpdateWindow(hwnd);
 
 	runtime = new gxRuntime(hinst, cmd_line, hwnd);
@@ -99,30 +108,35 @@ gxRuntime* gxRuntime::openRuntime(HINSTANCE hinst, const std::string& cmd_line, 
 }
 
 void gxRuntime::closeRuntime(gxRuntime* r) {
-	if(!runtime || runtime != r) return;
-
-	std::map<std::string, gxDll*>::const_iterator it;
-	for(it = libs.begin(); it != libs.end(); ++it) {
+	if (!runtime || runtime != r) return;
+	for (auto it = libs.begin(); it != libs.end(); ++it)
 		FreeLibrary(it->second->hinst);
-	}
 	libs.clear();
 
 	delete runtime;
 	runtime = 0;
 }
 
+
 //////////////////////////
 // RUNTIME CONSTRUCTION //
 //////////////////////////
 gxRuntime::gxRuntime(HINSTANCE hi, const std::string& cl, HWND hw) :
 	hinst(hi), cmd_line(cl), hwnd(hw), curr_driver(0), enum_all(false),
-	pointer_visible(true), audio(0), input(0), graphics(0), fileSystem(0), use_di(false) {
+	pointer_visible(true), audio(0), input(0), graphics(0), fileSystem(0), use_di(false),
+	d3d(0), d3dDevice(0), backBuffer(0), frontBuffer(0) {
 
 	CoInitialize(0);
 
 	FreeImage_Initialise(true);
 
+	d3d = Direct3DCreate9(D3D_SDK_VERSION);
+	if (!d3d) {
+		debugLog("Direct3D9 not available");
+	}
+
 	enumGfx();
+
 	TIMECAPS tc;
 	timeGetDevCaps(&tc, sizeof(tc));
 	timeBeginPeriod(tc.wPeriodMin);
@@ -141,16 +155,6 @@ gxRuntime::gxRuntime(HINSTANCE hi, const std::string& cl, HWND hw) :
 	memset(&statex, 0, sizeof(statex));
 	statex.dwLength = sizeof(statex);
 	GlobalMemoryStatusEx(&statex);
-
-	if (osinfo.dwMajorVersion == 6 && (osinfo.dwMinorVersion == 2 || osinfo.dwMinorVersion == 3)) {
-		HMODULE ddraw = LoadLibraryA("ddraw.dll");
-		if (ddraw) {
-			typedef HRESULT (WINAPI* SetAppCompatDataFunc)(DWORD, DWORD);
-			SetAppCompatDataFunc SetAppCompatData = (SetAppCompatDataFunc)GetProcAddress(ddraw, "SetAppCompatData");
-			if (SetAppCompatData) SetAppCompatData(12, 0);
-			FreeLibrary(ddraw);
-		}
-	}
 
 	memset(&devmode, 0, sizeof(devmode));
 	devmode.dmSize = sizeof(devmode);
@@ -270,55 +274,83 @@ void gxRuntime::forceResume() {
 // PAINT //
 ///////////
 void gxRuntime::paint() {
-	switch(gfx_mode) {
-		case GMODE_SCALED:
-		case GMODE_FIXED:
-		{
-			RECT src, dest;
-			src.left = src.top = 0;
-			GetClientRect(hwnd, &dest);
-			src.right = gfx_mode == GMODE_SCALED ? graphics->getWidth() : dest.right;
-			src.bottom = gfx_mode == GMODE_SCALED ? graphics->getHeight() : dest.bottom;
-			POINT p; p.x = p.y = 0; ClientToScreen(hwnd, &p);
-			dest.left += p.x; dest.right += p.x;
-			dest.top += p.y; dest.bottom += p.y;
-			gxCanvas* f = graphics->getFrontCanvas();
-			primSurf->Blt(&dest, f->getSurface(), &src, 0, 0);
-			break;
+	if (!d3dDevice || !backBuffer) return;
+
+	gxGraphics::DeviceState state = graphics->getDeviceState();
+	if (state == gxGraphics::DEVICE_LOST) {
+		return;
+	}
+	if (state == gxGraphics::DEVICE_NEEDS_RESET) {
+		if (!graphics->restore()) {
+			return;
 		}
 	}
+
+	switch (gfx_mode) {
+	case GMODE_SCALED:
+	case GMODE_FIXED: {
+		if (!graphics) break;
+		gxCanvas* f = graphics->getFrontCanvas();
+		IDirect3DSurface9* canvasSurf = f->getSurface();
+
+		RECT src, dest;
+		GetClientRect(hwnd, &dest);
+		src.left = src.top = 0;
+		src.right = (gfx_mode == GMODE_SCALED) ? graphics->getWidth() : (dest.right - dest.left);
+		src.bottom = (gfx_mode == GMODE_SCALED) ? graphics->getHeight() : (dest.bottom - dest.top);
+
+		if (gfx_mode == GMODE_FIXED) {
+			POINT pt = { dest.left, dest.top };
+			d3dDevice->UpdateSurface(canvasSurf, &src, backBuffer, &pt);
+		}
+		else {
+			IDirect3DSurface9* stretchSrc = nullptr;
+			D3DSURFACE_DESC desc;
+			canvasSurf->GetDesc(&desc);
+			if (SUCCEEDED(d3dDevice->CreateRenderTarget(desc.Width, desc.Height, desc.Format, D3DMULTISAMPLE_NONE, 0, FALSE, &stretchSrc, nullptr))) {
+				POINT zero = { 0, 0 };
+				RECT full = { 0, 0, (LONG)desc.Width, (LONG)desc.Height };
+				d3dDevice->UpdateSurface(canvasSurf, &full, stretchSrc, &zero);
+				d3dDevice->StretchRect(stretchSrc, &src, backBuffer, &dest, D3DTEXF_LINEAR);
+				stretchSrc->Release();
+			}
+		}
+		d3dDevice->Present(NULL, NULL, NULL, NULL);
+		break;
+	}
+	case GMODE_EXCLUSIVE:
+		d3dDevice->Present(NULL, NULL, NULL, NULL);
+		break;
+	}
 }
+
 
 //////////
 // FLIP //
 //////////
+
 void gxRuntime::flip(bool vwait) {
-	gxCanvas* b = graphics->getBackCanvas();
-	gxCanvas* f = graphics->getFrontCanvas();
-	int n;
-	switch(gfx_mode) {
-		case GMODE_SCALED:
-		case GMODE_FIXED:
-			if(vwait) graphics->vwait();
-			f->setModify(b->getModify());
-			if(f->getModify() != mod_cnt) {
-				mod_cnt = f->getModify();
-				paint();
-			}
-			break;
-		case GMODE_EXCLUSIVE:
-			if(vwait) {
-				BOOL vb;
-				while(graphics->dirDraw->GetVerticalBlankStatus(&vb) >= 0 && vb) {}
-				n = f->getSurface()->Flip(0, DDFLIP_WAIT);
-			}
-			else {
-				n = f->getSurface()->Flip(0, DDFLIP_NOVSYNC | DDFLIP_WAIT);
-			}
-			if(n >= 0) return;
-			debugLog(("Flip Failed! Return code:" + itoa(n & 0x7fff)).c_str());
-			break;
+	MSG msg;
+	while (PeekMessage(&msg, NULL, 0, 0, PM_REMOVE)) {
+		TranslateMessage(&msg);
+		DispatchMessage(&msg);
+		if (!run_flag) {
+			return;
+		}
 	}
+
+	if (!graphics || !d3dDevice) return;
+
+	gxGraphics::DeviceState state = graphics->getDeviceState();
+	if (state == gxGraphics::DEVICE_LOST) {
+		return;
+	}
+	if (state == gxGraphics::DEVICE_NEEDS_RESET) {
+		if (!graphics->restore()) {
+			return;
+		}
+	}
+	d3dDevice->Present(NULL, NULL, NULL, NULL);
 }
 
 ////////////////
@@ -516,6 +548,14 @@ void gxRuntime::asyncEnd() {
 // IDLE //
 //////////
 bool gxRuntime::idle() {
+	// emergency exit, ctrl alt q
+	if ((GetAsyncKeyState(VK_CONTROL) & 0x8000) &&
+		(GetAsyncKeyState(VK_MENU) & 0x8000) &&
+		(GetAsyncKeyState('Q') & 0x8000)) {
+		run_flag = false;
+		return false;
+	}
+
 	for(;;) {
 		MSG msg;
 		BOOL success = 0;
@@ -767,12 +807,12 @@ void gxRuntime::closeInput(gxInput* i) {
 /////////////////////////////////////////////////////
 // TIMER CALLBACK FOR AUTOREFRESH OF WINDOWED MODE //
 /////////////////////////////////////////////////////
-static void CALLBACK timerCallback(UINT id, UINT msg, DWORD user, DWORD dw1, DWORD dw2) {
-	if(gfx_mode) {
+static void CALLBACK timerCallback(UINT, UINT, DWORD, DWORD, DWORD) {
+	if (gfx_mode && runtime && runtime->graphics) {
 		gxCanvas* f = runtime->graphics->getFrontCanvas();
-		if(f->getModify() != mod_cnt) {
+		if (f && f->getModify() != mod_cnt) {
 			mod_cnt = f->getModify();
-			InvalidateRect(runtime->hwnd, 0, false);
+			PostMessage(runtime->hwnd, WM_PAINT, 0, 0);
 		}
 	}
 }
@@ -793,232 +833,243 @@ void gxRuntime::restoreWindowState() {
 		SWP_NOZORDER | SWP_FRAMECHANGED);
 }
 
-bool gxRuntime::setDisplayMode(int w, int h, int d, bool d3d, IDirectDraw7* dirDraw) {
+bool gxRuntime::setDisplayMode(int w, int h, int d, bool d3d) {
+	D3DFORMAT format = D3DFMT_UNKNOWN;
+	if (d == 32) format = D3DFMT_X8R8G8B8;
+	else if (d == 24) format = D3DFMT_R8G8B8;
+	else if (d == 16) format = D3DFMT_R5G6B5;
+	else return false;
 
-	if(d) return dirDraw->SetDisplayMode(w, h, d, 0, 0) >= 0;
+	HRESULT hr = this->d3d->CheckDeviceType(curr_driver->adapter, D3DDEVTYPE_HAL, format, format, FALSE);
+	if (FAILED(hr)) return false;
 
-	int best_d = 0;
-
-	if(d3d) {
-		int bd = curr_driver->d3d_desc.dwDeviceRenderBitDepth;
-		if(bd & DDBD_32) best_d = 32;
-		else if(bd & DDBD_24) best_d = 24;
-		else if(bd & DDBD_16) best_d = 16;
-	}
-	else {
-		int best_n = 0;
-		for(d = 16; d <= 32; d += 8) {
-			if(dirDraw->SetDisplayMode(w, h, d, 0, 0) < 0) continue;
-			DDCAPS caps = { sizeof(caps) };
-			dirDraw->GetCaps(&caps, 0);
-			int n = 0;
-			if(caps.dwCaps & DDCAPS_BLT) ++n;
-			if(caps.dwCaps & DDCAPS_BLTCOLORFILL) ++n;
-			if(caps.dwCKeyCaps & DDCKEYCAPS_SRCBLT) ++n;
-			if(caps.dwCaps2 & DDCAPS2_WIDESURFACES) ++n;
-			if(n == 4) return true;
-			if(n > best_n) {
-				best_d = d;
-				best_n = n;
-			}
-			dirDraw->RestoreDisplayMode();
-		}
-	}
-	return best_d ? dirDraw->SetDisplayMode(w, h, best_d, 0, 0) >= 0 : false;
+	d3dpp.BackBufferWidth = w;
+	d3dpp.BackBufferHeight = h;
+	d3dpp.BackBufferFormat = format;
+	return true;
 }
 
 gxGraphics* gxRuntime::openWindowedGraphics(int w, int h, int d, bool d3d) {
+	if (!d3d) return 0;
 
-	IDirectDraw7* dd;
-	if(DirectDrawCreateEx(curr_driver->guid, (void**)&dd, IID_IDirectDraw7, 0) < 0) return 0;
+	ZeroMemory(&d3dpp, sizeof(d3dpp));
+	d3dpp.Windowed = TRUE;
+	d3dpp.SwapEffect = D3DSWAPEFFECT_DISCARD;
+	d3dpp.Flags = D3DPRESENTFLAG_LOCKABLE_BACKBUFFER;
+	d3dpp.EnableAutoDepthStencil = FALSE;
+	d3dpp.BackBufferCount = 1;
+	d3dpp.BackBufferWidth = w;
+	d3dpp.BackBufferHeight = h;
+	d3dpp.PresentationInterval = D3DPRESENT_INTERVAL_IMMEDIATE;
 
-	//set coop level
-	if(dd->SetCooperativeLevel(hwnd, DDSCL_NORMAL) >= 0) {
-		//create primary surface
-		IDirectDrawSurface7* ps;
-		DDSURFACEDESC2 desc = { sizeof(desc) };
-		desc.dwFlags = DDSD_CAPS;
-		desc.ddsCaps.dwCaps = DDSCAPS_PRIMARYSURFACE;
-		if(dd->CreateSurface(&desc, &ps, 0) >= 0) {
-			//create clipper
-			IDirectDrawClipper* cp;
-			if(dd->CreateClipper(0, &cp, 0) >= 0) {
-				//attach clipper 
-				if(ps->SetClipper(cp) >= 0) {
-					//set clipper HWND
-					if(cp->SetHWnd(0, hwnd) >= 0) {
-						//create front buffer
-						IDirectDrawSurface7* fs;
-						DDSURFACEDESC2 desc = { sizeof(desc) };
-						desc.dwFlags = DDSD_WIDTH | DDSD_HEIGHT | DDSD_CAPS;
-						desc.dwWidth = w; desc.dwHeight = h;
-						desc.ddsCaps.dwCaps = DDSCAPS_OFFSCREENPLAIN;
+	D3DDISPLAYMODE mode;
+	if (FAILED(this->d3d->GetAdapterDisplayMode(curr_driver->adapter, &mode))) return 0;
 
-						if(d3d) desc.ddsCaps.dwCaps |= DDSCAPS_3DDEVICE;
+	d3dpp.BackBufferFormat = (mode.Format == D3DFMT_R8G8B8 || mode.Format == D3DFMT_A8R8G8B8 || mode.Format == D3DFMT_X8R8G8B8) ? mode.Format : D3DFMT_X8R8G8B8;
 
-						if(dd->CreateSurface(&desc, &fs, 0) >= 0) {
-							if(timerID = timeSetEvent(100, 10, timerCallback, 0, TIME_PERIODIC)) {
-								//Success!
-								clipper = cp;
-								primSurf = ps;
-								mod_cnt = 0;
-								fs->AddRef();
-								return new gxGraphics(this, dd, fs, fs, d3d);
-							}
-							fs->Release();
-						}
-					}
-				}
-				cp->Release();
-			}
-			ps->Release();
-		}
+	DWORD vp_flag = pickVertexProcessingFlag(this->d3d, curr_driver->adapter);
+	if (FAILED(this->d3d->CreateDevice(curr_driver->adapter, D3DDEVTYPE_HAL, hwnd, vp_flag, &d3dpp, &d3dDevice))) return 0;
+
+	if (FAILED(d3dDevice->GetBackBuffer(0, 0, D3DBACKBUFFER_TYPE_MONO, &backBuffer))) {
+		d3dDevice->Release(); d3dDevice = 0;
+		return 0;
 	}
-	dd->Release();
-	return 0;
+
+	frontBuffer = backBuffer;
+	frontBuffer->AddRef();
+
+	// Do we need this timer stuff anymore?
+	if (!(timerID = timeSetEvent(100, 10, timerCallback, 0, TIME_PERIODIC))) {
+		DebugMsg("timeSetEvent failed!");
+		timerID = 0;
+	}
+
+	return new gxGraphics(this, d3dDevice, frontBuffer, backBuffer, d3d);
 }
 
 gxGraphics* gxRuntime::openExclusiveGraphics(int w, int h, int d, bool d3d) {
+	if (!d3d) return 0;
 
-	IDirectDraw7* dd;
-	if(DirectDrawCreateEx(curr_driver->guid, (void**)&dd, IID_IDirectDraw7, 0) < 0) return 0;
-
-	//Set coop level
-	if(dd->SetCooperativeLevel(hwnd, DDSCL_EXCLUSIVE | DDSCL_FULLSCREEN | DDSCL_ALLOWREBOOT) >= 0) {
-		//Set display mode
-		if(setDisplayMode(w, h, d, d3d, dd)) {
-			//create primary surface
-			IDirectDrawSurface7* ps;
-			DDSURFACEDESC2 desc = { sizeof(desc) };
-			desc.dwFlags = DDSD_CAPS | DDSD_BACKBUFFERCOUNT;
-			desc.ddsCaps.dwCaps = DDSCAPS_PRIMARYSURFACE | DDSCAPS_COMPLEX | DDSCAPS_FLIP;
-
-			desc.dwBackBufferCount = 1;
-			if(d3d) desc.ddsCaps.dwCaps |= DDSCAPS_3DDEVICE;
-
-			if(dd->CreateSurface(&desc, &ps, 0) >= 0) {
-				//find back surface
-				IDirectDrawSurface7* bs;
-				DDSCAPS2 caps = { sizeof caps };
-				caps.dwCaps = DDSCAPS_BACKBUFFER;
-				if(ps->GetAttachedSurface(&caps, &bs) >= 0) {
-					return new gxGraphics(this, dd, ps, bs, d3d);
-				}
-				ps->Release();
-			}
-			dd->RestoreDisplayMode();
-		}
+	D3DFORMAT format;
+	if (d == 0) {
+		D3DDISPLAYMODE mode;
+		if (FAILED(this->d3d->GetAdapterDisplayMode(curr_driver->adapter, &mode))) return 0;
+		format = mode.Format;
 	}
-	dd->Release();
-	return 0;
+	else if (d == 32) format = D3DFMT_X8R8G8B8;
+	else if (d == 24) format = D3DFMT_R8G8B8;
+	else if (d == 16) format = D3DFMT_R5G6B5;
+	else return 0;
+
+	if (FAILED(this->d3d->CheckDeviceType(curr_driver->adapter, D3DDEVTYPE_HAL, format, format, FALSE))) {
+		DebugMsg("openExclusiveGraphics: CheckDeviceType failed for requested format");
+		return 0;
+	}
+
+	ZeroMemory(&d3dpp, sizeof(d3dpp));
+	d3dpp.Windowed = FALSE;
+	d3dpp.BackBufferWidth = w;
+	d3dpp.BackBufferHeight = h;
+	d3dpp.BackBufferFormat = format;
+	d3dpp.PresentationInterval = D3DPRESENT_INTERVAL_IMMEDIATE;
+	d3dpp.SwapEffect = D3DSWAPEFFECT_DISCARD;
+	d3dpp.BackBufferCount = 1;
+	d3dpp.EnableAutoDepthStencil = FALSE;
+	d3dpp.Flags = D3DPRESENTFLAG_LOCKABLE_BACKBUFFER;
+
+	DWORD vp_flag = pickVertexProcessingFlag(this->d3d, curr_driver->adapter);
+	if (FAILED(this->d3d->CreateDevice(curr_driver->adapter, D3DDEVTYPE_HAL, hwnd, vp_flag, &d3dpp, &d3dDevice))) {
+		return 0;
+	}
+
+	if (FAILED(d3dDevice->GetBackBuffer(0, 0, D3DBACKBUFFER_TYPE_MONO, &backBuffer))) {
+		d3dDevice->Release();
+		d3dDevice = 0;
+		return 0;
+	}
+
+	// front is same as back in exclusive
+	frontBuffer = backBuffer;
+	frontBuffer->AddRef();
+
+	return new gxGraphics(this, d3dDevice, frontBuffer, backBuffer, d3d);
 }
 
 gxGraphics* gxRuntime::openGraphics(int w, int h, int d, int driver, int flags) {
-	if(graphics) return 0;
+	std::stringstream ss;
+	ss << "openGraphics called: " << w << "x" << h << " d=" << d
+		<< " driver=" << driver << " flags=0x" << std::hex << flags;
+	DebugMsg(ss.str());
 
+	if (graphics) {
+		DebugMsg("ERROR: graphics already open!");
+		return 0;
+	}
 	busy = true;
 
-	bool d3d = flags & gxGraphics::GRAPHICS_3D ? true : false;
-	bool windowed = flags & gxGraphics::GRAPHICS_WINDOWED ? true : false;
+	bool d3d = (flags & gxGraphics::GRAPHICS_3D) != 0;
+	bool windowed = (flags & gxGraphics::GRAPHICS_WINDOWED) != 0;
+
+	ss.str("");
+	ss << "d3d flag=" << d3d << " windowed=" << windowed;
+	DebugMsg(ss.str());
+
+	if (!d3d) {
+		DebugMsg("ERROR: GRAPHICS_3D flag not set!");
+		busy = false;
+		return 0;
+	}
+
+	if (!this->d3d) {
+		DebugMsg("ERROR: Direct3D9 object is null! Direct3DCreate9 failed in constructor.");
+		busy = false;
+		return 0;
+	}
 
 	curr_driver = drivers[driver];
 
-	if(windowed) {
-		if(graphics = openWindowedGraphics(w, h, d, d3d)) {
+	if (windowed) {
+		DebugMsg("Attempting openWindowedGraphics...");
+		graphics = openWindowedGraphics(w, h, d, d3d);
+		if (graphics) {
+			DebugMsg("openWindowedGraphics SUCCESS");
 			gfx_mode = (flags & gxGraphics::GRAPHICS_SCALED) ? GMODE_SCALED : GMODE_FIXED;
-			auto_suspend = (flags & gxGraphics::GRAPHICS_AUTOSUSPEND) ? true : false;
-			int ws, ww, hh;
+			auto_suspend = (flags & gxGraphics::GRAPHICS_AUTOSUSPEND) != 0;
 			border_mode = (flags & gxGraphics::GRAPHICS_BORDERLESS) ? 1 : 0;
-			if(gfx_mode == GMODE_SCALED) {
-				ws = scaled_ws;
-				RECT c_r;
-				GetClientRect(hwnd, &c_r);
-				ww = c_r.right - c_r.left;
-				hh = c_r.bottom - c_r.top;
-			}
-			else {
-				ws = static_ws;
-				ww = w;
-				hh = h;
-			}
 
-			if(border_mode == 1) {
-				SetWindowLong(hwnd, GWL_STYLE, WS_POPUP);
-				SetWindowPos(hwnd, HWND_TOP, 0, 0, 0, 0, SWP_SHOWWINDOW);
-			}
-			else {
+			int ws = (gfx_mode == GMODE_SCALED) ? scaled_ws : static_ws;
+			if (border_mode == 1)
+				SetWindowLong(hwnd, GWL_STYLE, WS_POPUP | WS_VISIBLE);
+			else
 				SetWindowLong(hwnd, GWL_STYLE, ws);
-				SetWindowPos(hwnd, 0, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_FRAMECHANGED);
-			}
+			SetWindowPos(hwnd, 0, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_FRAMECHANGED);
 
 			RECT w_r, c_r;
 			GetWindowRect(hwnd, &w_r);
 			GetClientRect(hwnd, &c_r);
 			int tw = (w_r.right - w_r.left) - (c_r.right - c_r.left);
 			int th = (w_r.bottom - w_r.top) - (c_r.bottom - c_r.top);
-			int cx = (GetSystemMetrics(SM_CXSCREEN) - ww) / 2;
-			int cy = (GetSystemMetrics(SM_CYSCREEN) - hh) / 2;
-			POINT zz = { 0,0 };
-			ClientToScreen(hwnd, &zz);
-			int bw = zz.x - w_r.left, bh = zz.y - w_r.top;
-			int wx = cx - bw, wy = cy - bh; if(wy < 0) wy = 0;		//not above top!
-			MoveWindow(hwnd, wx, wy, ww + tw, hh + th, true);
+			int cx = (GetSystemMetrics(SM_CXSCREEN) - w) / 2;
+			int cy = (GetSystemMetrics(SM_CYSCREEN) - h) / 2;
+			MoveWindow(hwnd, cx, cy, w + tw, h + th, true);
+		}
+		else {
+			DebugMsg("openWindowedGraphics FAILED");
 		}
 	}
 	else {
+		DebugMsg("Attempting openExclusiveGraphics...");
 		backupWindowState();
-
 		SetWindowLong(hwnd, GWL_STYLE, WS_VISIBLE | WS_POPUP);
 		SetWindowPos(hwnd, 0, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_FRAMECHANGED);
-
 		ShowCursor(0);
-		if(graphics = openExclusiveGraphics(w, h, d, d3d)) {
+		graphics = openExclusiveGraphics(w, h, d, d3d);
+		if (!graphics) {
+			DebugMsg("openExclusiveGraphics FAILED");
+			ShowCursor(1);
+			restoreWindowState();
+		}
+		else {
+			DebugMsg("openExclusiveGraphics SUCCESS");
 			gfx_mode = GMODE_EXCLUSIVE;
 			auto_suspend = true;
 			SetCursorPos(0, 0);
 			acquireInput();
 		}
-		else {
-			ShowCursor(1);
-			restoreWindowState();
-		}
 	}
 
-	if(!graphics) curr_driver = 0;
-
 	gfx_lost = false;
-
 	busy = false;
+
+	if (!graphics) {
+		DebugMsg("openGraphics FINAL: Returning NULL (graphics creation failed)");
+	}
+	else {
+		DebugMsg("openGraphics FINAL: Success");
+	}
 
 	return graphics;
 }
 
 void gxRuntime::closeGraphics(gxGraphics* g) {
-	if(!graphics || graphics != g) return;
-
+	if (!graphics || graphics != g) return;
 	auto_suspend = false;
-
 	busy = true;
 
 	unacquireInput();
-	if(timerID) { timeKillEvent(timerID); timerID = 0; }
-	if(clipper) { clipper->Release(); clipper = 0; }
-	if(primSurf) { primSurf->Release(); primSurf = 0; }
-	delete graphics; graphics = 0;
+	if (timerID) { timeKillEvent(timerID); timerID = 0; }
+	if (d3dDevice) {
+		if (frontBuffer && frontBuffer != backBuffer) frontBuffer->Release();
+		if (backBuffer) backBuffer->Release();
+		d3dDevice->Release();
+		d3dDevice = 0;
+		backBuffer = 0;
+		frontBuffer = 0;
+	}
+	graphics->dir3dDev = nullptr;
+	graphics->frontBuffer = nullptr;
+	graphics->backBuffer = nullptr;
+	delete graphics;
+	graphics = 0;
 
-	if(gfx_mode == GMODE_EXCLUSIVE) {
+	if (gfx_mode == GMODE_EXCLUSIVE) {
 		ShowCursor(1);
 		restoreWindowState();
 	}
 	gfx_mode = GMODE_NONE;
-
 	gfx_lost = false;
-
 	busy = false;
 }
 
 bool gxRuntime::graphicsLost() {
-	return gfx_lost;
+	if (!d3dDevice) return false;
+	HRESULT hr = d3dDevice->TestCooperativeLevel();
+	if (hr == D3DERR_DEVICELOST) return true;
+	if (hr == D3DERR_DEVICENOTRESET) {
+		d3dDevice->Reset(&d3dpp);
+		d3dDevice->GetBackBuffer(0, 0, D3DBACKBUFFER_TYPE_MONO, &backBuffer);
+	}
+	return false;
 }
 
 bool gxRuntime::focus() {
@@ -1053,75 +1104,36 @@ void gxRuntime::closeFileSystem(gxFileSystem* f) {
 ////////////////////
 // GFX ENUM STUFF //
 ////////////////////
-static HRESULT WINAPI enumMode(DDSURFACEDESC2* desc, void* context) {
-	int dp = desc->ddpfPixelFormat.dwRGBBitCount;
-	if(dp == 16 || dp == 24 || dp == 32) {
-		gxRuntime::GfxMode* m = new gxRuntime::GfxMode;
-		m->desc = *desc;
-		gxRuntime::GfxDriver* d = (gxRuntime::GfxDriver*)context;
-		d->modes.push_back(m);
-	}
-	return DDENUMRET_OK;
-}
-
-static int maxDevType;
-static HRESULT CALLBACK enumDevice(char* desc, char* name, D3DDEVICEDESC7* devDesc, void* context) {
-	int t = 0;
-	GUID guid = devDesc->deviceGUID;
-	if(guid == IID_IDirect3DRGBDevice) t = 1;
-	else if(guid == IID_IDirect3DHALDevice) t = 2;
-	else if(guid == IID_IDirect3DTnLHalDevice) t = 3;
-	if(t > 1 && t > maxDevType) {
-		maxDevType = t;
-		gxRuntime::GfxDriver* d = (gxRuntime::GfxDriver*)context;
-		d->d3d_desc = *devDesc;
-	}
-	return D3DENUMRET_OK;
-}
-
-static BOOL WINAPI enumDriver(GUID FAR* guid, LPSTR desc, LPSTR name, LPVOID context, HMONITOR hm) {
-	IDirectDraw7* dd;
-	if(DirectDrawCreateEx(guid, (void**)&dd, IID_IDirectDraw7, 0) < 0) return 0;
-
-	if(!guid && !desktop_desc.ddpfPixelFormat.dwRGBBitCount) {
-		desktop_desc.dwSize = sizeof(desktop_desc);
-		dd->GetDisplayMode(&desktop_desc);
-	}
-
-	gxRuntime::GfxDriver* d = new gxRuntime::GfxDriver;
-
-	d->guid = guid ? new GUID(*guid) : 0;
-	d->name = desc;
-
-	memset(&d->d3d_desc, 0, sizeof(d->d3d_desc));
-	IDirect3D7* dir3d;
-	if(dd->QueryInterface(IID_IDirect3D7, (void**)&dir3d) >= 0) {
-		maxDevType = 0;
-		dir3d->EnumDevices(enumDevice, d);
-		dir3d->Release();
-	}
-	std::vector<gxRuntime::GfxDriver*>* drivers = (std::vector<gxRuntime::GfxDriver*>*)context;
-	drivers->push_back(d);
-	dd->EnumDisplayModes(0, 0, d, enumMode);
-	dd->Release();
-	return 1;
-}
-
 void gxRuntime::enumGfx() {
 	denumGfx();
-	if(enum_all) {
-		DirectDrawEnumerateEx(enumDriver, &drivers, DDENUM_ATTACHEDSECONDARYDEVICES | DDENUM_NONDISPLAYDEVICES);
-	}
-	else {
-		DirectDrawEnumerateEx(enumDriver, &drivers, 0);
+	if (!d3d) return;
+	static const D3DFORMAT kFormats[] = { D3DFMT_X8R8G8B8, D3DFMT_R5G6B5, D3DFMT_A8R8G8B8 };
+	UINT adapterCount = d3d->GetAdapterCount();
+	for (UINT i = 0; i < adapterCount; ++i) {
+		D3DADAPTER_IDENTIFIER9 id;
+		if (SUCCEEDED(d3d->GetAdapterIdentifier(i, 0, &id))) {
+			GfxDriver* d = new GfxDriver;
+			d->adapter = i;
+			d->identifier = id;
+			for (D3DFORMAT fmt : kFormats) {
+				UINT modeCount = d3d->GetAdapterModeCount(i, fmt);
+				for (UINT j = 0; j < modeCount; ++j) {
+					D3DDISPLAYMODE mode;
+					if (SUCCEEDED(d3d->EnumAdapterModes(i, fmt, j, &mode))) {
+						GfxMode* m = new GfxMode;
+						m->mode = mode;
+						d->modes.push_back(m);
+					}
+				}
+			}
+			drivers.push_back(d);
+		}
 	}
 }
 
 void gxRuntime::denumGfx() {
-	for(int k = 0; k < drivers.size(); ++k) {
-		gxRuntime::GfxDriver* d = drivers[k];
-		for(int j = 0; j < d->modes.size(); ++j) delete d->modes[j];
-		delete d->guid;
+	for (auto d : drivers) {
+		for (auto m : d->modes) delete m;
 		delete d;
 	}
 	drivers.clear();
@@ -1135,45 +1147,33 @@ int gxRuntime::numGraphicsDrivers() {
 	return drivers.size();
 }
 
-void gxRuntime::graphicsDriverInfo(int driver, std::string* name, int* c) {
-	GfxDriver* g = drivers[driver];
-	int caps = 0;
-	if(g->d3d_desc.dwDeviceRenderBitDepth) caps |= GFXMODECAPS_3D;
-	*name = g->name;
-	*c = caps;
+void gxRuntime::graphicsDriverInfo(int driver, std::string* name, int* caps) {
+	GfxDriver* d = drivers[driver];
+	*name = d->identifier.Description;
+	*caps = 0;
+	if (d->identifier.DeviceId) *caps |= GFXMODECAPS_3D;
 }
 
 int gxRuntime::numGraphicsModes(int driver) {
 	return drivers[driver]->modes.size();
 }
 
-void gxRuntime::graphicsModeInfo(int driver, int mode, int* w, int* h, int* d, int* c) {
-	GfxDriver* g = drivers[driver];
-	GfxMode* m = g->modes[mode];
-	int caps = 0;
-	int bd = 0;
-	switch(m->desc.ddpfPixelFormat.dwRGBBitCount) {
-		case 16:bd = DDBD_16; break;
-		case 24:bd = DDBD_24; break;
-		case 32:bd = DDBD_32; break;
+void gxRuntime::graphicsModeInfo(int driver, int mode, int* w, int* h, int* d, int* caps) {
+	GfxDriver* drv = drivers[driver];
+	GfxMode* m = drv->modes[mode];
+	*w = m->mode.Width;
+	*h = m->mode.Height;
+	switch (m->mode.Format) {
+	case D3DFMT_X8R8G8B8: *d = 32; break;
+	case D3DFMT_R8G8B8:   *d = 24; break;
+	case D3DFMT_R5G6B5:   *d = 16; break;
+	default:              *d = 0; break;
 	}
-	if(g->d3d_desc.dwDeviceRenderBitDepth & bd) caps |= GFXMODECAPS_3D;
-	*w = m->desc.dwWidth;
-	*h = m->desc.dwHeight;
-	*d = m->desc.ddpfPixelFormat.dwRGBBitCount;
-	*c = caps;
+	*caps = GFXMODECAPS_3D;
 }
 
-void gxRuntime::windowedModeInfo(int* c) {
-	int caps = 0;
-	int bd = 0;
-	switch(desktop_desc.ddpfPixelFormat.dwRGBBitCount) {
-		case 16:bd = DDBD_16; break;
-		case 24:bd = DDBD_24; break;
-		case 32:bd = DDBD_32; break;
-	}
-	if(drivers[0]->d3d_desc.dwDeviceRenderBitDepth & bd) caps |= GFXMODECAPS_3D;
-	*c = caps;
+void gxRuntime::windowedModeInfo(int* caps) {
+	*caps = GFXMODECAPS_3D;
 }
 
 gxTimer* gxRuntime::createTimer(int hertz) {
@@ -1296,14 +1296,11 @@ std::string gxRuntime::systemProperty(const std::string& p) {
 	else if(t == "tempdir") {
 		if(GetTempPath(MAX_PATH, buff)) return toDir(buff);
 	}
-	else if(t == "direct3d7") {
+	else if(t == "direct3d8") {
 		if(graphics) return itoa((int)graphics->dir3d);
 	}
-	else if(t == "direct3ddevice7") {
+	else if(t == "direct3ddevice8") {
 		if(graphics) return itoa((int)graphics->dir3dDev);
-	}
-	else if(t == "directdraw7") {
-		if(graphics) return itoa((int)graphics->dirDraw);
 	}
 	else if(t == "directinput7") {
 		if(input) return itoa((int)input->dirInput);

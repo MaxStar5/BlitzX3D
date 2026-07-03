@@ -2,6 +2,7 @@
 #define WORLD_H
 
 #include <list>
+#include <unordered_map>
 
 #include "model.h"
 #include "camera.h"
@@ -42,8 +43,7 @@ private:
 		int dst_type, method, response;
 	};
 
-	std::vector<CollInfo> _collInfo[1000];
-	std::vector<Object*> _objsByType[1000];
+	std::unordered_map<int, std::vector<CollInfo>> _collInfo;
 
 	void collide(Object* src);
 	void render(Camera* c, Mirror* m);

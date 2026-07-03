@@ -6,35 +6,58 @@
 class gxFont;
 class gxGraphics;
 
-typedef IDirectDrawSurface7 ddSurf;
 
 class gxCanvas {
 public:
-	gxCanvas(gxGraphics* g, IDirectDrawSurface7* s, int f);
+	gxCanvas(gxGraphics* g, IDirect3DSurface9* surf, int flags);
+	gxCanvas(gxGraphics* g, IDirect3DTexture9* tex, int flags);
+	gxCanvas(gxGraphics* g, IDirect3DCubeTexture9* cube_tex, int flags);
 	~gxCanvas();
 
-	void backup()const;
-	void restore()const;
-	ddSurf* getSurface()const;
-	ddSurf* getTexSurface()const;
+	gxGraphics* graphics;
+
+	void backup();
+	void restore();
+
+	IDirect3DSurface9* getSurface()  const;
+	IDirect3DBaseTexture9* getTexture() const;
+
+	mutable int mod_cnt;
+	mutable bool mipmapNeeded;
+
+	mutable IDirect3DTexture9* blit_tex;
+	mutable int blit_tex_mod_cnt;
+	mutable unsigned blit_tex_mask;
+
+	PixelFormat format;
+
+	RECT clip_rect;
+
+	unsigned mask_surf, color_surf, color_argb, clsColor_surf;
+
 	void setModify(int n);
-	int getModify()const;
+	int  getModify() const;
 
 	bool attachZBuffer();
 	void releaseZBuffer();
 
-	bool clip(RECT* d)const;
-	bool clip(RECT* d, RECT* s)const;
-	void damage(const RECT& r)const;
+	bool clip(RECT* d)          const;
+	bool clip(RECT* d, RECT* s) const;
+	void damage(const RECT& r)  const;
+
+	IDirect3DSurface9* surf;             // the "active" surf
+	IDirect3DSurface9* z_surf;           // depth/stencil surf
 
 private:
-	int flags, cube_mode;
-	gxGraphics* graphics;
+	int   flags, cube_mode;
 
-	ddSurf* main_surf, * surf, * z_surf, * cube_surfs[6];
+	IDirect3DSurface9* plain_surf;   // non text offscreen surf
+	IDirect3DTexture9* tex;
+	IDirect3DCubeTexture9* cube_tex;
 
-	mutable int mod_cnt;
-	mutable ddSurf* t_surf;
+	IDirect3DSurface9* cube_surfs[6];
+
+	mutable IDirect3DSurface9* t_surf;
 
 	mutable int locked_pitch, locked_cnt, lock_mod_cnt, remip_cnt;
 	mutable unsigned char* locked_surf;
@@ -42,16 +65,12 @@ private:
 	mutable int cm_pitch;
 	mutable unsigned* cm_mask;
 
-	RECT clip_rect;
-
-	PixelFormat format;
 
 	gxFont* font;
 	RECT viewport;
 	int origin_x, origin_y, handle_x, handle_y;
-	unsigned mask_surf, color_surf, color_argb, clsColor_surf;
 
-	void updateBitMask(const RECT& r)const;
+	void updateBitMask(const RECT& r) const;
 
 	/***** GX INTERFACE *****/
 public:
@@ -85,6 +104,8 @@ public:
 		CUBESPACE_CAMERA = 4
 	};
 
+	void fillRect(const RECT& r, unsigned argb);
+
 	//MANIPULATORS
 	void setFont(gxFont* font);
 	void setMask(unsigned argb);
@@ -103,6 +124,8 @@ public:
 	void blit(int x, int y, gxCanvas* src, int src_x, int src_y, int src_w, int src_h, bool solid);
 
 	void blitstretch(int x, int y, int w, int h, gxCanvas* src, int src_x, int src_y, int src_w, int src_h, bool solid);//for CopyRectStretch
+
+	void blitAlpha(int x, int y, gxCanvas* src, int src_x, int src_y, int src_w, int src_h, unsigned color_argb, bool filter = false);//for anti-aliased fonts
 
 	bool collide(int x, int y, const gxCanvas* src, int src_x, int src_y, bool solid)const;
 	bool rect_collide(int x, int y, int rect_x, int rect_y, int rect_w, int rect_h, bool solid)const;
@@ -124,6 +147,9 @@ public:
 	void setCubeMode(int mode);
 	void setCubeFace(int face);
 
+	int logical_w, logical_h;
+	void setLogicalSize(int w, int h) { logical_w = w; logical_h = h; }
+
 	//ACCESSORS
 	int getWidth()const;
 	int getHeight()const;
@@ -136,6 +162,8 @@ public:
 	unsigned getMask()const;
 	unsigned getColor()const;
 	unsigned getClsColor()const;
+	IDirect3DBaseTexture9* getTexSurface() const;
+	void setMipmapNeeded(bool needed) const { mipmapNeeded = needed; }
 };
 
 #endif

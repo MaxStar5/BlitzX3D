@@ -148,24 +148,46 @@ static int readVertices() {
 	int tc_sets = readInt();
 	int tc_size = readInt();
 
+	int vertex_size = 3 * sizeof(float); // coords
+	if (flags & 1) vertex_size += 3 * sizeof(float); // normal
+	if (flags & 2) vertex_size += 4 * sizeof(float); // color
+	vertex_size += tc_sets * tc_size * sizeof(float);
+
+	int remaining = chunk_stack.back() - ftell(in);
+	int num_vertices = remaining / vertex_size;
+
+	char* buffer = new char[remaining];
+	fread(buffer, remaining, 1, in);
+
+	char* ptr = buffer;
 	float tc[4] = { 0 };
 
-	Surface::Vertex t;
-	while (chunkSize()) {
-		readFloatArray(t.coords, 3);
+	for (int i = 0; i < num_vertices; ++i) {
+		Surface::Vertex t;
+
+		// coords
+		memcpy(t.coords, ptr, 12); ptr += 12;
+
 		if (flags & 1) {
-			readFloatArray(t.normal, 3);
+			memcpy(t.normal, ptr, 12); ptr += 12;
 		}
 		if (flags & 2) {
-			readColor(&t.color);
+			float rgba[4];
+			memcpy(rgba, ptr, 16); ptr += 16;
+			float r = rgba[0]; if (r < 0) r = 0; else if (r > 1) r = 1;
+			float g = rgba[1]; if (g < 0) g = 0; else if (g > 1) g = 1;
+			float b = rgba[2]; if (b < 0) b = 0; else if (b > 1) b = 1;
+			float a = rgba[3]; if (a < 0) a = 0; else if (a > 1) a = 1;
+			t.color = (unsigned(a * 255) << 24) | (unsigned(r * 255) << 16) | (unsigned(g * 255) << 8) | unsigned(b * 255);
 		}
 		for (int k = 0; k < tc_sets; ++k) {
-			readFloatArray(tc, std::clamp(tc_size, 0, 4));
+			memcpy(tc, ptr, tc_size * sizeof(float)); ptr += tc_size * sizeof(float);
 			if (k < 2) memcpy(t.tex_coords[k], tc, 8);
 		}
 		MeshLoader::addVertex(t);
 	}
 
+	delete[] buffer;
 	return flags;
 }
 

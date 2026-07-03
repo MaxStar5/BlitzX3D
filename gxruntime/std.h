@@ -1,6 +1,10 @@
 #ifndef STD_H
 #define STD_H
 
+#define _WINSOCKAPI_
+#define WIN32_LEAN_AND_MEAN
+#define POINTER_64 __ptr64
+
 #include "..//fmod375/include/fmod.h"
 
 #include "../config/config.h"
@@ -22,7 +26,6 @@
 
 #include <math.h>
 #include <Windows.h>
-#include <ddraw.h> // Why are we still here? Just to suffer?
-#include <d3d.h>
+#include <d3d9.h>
 
 #endif

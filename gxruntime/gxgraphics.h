@@ -6,7 +6,7 @@
 
 #include <set>
 #include <string>
-#include <d3d.h>
+#include <d3d9.h>
 
 #include "ddutil.h"
 
@@ -20,21 +20,19 @@ class gxRuntime;
 
 class gxGraphics {
 public:
-	IDirectDraw7* dirDraw;
-	IDirectDraw* ds_dirDraw;
+	IDirect3DDevice9* dir3dDev;
+	IDirect3DSurface9* frontBuffer;
+	IDirect3DSurface9* backBuffer;
+	IDirect3D9* dir3d;
 
-	IDirect3D7* dir3d;
-	IDirect3DDevice7* dir3dDev;
-	D3DDEVICEDESC7 dir3dDevDesc;
-	DDPIXELFORMAT primFmt, zbuffFmt;
-
-	DDPIXELFORMAT texRGBFmt[2], texAlphaFmt[2], texRGBAlphaFmt[2], texRGBMaskFmt[2];
-
+	D3DFORMAT           zbuffFmt;
+	D3DPRESENT_PARAMETERS present_params;
+	
 	FT_Library ftLibrary;
 
 	bool running_on_wine;
 
-	gxGraphics(gxRuntime* runtime, IDirectDraw7* dirDraw, IDirectDrawSurface7* front, IDirectDrawSurface7* back, bool d3d);
+	gxGraphics(gxRuntime* runtime, IDirect3DDevice9* device, IDirect3DSurface9* front, IDirect3DSurface9* back, bool d3d);
 	~gxGraphics();
 
 	bool restore();
@@ -56,8 +54,8 @@ private:
 	std::set<gxMovie*> movie_set;
 	std::set<std::string> font_res;
 
-	DDGAMMARAMP _gammaRamp;
-	IDirectDrawGammaControl* _gamma;
+	// DDGAMMARAMP _gammaRamp;
+	// IDirectDrawGammaControl* _gamma;
 
 	/***** GX INTERFACE *****/
 public:
@@ -69,9 +67,18 @@ public:
 		GRAPHICS_BORDERLESS = 16
 	};
 
+	enum DeviceState {
+		DEVICE_OK,
+		DEVICE_LOST,
+		DEVICE_NEEDS_RESET
+	};
+
+	DeviceState getDeviceState();
+
 	//MANIPULATORS
 	void vwait();
 	void flip(bool vwait);
+	bool changeDisplayMode(int width, int height, bool fullscreen, bool borderless = false);
 
 	//SPECIAL!
 	void copy(gxCanvas* dest, int dx, int dy, int dw, int dh, gxCanvas* src, int sx, int sy, int sw, int sh);
@@ -110,6 +117,8 @@ public:
 	gxScene* createScene(int flags);
 	gxScene* verifyScene(gxScene* scene);
 	void freeScene(gxScene* scene);
+
+	void adoptCanvas(gxCanvas* c);
 
 	gxMesh* createMesh(int max_verts, int max_tris, int flags);
 	gxMesh* verifyMesh(gxMesh* mesh);

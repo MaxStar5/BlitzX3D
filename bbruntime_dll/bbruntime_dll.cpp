@@ -14,6 +14,53 @@
 #include "../MultiLang/MultiLang.h"
 #include "../bbruntime/bbsys.h"
 
+#include <cstring>
+#include <cstdio>
+#include <ctime>
+#include <DbgHelp.h>
+#pragma comment(lib, "Dbghelp.lib")
+
+static void writeMiniDump(EXCEPTION_POINTERS* pExp) {
+	char path[MAX_PATH];
+	if (!GetTempPathA(MAX_PATH, path)) return;
+	strcat_s(path, MAX_PATH, "blitz_crash.dmp");
+
+	HANDLE hFile = CreateFileA(path, GENERIC_WRITE, 0, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
+	if (hFile == INVALID_HANDLE_VALUE) return;
+
+	MINIDUMP_EXCEPTION_INFORMATION mdei;
+	mdei.ThreadId = GetCurrentThreadId();
+	mdei.ExceptionPointers = pExp;
+	mdei.ClientPointers = FALSE;
+
+	MINIDUMP_TYPE dumpType = (MINIDUMP_TYPE)(MiniDumpWithThreadInfo | MiniDumpWithIndirectlyReferencedMemory | MiniDumpWithDataSegs);
+
+	MiniDumpWriteDump(GetCurrentProcess(), GetCurrentProcessId(), hFile, dumpType, pExp ? &mdei : NULL, NULL, NULL);
+	CloseHandle(hFile);
+}
+
+static void writeCrashLog(const char* fmt, ...) {
+	char path[MAX_PATH];
+	if (!GetTempPathA(MAX_PATH, path)) return;
+	strcat_s(path, MAX_PATH, "blitz_crash.log");
+
+	HANDLE hFile = CreateFileA(path, GENERIC_WRITE, FILE_SHARE_READ, NULL, OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
+	if (hFile == INVALID_HANDLE_VALUE) return;
+
+	SetFilePointer(hFile, 0, NULL, FILE_END); // append
+
+	char buffer[1024];
+	va_list args;
+	va_start(args, fmt);
+	vsnprintf(buffer, sizeof(buffer), fmt, args);
+	va_end(args);
+
+	DWORD written;
+	WriteFile(hFile, buffer, (DWORD)strlen(buffer), &written, NULL);
+	WriteFile(hFile, "\r\n", 2, &written, NULL);
+	CloseHandle(hFile);
+}
+
 class DummyDebugger : public Debugger {
 public:
 	virtual void debugRun() {}
@@ -35,6 +82,7 @@ static HINSTANCE hinst;
 static std::map<const char*, void*> syms;
 std::map<const char*, void*>::iterator sym_it;
 static gxRuntime* gx_runtime;
+static void* module_pc = nullptr;
 
 inline const char* getCharPtr(std::string str) {
 	char* cha = new char[str.size() + 1];
@@ -67,7 +115,11 @@ void throw_mav() {
 			}
 		}
 		if (ErrorMessagePool::hasMacro) {
-			s = replace_all(s, "_CaughtError_", std::format("{0}: {1}", errorfunc, errorlog));
+			std::string caught = "unknown location";
+			if (errorfunc && errorlog) {
+				caught = std::format("{0}: {1}", errorfunc, errorlog);
+			}
+			s = replace_all(s, "_CaughtError_", caught);
 			s = replace_all(s, "_AvailPhys_", to_string(gx_runtime->getAvailPhys()));
 			s = replace_all(s, "_AvailVirtual_", to_string(gx_runtime->getAvailVirtual()));
 		}
@@ -88,30 +140,85 @@ static void killer() {
 }
 
 static void _cdecl seTranslator(unsigned int u, EXCEPTION_POINTERS* pExp) {
-	switch(u) {
-		case EXCEPTION_INT_DIVIDE_BY_ZERO:
-			bbruntime_panic(MultiLang::integer_divide_zero);
-			break;
-		case EXCEPTION_ACCESS_VIOLATION:
-			throw_mav();
-			break;
-		case EXCEPTION_ILLEGAL_INSTRUCTION:
-			bbruntime_panic(MultiLang::illegal_instruction);
-			break;
-		case EXCEPTION_STACK_OVERFLOW:
-			bbruntime_panic(MultiLang::stack_overflow);
-			break;
-		case EXCEPTION_INT_OVERFLOW:
-			bbruntime_panic(MultiLang::integer_overflow);
-			break;
-		case EXCEPTION_FLT_OVERFLOW:
-			bbruntime_panic(MultiLang::float_overflow);
-			break;
-		case EXCEPTION_FLT_DIVIDE_BY_ZERO:
-			bbruntime_panic(MultiLang::float_divide_zero);
-			break;
+	if (pExp && pExp->ExceptionRecord) {
+		writeMiniDump(pExp);
+
+		EXCEPTION_RECORD* rec = pExp->ExceptionRecord;
+		void* crashAddr = rec->ExceptionAddress;
+
+		DWORD offset = 0;
+		if (module_pc && crashAddr >= module_pc) {
+			offset = (DWORD)((char*)crashAddr - (char*)module_pc);
+		}
+
+		DWORD accessAddr = 0;
+		DWORD accessType = 0; // 0 = read 1 = write
+		if (rec->NumberParameters >= 2) {
+			accessType = (DWORD)rec->ExceptionInformation[0];
+			accessAddr = (DWORD)rec->ExceptionInformation[1];
+		}
+		const char* typeStr = (accessType == 1) ? "WRITE" : "READ";
+
+		time_t now = time(nullptr);
+		char timeBuf[64];
+		ctime_s(timeBuf, sizeof(timeBuf), &now);
+		char* nl = strchr(timeBuf, '\n');
+		if (nl) *nl = '\0';
+
+		writeCrashLog("=== CRASH LOG ===");
+		writeCrashLog("Time: %s", timeBuf);
+		writeCrashLog("Exception Code: 0x%08X", rec->ExceptionCode);
+		writeCrashLog("Instruction Address: 0x%p (Offset in module: 0x%X)", crashAddr, offset);
+		writeCrashLog("Access Violation: %s at 0x%p", typeStr, (void*)accessAddr);
+
+		unsigned char instr[16];
+		SIZE_T bytesRead;
+		if (ReadProcessMemory(GetCurrentProcess(), crashAddr, instr, 16, &bytesRead)) {
+			char hex[64] = { 0 };
+			for (SIZE_T i = 0; i < bytesRead; i++) {
+				char part[8];
+				sprintf_s(part, sizeof(part), "%02X ", instr[i]);
+				strcat_s(hex, sizeof(hex), part);
+			}
+			writeCrashLog("Instruction bytes: %s", hex);
+		}
+		writeCrashLog("---");
+
+		char logPath[MAX_PATH];
+		GetTempPathA(MAX_PATH, logPath);
+		strcat_s(logPath, MAX_PATH, "blitz_crash.log");
+
+		char msg[512];
+		sprintf_s(msg, sizeof(msg), "A crash has occurred.\n\nThe log and dump files have been saved to:\n%s\n\n" "Please send this file to krimbopple for debugging.", logPath);
+		MessageBoxA(NULL, msg, "Blitz Runtime Error", MB_OK | MB_ICONERROR);
 	}
-	bbruntime_panic(MultiLang::unknown_runtime_exception);
+
+	switch (u) {
+	case EXCEPTION_INT_DIVIDE_BY_ZERO:
+		bbruntime_panic(MultiLang::integer_divide_zero);
+		break;
+	case EXCEPTION_ACCESS_VIOLATION:
+		throw_mav();
+		break;
+	case EXCEPTION_ILLEGAL_INSTRUCTION:
+		bbruntime_panic(MultiLang::illegal_instruction);
+		break;
+	case EXCEPTION_STACK_OVERFLOW:
+		bbruntime_panic(MultiLang::stack_overflow);
+		break;
+	case EXCEPTION_INT_OVERFLOW:
+		bbruntime_panic(MultiLang::integer_overflow);
+		break;
+	case EXCEPTION_FLT_OVERFLOW:
+		bbruntime_panic(MultiLang::float_overflow);
+		break;
+	case EXCEPTION_FLT_DIVIDE_BY_ZERO:
+		bbruntime_panic(MultiLang::float_divide_zero);
+		break;
+	default:
+		bbruntime_panic(MultiLang::unknown_runtime_exception);
+		break;
+	}
 }
 
 int Runtime::version() {
@@ -137,6 +244,7 @@ int Runtime::symValue(const char* sym) {
 
 void Runtime::startup(HINSTANCE h) {
 	hinst = h;
+	module_pc = (void*)h;
 }
 
 void Runtime::shutdown() {
@@ -206,7 +314,6 @@ Runtime* _cdecl runtimeGetRuntime() {
 
 /********************** BUTT UGLY DLL->EXE HOOK! *************************/
 
-static void* module_pc;
 static std::map<std::string, int> module_syms;
 static std::map<std::string, int> runtime_syms;
 static Runtime* runtime;

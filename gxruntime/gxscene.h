@@ -16,7 +16,7 @@ class gxTexture;
 class gxScene {
 public:
 	gxGraphics* graphics;
-	IDirect3DDevice7* dir3dDev;
+	IDirect3DDevice9* dir3dDev;
 
 	gxScene(gxGraphics* graphics, gxCanvas* target);
 	~gxScene();
@@ -126,12 +126,12 @@ private:
 	unsigned ambient, ambient2, fogcolor;
 	int caps_level, fogmode, zmode, max_lights;
 	float fogrange_nr, fogrange_fr, fog_density;
-	D3DVIEWPORT7 viewport;
+	D3DVIEWPORT9 viewport;
 	bool ortho_proj;
 	float frustum_nr, frustum_fr, frustum_w, frustum_h;
 	D3DMATRIX projmatrix, viewmatrix, worldmatrix;
 	D3DMATRIX inv_viewmatrix;
-	D3DMATERIAL7 material;
+	D3DMATERIAL9 material;
 	float shininess;
 	int blend, fx;
 	struct TexState {
@@ -151,9 +151,14 @@ private:
 
 	int d3d_rs[160];
 	int d3d_tss[8][32];
+	int d3d_samp[8][16];
+
+	RenderState lastRenderState;
+	bool lastRenderStateValid;
 
 	void setRS(int n, int t);
 	void setTSS(int n, int s, int t);
+	void setSamp(int n, int s, int t);
 
 	void setLights();
 	void setZMode();

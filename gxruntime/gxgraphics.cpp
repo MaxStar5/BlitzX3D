@@ -6,12 +6,30 @@
 extern gxRuntime* gx_runtime;
 static Debugger* debugger;
 
-gxGraphics::gxGraphics(gxRuntime* rt, IDirectDraw7* dd, IDirectDrawSurface7* fs, IDirectDrawSurface7* bs, bool d3d) :
-	runtime(rt), dirDraw(dd), dir3d(0), dir3dDev(0), gfx_lost(false), dummy_mesh(0) {
-	dirDraw->QueryInterface(IID_IDirectDraw, (void**)&ds_dirDraw);
+gxGraphics::gxGraphics(gxRuntime* rt, IDirect3DDevice9* dev, IDirect3DSurface9* front, IDirect3DSurface9* back, bool d3d) : runtime(rt), dir3dDev(dev), frontBuffer(front), backBuffer(back), gfx_lost(false), dummy_mesh(0) {
 
-	front_canvas = new gxCanvas(this, fs, 0);
-	back_canvas = new gxCanvas(this, bs, 0);
+	if (dir3dDev) dir3dDev->AddRef();
+	if (frontBuffer) frontBuffer->AddRef();
+	if (backBuffer) backBuffer->AddRef();
+
+	front_canvas = new gxCanvas(this, frontBuffer, 0);
+	// MessageBoxA(NULL, "front_canvas created", "Debug", MB_OK);
+
+	if (!backBuffer) {
+		// MessageBoxA(NULL, "backBuffer is NULL!", "Error", MB_OK);
+		return;
+	}
+
+	D3DSURFACE_DESC testDesc;
+	HRESULT hr = backBuffer->GetDesc(&testDesc);
+	if (FAILED(hr)) {
+		char buf[256];
+		sprintf(buf, "backBuffer->GetDesc failed: 0x%08X", hr);
+		// MessageBoxA(NULL, buf, "Error", MB_OK);
+	}
+
+	back_canvas = new gxCanvas(this, backBuffer, 0);
+	// MessageBoxA(NULL, "back_canvas created", "Debug", MB_OK);
 
 	front_canvas->cls();
 	back_canvas->cls();
@@ -22,30 +40,22 @@ gxGraphics::gxGraphics(gxRuntime* rt, IDirectDraw7* dd, IDirectDrawSurface7* fs,
 	running_on_wine = ntdllModule && GetProcAddress(ntdllModule, "wine_get_version");
 
 	def_font = running_on_wine ? nullptr : this->loadFont(UTF8::getSystemFontFile("Courier"), 12);
-
 	front_canvas->setFont(def_font);
 	back_canvas->setFont(def_font);
 
-	memset(&primFmt, 0, sizeof(primFmt));
-	primFmt.dwSize = sizeof(primFmt);
-	fs->GetPixelFormat(&primFmt);
-
-	getTotalVidmem();
-
-	//are we fullscreen?
-	_gamma = 0;
-	if (fs != bs) {
-		if (fs->QueryInterface(IID_IDirectDrawGammaControl, (void**)&_gamma) >= 0) {
-			if (_gamma->GetGammaRamp(0, &_gammaRamp) < 0) _gamma = 0;
-		}
+	D3DCAPS9 caps;
+	if (dir3dDev && SUCCEEDED(dir3dDev->GetDeviceCaps(&caps))) {
+		// simple for now, we should probably enumerate!!
+		zbuffFmt = D3DFMT_D16;
 	}
-	if (!_gamma) {
-		for (int k = 0; k < 256; ++k) _gammaRamp.red[k] = _gammaRamp.blue[k] = _gammaRamp.green[k] = k;
+	else {
+		zbuffFmt = D3DFMT_UNKNOWN;
 	}
+
+	// todo: gamma
 }
 
 gxGraphics::~gxGraphics() {
-	if (_gamma) _gamma->Release();
 	while (scene_set.size()) freeScene(*scene_set.begin());
 	while (movie_set.size()) closeMovie(*movie_set.begin());
 	while (font_set.size()) freeFont(*font_set.begin());
@@ -68,52 +78,184 @@ gxGraphics::~gxGraphics() {
 
 	FT_Done_FreeType(ftLibrary);
 
-	ds_dirDraw->Release();
-
-	dirDraw->RestoreDisplayMode();
-	dirDraw->Release();
+	if (dir3dDev) dir3dDev->Release();
+	if (frontBuffer && frontBuffer != backBuffer) frontBuffer->Release();
+	if (backBuffer) backBuffer->Release();
 }
 
 void gxGraphics::setGamma(int r, int g, int b, float dr, float dg, float db) {
-	_gammaRamp.red[r & 255] = dr * 257.0f;
-	_gammaRamp.green[g & 255] = dg * 257.0f;
-	_gammaRamp.blue[b & 255] = db * 257.0f;
+	//bruh
 }
 
 void gxGraphics::updateGamma(bool calibrate) {
-	if (!_gamma) return;
-	_gamma->SetGammaRamp(calibrate ? DDSGR_CALIBRATE : 0, &_gammaRamp);
+	//bruh
 }
 
 void gxGraphics::getGamma(int r, int g, int b, float* dr, float* dg, float* db) {
-	*dr = _gammaRamp.red[r & 255] / 257.0f;
-	*dg = _gammaRamp.green[g & 255] / 257.0f;
-	*db = _gammaRamp.blue[b & 255] / 257.0f;
+	//bruh
 }
 
 bool gxGraphics::restore() {
+	if (!dir3dDev) return false;
 
-	while (dirDraw->TestCooperativeLevel() != DD_OK) {
+	HRESULT hr = dir3dDev->TestCooperativeLevel();
+	if (hr == D3DERR_DEVICELOST) return false;
 
-		if (dirDraw->TestCooperativeLevel() == DDERR_WRONGMODE) return false;
+	if (hr == D3DERR_DEVICENOTRESET) {
+		if (present_params.Windowed) {
+			present_params.Flags |= D3DPRESENTFLAG_LOCKABLE_BACKBUFFER;
+		}
 
-		Sleep(100);
+		hr = dir3dDev->Reset(&present_params);
+		if (FAILED(hr)) return false;
+
+		IDirect3DSurface9* newBack = nullptr;
+		hr = dir3dDev->GetBackBuffer(0, 0, D3DBACKBUFFER_TYPE_MONO, &newBack);
+		if (FAILED(hr) || !newBack) return false;
+
+		if (runtime->backBuffer) runtime->backBuffer->Release();
+		runtime->backBuffer = newBack;
+		newBack->AddRef();
+
+		if (back_canvas && back_canvas->surf) {
+			back_canvas->surf->Release();
+			back_canvas->surf = newBack;
+			newBack->AddRef();
+		}
+		if (front_canvas && front_canvas->surf == back_canvas->surf) {
+			front_canvas->surf->Release();
+			front_canvas->surf = newBack;
+			newBack->AddRef();
+		}
+
+		for (auto it = canvas_set.begin(); it != canvas_set.end(); ++it) {
+			(*it)->restore();
+		}
+
+		for (auto it = mesh_set.begin(); it != mesh_set.end(); ++it) {
+			(*it)->restore();
+		}
+
+		for (auto font : font_set) {
+			for (auto atlas : font->atlases) {
+				atlas->restore();
+			}
+			if (font->tempCanvas) {
+				font->tempCanvas->restore();
+			}
+		}
+
+		InvalidateRect(runtime->hwnd, nullptr, FALSE);
+	}
+	return true;
+}
+
+bool gxGraphics::changeDisplayMode(int width, int height, bool fullscreen, bool borderless) {
+	if (!dir3dDev) return false;
+
+	HWND hwnd = runtime->hwnd;
+
+	if (fullscreen) {
+		SetWindowLong(hwnd, GWL_STYLE, WS_VISIBLE | WS_POPUP);
+		SetWindowPos(hwnd, HWND_TOPMOST, 0, 0, width, height, SWP_FRAMECHANGED);
+		ShowCursor(FALSE);
+	}
+	else if (borderless) {
+		SetWindowLong(hwnd, GWL_STYLE, WS_VISIBLE | WS_POPUP);
+		int dw = GetSystemMetrics(SM_CXSCREEN);
+		int dh = GetSystemMetrics(SM_CYSCREEN);
+		SetWindowPos(hwnd, HWND_TOPMOST, 0, 0, dw, dh, SWP_FRAMECHANGED);
+		width = dw;
+		height = dh;
+	}
+	else {
+		DWORD style = WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX | WS_VISIBLE;
+		SetWindowLong(hwnd, GWL_STYLE, style);
+		RECT w_r, c_r;
+		GetWindowRect(hwnd, &w_r);
+		GetClientRect(hwnd, &c_r);
+		int borderX = (w_r.right - w_r.left) - (c_r.right - c_r.left);
+		int borderY = (w_r.bottom - w_r.top) - (c_r.bottom - c_r.top);
+		int cx = (GetSystemMetrics(SM_CXSCREEN) - width) / 2;
+		int cy = (GetSystemMetrics(SM_CYSCREEN) - height) / 2;
+		MoveWindow(hwnd, cx, cy, width + borderX, height + borderY, TRUE);
 	}
 
-	if (back_canvas->getSurface()->IsLost() == DD_OK) return true;
+	if (runtime->backBuffer) {
+		runtime->backBuffer->Release();
+		runtime->backBuffer = nullptr;
+	}
+	if (runtime->frontBuffer && runtime->frontBuffer != runtime->backBuffer) {
+		runtime->frontBuffer->Release();
+		runtime->frontBuffer = nullptr;
+	}
 
-	dirDraw->RestoreAllSurfaces();
+	present_params.BackBufferWidth = width;
+	present_params.BackBufferHeight = height;
+	present_params.Windowed = !fullscreen;
+	if (fullscreen) {
+		present_params.FullScreen_RefreshRateInHz = D3DPRESENT_RATE_DEFAULT;
+		present_params.PresentationInterval = D3DPRESENT_INTERVAL_IMMEDIATE;
+	}
+	else {
+		present_params.FullScreen_RefreshRateInHz = 0;
+		present_params.PresentationInterval = D3DPRESENT_INTERVAL_IMMEDIATE;
+	}
 
-	//restore all canvases
-	for (auto it = canvas_set.begin(); it != canvas_set.end(); ++it) {
+	HRESULT hr = dir3dDev->Reset(&present_params);
+	if (FAILED(hr)) {
+		char buf[256];
+		sprintf(buf, "Reset failed: 0x%08X", hr);
+		runtime->debugLog(buf);
+		return false;
+	}
+
+	IDirect3DSurface9* newBack = nullptr;
+	hr = dir3dDev->GetBackBuffer(0, 0, D3DBACKBUFFER_TYPE_MONO, &newBack);
+	if (FAILED(hr) || !newBack) {
+		runtime->debugLog("GetBackBuffer failed");
+		return false;
+	}
+	runtime->backBuffer = newBack;
+	runtime->frontBuffer = newBack;
+	newBack->AddRef();
+	newBack->AddRef();
+
+	auto updateCanvas = [&](gxCanvas* canvas) {
+		if (!canvas) return;
+		if (canvas->surf) {
+			canvas->surf->Release();
+			canvas->surf = nullptr;
+		}
+		canvas->surf = newBack;
+		newBack->AddRef();
+
+		canvas->logical_w = width;
+		canvas->logical_h = height;
+		canvas->clip_rect.left = 0;
+		canvas->clip_rect.top = 0;
+		canvas->clip_rect.right = width;
+		canvas->clip_rect.bottom = height;
+		canvas->setViewport(0, 0, width, height);
+
+		if (canvas->z_surf) {
+			canvas->releaseZBuffer();
+			canvas->attachZBuffer();
+		}
+		};
+
+	updateCanvas(front_canvas);
+	updateCanvas(back_canvas);
+
+	for (auto it = mesh_set.begin(); it != mesh_set.end(); ++it) {
 		(*it)->restore();
 	}
-
-	//restore all meshes (b3d surfaces)
-	for (auto mesh_it = mesh_set.begin(); mesh_it != mesh_set.end(); ++mesh_it) {
-		(*mesh_it)->restore();
+	for (auto font : font_set) {
+		for (auto atlas : font->atlases) atlas->restore();
+		if (font->tempCanvas) font->tempCanvas->restore();
 	}
-	if (dir3d) dir3d->EvictManagedTextures();
+
+	InvalidateRect(hwnd, nullptr, FALSE);
 
 	return true;
 }
@@ -130,67 +272,35 @@ gxFont* gxGraphics::getDefaultFont()const {
 	return def_font;
 }
 
-void gxGraphics::vwait() {
-	dirDraw->WaitForVerticalBlank(DDWAITVB_BLOCKBEGIN, 0);
+void gxGraphics::vwait() { // stubby stbu stub
+	// dirDraw->WaitForVerticalBlank(DDWAITVB_BLOCKBEGIN, 0);
 }
 
-void gxGraphics::flip(bool v) {
-	runtime->flip(v);
+gxGraphics::DeviceState gxGraphics::getDeviceState() {
+	if (!dir3dDev) return DEVICE_LOST;
+	HRESULT hr = dir3dDev->TestCooperativeLevel();
+	if (hr == D3DERR_DEVICELOST) return DEVICE_LOST;
+	if (hr == D3DERR_DEVICENOTRESET) return DEVICE_NEEDS_RESET;
+	return DEVICE_OK;
+}
+
+void gxGraphics::flip(bool vwait) {
+	if (runtime) runtime->flip(vwait);
 }
 
 void gxGraphics::copy(gxCanvas* dest, int dx, int dy, int dw, int dh, gxCanvas* src, int sx, int sy, int sw, int sh) {
-	RECT r = { dx,dy,dx + dw,dy + dh };
-	ddUtil::copy(dest->getSurface(), dx, dy, dw, dh, src->getSurface(), sx, sy, sw, sh);
+	ddUtil::copy(dir3dDev, dest->getSurface(), dx, dy, dw, dh, src->getSurface(), sx, sy, sw, sh);
+	RECT r = { dx, dy, dx + dw, dy + dh };
 	dest->damage(r);
 }
 
-int gxGraphics::getScanLine()const {
-	DWORD t = 0;
-	dirDraw->GetScanLine(&t);
-	return t;
-}
+int gxGraphics::getScanLine() const { return 0; }
 
-int gxGraphics::getTotalVidmem()const {
-	DDCAPS caps = { sizeof(caps) };
-	dirDraw->GetCaps(&caps, 0);
-	return caps.dwVidMemTotal / 1024;
-}
+int gxGraphics::getAvailVidmem() const { return 0; }
 
-int gxGraphics::getAvailVidmem()const {
-	DDCAPS caps = { sizeof(caps) };
-	dirDraw->GetCaps(&caps, 0);
-	return caps.dwVidMemFree / 1024;
-}
+int gxGraphics::getTotalVidmem() const { return 0; }
 
 gxMovie* gxGraphics::openMovie(const std::string& file, int flags) {
-
-	IAMMultiMediaStream* iam_stream;
-
-	if (CoCreateInstance(
-		CLSID_AMMultiMediaStream, NULL, CLSCTX_INPROC_SERVER,
-		IID_IAMMultiMediaStream, (void**)&iam_stream) == S_OK) {
-
-		if (iam_stream->Initialize(STREAMTYPE_READ, AMMSF_NOGRAPHTHREAD, NULL) == S_OK) {
-
-			if (iam_stream->AddMediaStream(ds_dirDraw, &MSPID_PrimaryVideo, 0, 0) == S_OK) {
-
-				iam_stream->AddMediaStream(NULL, &MSPID_PrimaryAudio, AMMSF_ADDDEFAULTRENDERER, NULL);
-
-				WCHAR* path = new WCHAR[file.size() + 1];
-				MultiByteToWideChar(CP_ACP, 0, file.c_str(), -1, path, sizeof(WCHAR) * (file.size() + 1));
-				int n = iam_stream->OpenFile(path, 0);
-				delete path;
-
-				if (n == S_OK) {
-					gxMovie* movie = new gxMovie(this, iam_stream);
-					movie->filename = file;
-					movie_set.insert(movie);
-					return movie;
-				}
-			}
-		}
-		iam_stream->Release();
-	}
 	return 0;
 }
 
@@ -203,19 +313,33 @@ void gxGraphics::closeMovie(gxMovie* m) {
 }
 
 gxCanvas* gxGraphics::createCanvas(int w, int h, int flags) {
-	ddSurf* s = ddUtil::createSurface(w, h, flags, this);
-	if (!s) return 0;
-	gxCanvas* c = new gxCanvas(this, s, flags);
+	if (flags & gxCanvas::CANVAS_TEXTURE) {
+		IDirect3DTexture9* tex = ddUtil::createTextureSurface(w, h, flags, this);
+		if (!tex) return nullptr;
+		gxCanvas* c = new gxCanvas(this, tex, flags);
+		canvas_set.insert(c);
+		c->cls();
+		return c;
+	}
+	IDirect3DSurface9* surf = ddUtil::createDisplaySurface(w, h, this);
+	if (!surf) return nullptr;
+	gxCanvas* c = new gxCanvas(this, surf, flags);
 	canvas_set.insert(c);
 	c->cls();
-	if (debugger) printf("Created new gxCanvas instance.");
 	return c;
 }
 
 gxCanvas* gxGraphics::loadCanvas(const std::string& f, int flags) {
-	ddSurf* s = ddUtil::loadSurface(f, flags, this);
-	if (!s) return 0;
-	gxCanvas* c = new gxCanvas(this, s, flags);
+	if (flags & gxCanvas::CANVAS_TEXTURE) {
+		IDirect3DTexture9* tex = ddUtil::loadTextureSurface(f, flags, this);
+		if (!tex) return nullptr;
+		gxCanvas* c = new gxCanvas(this, tex, flags);
+		canvas_set.insert(c);
+		return c;
+	}
+	IDirect3DSurface9* surf = ddUtil::loadDisplaySurface(f, flags, this);
+	if (!surf) return nullptr;
+	gxCanvas* c = new gxCanvas(this, surf, flags);
 	canvas_set.insert(c);
 	return c;
 }
@@ -252,7 +376,7 @@ gxFont* gxGraphics::loadFont(std::string f, int height, bool bold, bool italic, 
 		t = f;
 	}
 
-	gxFont* newFont = new gxFont(ftLibrary, this, f, height, bold, italic, underlined);
+	gxFont* newFont = new gxFont(ftLibrary, this, f, height, bold, italic, underlined); // this line crashes in the backported version of UER, investigate !
 	font_set.emplace(newFont);
 	return newFont;
 }
@@ -269,240 +393,60 @@ void gxGraphics::freeFont(gxFont* f) {
 // 3D STUFF //
 //////////////
 
-static int maxDevType;
-
-static HRESULT CALLBACK enumDevice(char* desc, char* name, D3DDEVICEDESC7* devDesc, void* context) {
-	gxGraphics* g = (gxGraphics*)context;
-	int t = 0;
-	GUID guid = devDesc->deviceGUID;
-	if (guid == IID_IDirect3DRGBDevice) t = 1;
-	else if (guid == IID_IDirect3DHALDevice) t = 2;
-	else if (guid == IID_IDirect3DTnLHalDevice) t = 3;
-	if (t > maxDevType) {
-		g->dir3dDevDesc = *devDesc;
-		maxDevType = t;
-	}
-	return D3DENUMRET_OK;
-}
-
-static HRESULT CALLBACK enumZbuffFormat(LPDDPIXELFORMAT format, void* context) {
-	gxGraphics* g = (gxGraphics*)context;
-	if (format->dwZBufferBitDepth == g->primFmt.dwRGBBitCount) {
-		g->zbuffFmt = *format;
-		return D3DENUMRET_CANCEL;
-	}
-	if (format->dwZBufferBitDepth > g->zbuffFmt.dwZBufferBitDepth) {
-		if (format->dwZBufferBitDepth < g->primFmt.dwRGBBitCount) {
-			g->zbuffFmt = *format;
-		}
-	}
-	return D3DENUMRET_OK;
-}
-
-struct TexFmt {
-	DDPIXELFORMAT fmt;
-	int bits, a_bits, rgb_bits;
-};
-
-static int cntBits(int mask) {
-	int n = 0;
-	for (int k = 0; k < 32; ++k) {
-		if (mask & (1 << k)) ++n;
-	}
-	return n;
-}
-
-static std::vector<TexFmt> tex_fmts;
-
-static HRESULT CALLBACK enumTextureFormat(DDPIXELFORMAT* fmt, void* p) {
-	TexFmt t;
-	t.fmt = *fmt;
-	t.bits = fmt->dwRGBBitCount;
-	t.a_bits = (fmt->dwFlags & DDPF_ALPHAPIXELS) ? cntBits(fmt->dwRGBAlphaBitMask) : 0;
-	t.rgb_bits = (fmt->dwFlags & DDPF_RGB) ? cntBits(fmt->dwRBitMask | fmt->dwGBitMask | fmt->dwBBitMask) : 0;
-
-	tex_fmts.push_back(t);
-
-	return D3DENUMRET_OK;
-}
-
-static std::string itobin(int n) {
-	std::string t;
-	for (int k = 0; k < 32; n <<= 1, ++k) {
-		t += (n & 0x80000000) ? '1' : '0';
-	}
-	return t;
-}
-
-#ifdef BETA
-static void debugPF(const DDPIXELFORMAT& pf) {
-	string t;
-	t = "Bits:" + itoa(pf.dwRGBBitCount);
-	gx_runtime->debugLog(t.c_str());
-	t = "R Mask:" + itobin(pf.dwRBitMask);
-	gx_runtime->debugLog(t.c_str());
-	t = "G Mask:" + itobin(pf.dwGBitMask);
-	gx_runtime->debugLog(t.c_str());
-	t = "B Mask:" + itobin(pf.dwBBitMask);
-	gx_runtime->debugLog(t.c_str());
-	t = "A Mask:" + itobin(pf.dwRGBAlphaBitMask);
-	gx_runtime->debugLog(t.c_str());
-	}
-#endif
-
-static void pickTexFmts(gxGraphics* g, int hi) {
-	//texRGBFmt.
-	{
-		int pick = -1, max = 0, bits;
-		for (int d = g->primFmt.dwRGBBitCount; d <= 32; d += 8) {
-			for (int k = 0; k < tex_fmts.size(); ++k) {
-				const TexFmt& t = tex_fmts[k];
-				if (t.bits > d || !t.rgb_bits || t.rgb_bits < max) continue;
-				if (t.rgb_bits == max && t.bits >= bits) continue;
-				pick = k; max = t.rgb_bits; bits = t.bits;
-			}
-			if (!hi && pick >= 0) break;
-		}
-		if (pick < 0) g->texRGBFmt[hi] = g->primFmt;
-		else g->texRGBFmt[hi] = tex_fmts[pick].fmt;
-	}
-	//texAlphaFmt
-	{
-		int pick = -1, max = 0, bits;
-		for (int d = g->primFmt.dwRGBBitCount; d <= 32; d += 8) {
-			for (int k = 0; k < tex_fmts.size(); ++k) {
-				const TexFmt& t = tex_fmts[k];
-				if (t.bits > d || !t.a_bits || t.a_bits < max) continue;
-				if (t.a_bits == max && t.bits >= bits) continue;
-				pick = k; max = t.a_bits; bits = t.bits;
-			}
-			if (!hi && pick >= 0) break;
-		}
-		if (pick < 0) g->texAlphaFmt[hi] = g->primFmt;
-		else g->texAlphaFmt[hi] = tex_fmts[pick].fmt;
-	}
-	//texRGBAlphaFmt
-	{
-		int pick = -1, a8rgb8 = -1, max = 0, bits;
-		for (int d = g->primFmt.dwRGBBitCount; d <= 32; d += 8) {
-			for (int k = 0; k < tex_fmts.size(); ++k) {
-				const TexFmt& t = tex_fmts[k];
-				if (t.a_bits == 8 && t.bits == 16) { a8rgb8 = k; continue; }
-				if (t.bits > d || !t.a_bits || !t.rgb_bits || t.a_bits < max) continue;
-				if (t.a_bits == max && t.bits >= bits) continue;
-				pick = k; max = t.a_bits; bits = t.bits;
-			}
-			if (!hi && pick >= 0) break;
-		}
-		if (pick < 0) pick = a8rgb8;
-		if (pick < 0) g->texRGBAlphaFmt[hi] = g->primFmt;
-		else g->texRGBAlphaFmt[hi] = tex_fmts[pick].fmt;
-	}
-	//texRGBMaskFmt...
-	{
-		int pick = -1, max = 0, bits;
-		for (int d = g->primFmt.dwRGBBitCount; d <= 32; d += 8) {
-			for (int k = 0; k < tex_fmts.size(); ++k) {
-				const TexFmt& t = tex_fmts[k];
-				if (!t.a_bits || !t.rgb_bits || t.rgb_bits < max) continue;
-				if (t.rgb_bits == max && t.bits >= bits) continue;
-				pick = k; max = t.rgb_bits; bits = t.bits;
-			}
-			if (!hi && pick >= 0) break;
-		}
-		if (pick < 0) g->texRGBMaskFmt[hi] = g->primFmt;
-		else g->texRGBMaskFmt[hi] = tex_fmts[pick].fmt;
-	}
-}
-
 gxScene* gxGraphics::createScene(int flags) {
 	if (scene_set.size()) return 0;
+	if (!dir3dDev) return 0;
 
-	//get d3d
-	if (dirDraw->QueryInterface(IID_IDirect3D7, (void**)&dir3d) >= 0) {
-		//enum devices
-		maxDevType = 0;
-		if (dir3d->EnumDevices(enumDevice, this) >= 0 && maxDevType > 1) {
-			//enum zbuffer formats
-			zbuffFmt.dwZBufferBitDepth = 0;
-			if (dir3d->EnumZBufferFormats(dir3dDevDesc.deviceGUID, enumZbuffFormat, this) >= 0) {
-				//create zbuff for back buffer
-				if (back_canvas->attachZBuffer()) {
-					//create 3d device
-					if (dir3d->CreateDevice(dir3dDevDesc.deviceGUID, back_canvas->getSurface(), &dir3dDev) >= 0) {
-						//enum texture formats
-						tex_fmts.clear();
-						if (dir3dDev->EnumTextureFormats(enumTextureFormat, this) >= 0) {
-							pickTexFmts(this, 0);
-							pickTexFmts(this, 1);
-							tex_fmts.clear();
-#ifdef BETA
-							gx_runtime->debugLog("Texture RGB format:");
-							debugPF(texRGBFmt);
-							gx_runtime->debugLog("Texture Alpha format:");
-							debugPF(texAlphaFmt);
-							gx_runtime->debugLog("Texture RGB Alpha format:");
-							debugPF(texRGBAlphaFmt);
-							gx_runtime->debugLog("Texture RGB Mask format:");
-							debugPF(texRGBMaskFmt);
-							gx_runtime->debugLog("Texture Primary format:");
-							debugPF(primFmt);
-							string ts = "ZBuffer Bit Depth:" + itoa(zbuffFmt.dwZBufferBitDepth);
-							gx_runtime->debugLog(ts.c_str());
-#endif
-							gxScene* scene = new gxScene(this, back_canvas);
-							scene_set.insert(scene);
-
-							//dummy_mesh = createMesh(8, 12, 0);
-
-							return scene;
-					}
-						dir3dDev->Release();
-						dir3dDev = 0;
-				}
-					back_canvas->releaseZBuffer();
-			}
+	D3DFORMAT depthFormats[] = { D3DFMT_D24S8, D3DFMT_D24X8, D3DFMT_D16, D3DFMT_D32 };
+	bool zOk = false;
+	for (int i = 0; i < 4; ++i) {
+		zbuffFmt = depthFormats[i];
+		if (back_canvas->attachZBuffer()) {
+			zOk = true;
+			break;
 		}
 	}
-		dir3d->Release();
-		dir3d = 0;
-}
-	return 0;
+	if (!zOk) {
+		// MessageBoxA(NULL, "createScene: Failed to attach any Z-buffer", "Error", MB_OK);
+		return 0;
+	}
+
+	gxScene* scene = new gxScene(this, back_canvas);
+	scene_set.insert(scene);
+	return scene;
 }
 
-gxScene* gxGraphics::verifyScene(gxScene* s) {
-	return scene_set.count(s) ? s : 0;
-}
+gxScene* gxGraphics::verifyScene(gxScene* s) { return scene_set.count(s) ? s : 0; }
 
 void gxGraphics::freeScene(gxScene* scene) {
 	if (!scene_set.erase(scene)) return;
 	dummy_mesh = 0;
 	while (mesh_set.size()) freeMesh(*mesh_set.begin());
 	back_canvas->releaseZBuffer();
-	if (dir3dDev) { dir3dDev->Release(); dir3dDev = 0; }
-	if (dir3d) { dir3d->Release(); dir3d = 0; }
 	delete scene;
 }
 
+void gxGraphics::adoptCanvas(gxCanvas* c) {
+	canvas_set.insert(c);
+}
+
 gxMesh* gxGraphics::createMesh(int max_verts, int max_tris, int flags) {
-
-	static const int VTXFMT =
-		D3DFVF_XYZ | D3DFVF_NORMAL | D3DFVF_DIFFUSE | D3DFVF_TEX2 |
+	static const DWORD VTXFMT = D3DFVF_XYZ | D3DFVF_NORMAL | D3DFVF_DIFFUSE | D3DFVF_TEX2 |
 		D3DFVF_TEXCOORDSIZE2(0) | D3DFVF_TEXCOORDSIZE2(1);
+	DWORD usage = D3DUSAGE_WRITEONLY;
 
-	int vbflags = 0;
+	int safe_verts = max_verts > 0 ? max_verts : 1;
+	int safe_tris = max_tris > 0 ? max_tris : 1;
 
-	//XP or less?
-	if (runtime->osinfo.dwMajorVersion < 6) {
-		vbflags |= D3DVBCAPS_WRITEONLY;
+	IDirect3DVertexBuffer9* vb = nullptr;
+	if (FAILED(dir3dDev->CreateVertexBuffer(safe_verts * sizeof(gxMesh::dxVertex), usage, VTXFMT, D3DPOOL_MANAGED, &vb, nullptr)))
+		return nullptr;
+	IDirect3DIndexBuffer9* ib = nullptr;
+	if (FAILED(dir3dDev->CreateIndexBuffer(safe_tris * 3 * sizeof(WORD), usage, D3DFMT_INDEX16, D3DPOOL_MANAGED, &ib, nullptr))) {
+		vb->Release();
+		return nullptr;
 	}
-
-	D3DVERTEXBUFFERDESC desc = { sizeof(desc),vbflags,VTXFMT,max_verts };
-
-	IDirect3DVertexBuffer7* buff;
-	if (dir3d->CreateVertexBuffer(&desc, &buff, 0) < 0) return 0;
-	WORD* indices = new WORD[max_tris * 3];
-	gxMesh* mesh = new gxMesh(this, buff, indices, max_verts, max_tris);
+	gxMesh* mesh = new gxMesh(this, vb, ib, max_verts, max_tris);
 	mesh_set.insert(mesh);
 	return mesh;
 }

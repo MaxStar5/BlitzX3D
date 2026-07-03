@@ -2,6 +2,7 @@
 #define GXRUNTIME_H
 
 #include <Windows.h>
+#include <d3d9.h>
 #include <string>
 #include <vector>
 #include <intrin.h>
@@ -17,149 +18,142 @@
 class gxRuntime {
 	/***** INTERNAL INTERFACE *****/
 public:
+    HWND hwnd;
+    HINSTANCE hinst;
 
-	HWND hwnd;
-	HINSTANCE hinst;
+    gxAudio* audio;
+    gxInput* input;
+    gxGraphics* graphics;
+    gxFileSystem* fileSystem;
 
-	gxAudio* audio;
-	gxInput* input;
-	gxGraphics* graphics;
-	gxFileSystem* fileSystem;
+    IDirect3D9* d3d;
+    IDirect3DDevice9* d3dDevice;
+    IDirect3DSurface9* backBuffer;
+    IDirect3DSurface9* frontBuffer;
+    D3DPRESENT_PARAMETERS d3dpp;
 
-	float scale_x = .0f, scale_y = .0f;
+    float scale_x = .0f, scale_y = .0f;
 
-	void flip(bool vwait);
-	void moveMouse(int x, int y);
+    void flip(bool vwait);
+    void moveMouse(int x, int y);
+    LRESULT windowProc(HWND hwnd, UINT msg, WPARAM w, LPARAM l);
 
-	LRESULT windowProc(HWND hwnd, UINT msg, WPARAM w, LPARAM l);
-
-	struct GfxMode;
-	struct GfxDriver;
+    struct GfxMode;
+    struct GfxDriver;
 
 private:
-	gxRuntime(HINSTANCE hinst, const std::string& cmd_line, HWND hwnd);
-	~gxRuntime();
+    gxRuntime(HINSTANCE hinst, const std::string& cmd_line, HWND hwnd);
+    ~gxRuntime();
 
-	void paint();
-	void suspend();
-	void forceSuspend();
-	void resume();
-	void forceResume();
-	void backupWindowState();
-	void restoreWindowState();
+    void paint();
+    void suspend();
+    void forceSuspend();
+    void resume();
+    void forceResume();
+    void backupWindowState();
+    void restoreWindowState();
 
-	RECT t_rect;
-	int t_style;
-	std::string cmd_line;
-	bool pointer_visible;
-	std::string app_title;
-	std::string app_close;
+    RECT t_rect;
+    int t_style;
+    std::string cmd_line;
+    bool pointer_visible;
+    std::string app_title;
+    std::string app_close;
 
-	bool setDisplayMode(int w, int h, int d, bool d3d, IDirectDraw7* dd);
-	gxGraphics* openWindowedGraphics(int w, int h, int d, bool d3d);
-	gxGraphics* openExclusiveGraphics(int w, int h, int d, bool d3d);
+    bool setDisplayMode(int w, int h, int d, bool d3d);
+    gxGraphics* openWindowedGraphics(int w, int h, int d, bool d3d);
+    gxGraphics* openExclusiveGraphics(int w, int h, int d, bool d3d);
 
-	bool enum_all;
-	std::vector<GfxDriver*> drivers;
-	GfxDriver* curr_driver;
-	int use_di;
+    bool enum_all;
+    std::vector<GfxDriver*> drivers;
+    GfxDriver* curr_driver;
+    int use_di;
 
-	void enumGfx();
-	void denumGfx();
+    void enumGfx();
+    void denumGfx();
 
-	void resetInput();
-	void pauseAudio();
-	void resumeAudio();
-	void restoreGraphics();
-	void acquireInput();
-	void unacquireInput();
+    void resetInput();
+    void pauseAudio();
+    void resumeAudio();
+    void restoreGraphics();
+    void acquireInput();
+    void unacquireInput();
 
-	/***** APP INTERFACE *****/
 public:
-	static gxRuntime* openRuntime(HINSTANCE hinst, const std::string& cmd_line, Debugger* debugger);
-	static void closeRuntime(gxRuntime* runtime);
+    static gxRuntime* openRuntime(HINSTANCE hinst, const std::string& cmd_line, Debugger* debugger);
+    static void closeRuntime(gxRuntime* runtime);
 
-	void asyncStop();
-	void asyncRun();
-	void asyncEnd();
+    void asyncStop();
+    void asyncRun();
+    void asyncEnd();
 
+    enum {
+        GFXMODECAPS_3D = 1
+    };
+    enum {
+        GMODE_NONE = 0,
+        GMODE_SCALED = 1,
+        GMODE_FIXED = 2,
+        GMODE_EXCLUSIVE = 3
+    };
 
-	/***** GX INTERFACE *****/
-public:
-	enum {
-		GFXMODECAPS_3D = 1
-	};
-	enum {
-		GMODE_NONE = 0,
-		GMODE_SCALED = 1,
-		GMODE_FIXED = 2,
-		GMODE_EXCLUSIVE = 3 //IDK what exclusive mode is -Aesthetical
-	};
+    bool idle();
+    bool delay(int ms);
+    bool execute(const std::string& cmd);
+    void setTitle(const std::string& title, const std::string& close);
+    int  getMilliSecs();
+    void setPointerVisible(bool vis);
+    std::string commandLine();
+    std::string systemProperty(const std::string& t);
 
-	//return true if program should continue, or false for quit.
-	bool idle();
-	bool delay(int ms);
+    void debugStop();
+    bool debugStmt(int pos, const char* file);
+    void debugEnter(void* frame, void* env, const char* func);
+    void debugLeave();
+    void debugInfo(const char* t);
+    void debugError(const char* t);
+    void debugLog(const char* t);
 
-	bool execute(const std::string& cmd);
-	void setTitle(const std::string& title, const std::string& close);
-	int  getMilliSecs();
-	void setPointerVisible(bool vis);
+    int numGraphicsDrivers();
+    void graphicsDriverInfo(int driver, std::string* name, int* caps);
+    int numGraphicsModes(int driver);
+    void graphicsModeInfo(int driver, int mode, int* w, int* h, int* d, int* caps);
+    void windowedModeInfo(int* caps);
 
-	std::string commandLine();
+    gxAudio* openAudio(int flags);
+    void closeAudio(gxAudio* audio);
 
-	std::string systemProperty(const std::string& t);
+    gxInput* openInput(int flags);
+    void closeInput(gxInput* input);
 
-	void debugStop();
-	bool debugStmt(int pos, const char* file);
-	void debugEnter(void* frame, void* env, const char* func);
-	void debugLeave();
-	void debugInfo(const char* t);
-	void debugError(const char* t);
-	void debugLog(const char* t);
+    gxGraphics* openGraphics(int w, int h, int d, int driver, int flags);
+    void closeGraphics(gxGraphics* graphics);
+    bool graphicsLost();
+    bool focus();
+    int desktopWidth();
+    int desktopHeight();
 
-	int numGraphicsDrivers();
-	void graphicsDriverInfo(int driver, std::string* name, int* caps);
+    gxFileSystem* openFileSystem(int flags);
+    void closeFileSystem(gxFileSystem* filesys);
 
-	int numGraphicsModes(int driver);
-	void graphicsModeInfo(int driver, int mode, int* w, int* h, int* d, int* caps);
+    gxTimer* createTimer(int hertz);
+    void freeTimer(gxTimer* timer);
 
-	void windowedModeInfo(int* caps);
+    void calculateDPI();
+    void enableDirectInput(bool enable);
+    int  directInputEnabled() { return use_di; }
 
-	gxAudio* openAudio(int flags);
-	void closeAudio(gxAudio* audio);
+    int callDll(const std::string& dll, const std::string& func, const void* in, int in_sz, void* out, int out_sz);
 
-	gxInput* openInput(int flags);
-	void closeInput(gxInput* input);
+    OSVERSIONINFO osinfo;
+    MEMORYSTATUSEX statex;
+    DEVMODE devmode;
 
-	gxGraphics* openGraphics(int w, int h, int d, int driver, int flags);
-	void closeGraphics(gxGraphics* graphics);
-	bool graphicsLost();
-	bool focus();
-	int desktopWidth();
-	int desktopHeight();
-
-	gxFileSystem* openFileSystem(int flags);
-	void closeFileSystem(gxFileSystem* filesys);
-
-	gxTimer* createTimer(int hertz);
-	void freeTimer(gxTimer* timer);
-
-	void calculateDPI();
-
-	void enableDirectInput(bool use);
-	int  directInputEnabled() { return use_di; }
-
-	int callDll(const std::string& dll, const std::string& func, const void* in, int in_sz, void* out, int out_sz);
-
-	OSVERSIONINFO osinfo;
-	MEMORYSTATUSEX statex;
-	DEVMODE devmode;
-
-	int getMemoryLoad();
-	int getTotalPhys();
-	int getAvailPhys();
-	int getTotalVirtual();
-	int getAvailVirtual();
+    int getMemoryLoad();
+    int getTotalPhys();
+    int getAvailPhys();
+    int getTotalVirtual();
+    int getAvailVirtual();
 };
 
 #endif
