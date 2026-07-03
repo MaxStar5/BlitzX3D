@@ -802,12 +802,14 @@ void bbSetBrushEffect(Brush* b, gxEffect* effect) {
 
 void bbSetEffectFloat(gxEffect* effect, BBStr* name, float value) {
 	if (!effect || !name) return;
+	if (!gx_graphics->verifyEffect(effect)) { delete name; return; }
 	effect->setFloat(*name, value);
 	delete name;
 }
 
 void bbSetEffectVector(gxEffect* effect, BBStr* name, float x, float y, float z, float w) {
 	if (!effect || !name) return;
+	if (!gx_graphics->verifyEffect(effect)) { delete name; return; }
 	float vec[4] = { x, y, z, w };
 	effect->setVector(*name, vec);
 	delete name;
@@ -819,6 +821,7 @@ void bbSetEffectMatrix(gxEffect* effect, BBStr* name,
 	float m31, float m32, float m33, float m34,
 	float m41, float m42, float m43, float m44) {
 	if (!effect || !name) return;
+	if (!gx_graphics->verifyEffect(effect)) { delete name; return; }
 	D3DXMATRIX mat = {
 		m11, m12, m13, m14,
 		m21, m22, m23, m24,
