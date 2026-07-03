@@ -9,18 +9,19 @@ struct Brush::Rep {
 	bool blend_valid;
 	gxScene::RenderState rs;
 	Texture texs[gxScene::MAX_TEXTURES];
+	gxEffect* effect;
 
 	static Rep* pool;
 
 	Rep() :
-		ref_cnt(1), blend(0), max_tex(0), blend_valid(true) {
+		ref_cnt(1), blend(0), max_tex(0), blend_valid(true), effect(nullptr) {
 		memset(&rs, 0, sizeof(rs));
 		rs.blend = gxScene::BLEND_REPLACE;
 		rs.color[0] = rs.color[1] = rs.color[2] = rs.alpha = 1;
 	}
 
 	Rep(const Rep& t) :
-		ref_cnt(1), blend(t.blend), max_tex(t.max_tex), rs(t.rs), blend_valid(t.blend_valid) {
+		ref_cnt(1), blend(t.blend), max_tex(t.max_tex), rs(t.rs), blend_valid(t.blend_valid), effect(t.effect) {
 		for (int k = 0; k < max_tex; ++k) texs[k] = t.texs[k];
 	}
 
@@ -210,9 +211,19 @@ const gxScene::RenderState& Brush::getRenderState()const {
 		ts->bumpEnvScale = rep->texs[k].getBumpEnvScale();
 		ts->bumpEnvOffset = rep->texs[k].getBumpEnvOffset();
 	}
+	rep->rs.effect = rep->effect;
 	return rep->rs;
 }
 
 bool Brush::operator<(const Brush& t)const {
 	return memcmp(&getRenderState(), &t.getRenderState(), sizeof(gxScene::RenderState)) < 0;
+}
+
+void Brush::setEffect(gxEffect* e) {
+	write()->effect = e;
+	rep->blend_valid = false;
+}
+
+gxEffect* Brush::getEffect() const {
+	return rep->effect;
 }

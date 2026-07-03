@@ -21,6 +21,7 @@
 #include "../blitz3d/listener.h"
 #include "../blitz3d/cachedtexture.h"
 #include "../MultiLang/MultiLang.h"
+#include "../gxruntime/gxeffect.h"
 
 
 //Why is everything static?
@@ -764,6 +765,69 @@ void bbMeshCullBox(MeshModel* m, float x, float y, float z, float width, float h
 	m->setCullBox(Box(Vector(x, y, z), Vector(x + width, y + height, z + depth)));
 }
 
+//EFFECTS
+
+gxEffect* bbLoadEffect(BBStr* filename) {
+	debug3d("LoadEffect");
+	std::string f = *filename;
+	delete filename;
+	gxEffect* e = gx_graphics->createEffect(f);
+	if (!e) {
+		// error..........
+		return nullptr;
+	}
+	return e;
+}
+
+void bbFreeEffect(gxEffect* effect) {
+	if (!effect) return;
+	if (gx_graphics->verifyEffect(effect))
+		gx_graphics->freeEffect(effect);
+}
+
+void bbSetEntityEffect(Entity* e, gxEffect* effect) {
+	debugEntity(e, "SetEntityEffect");
+	if (Model* m = e->getModel()) {
+		m->setEffect(effect);
+	}
+	else {
+		ErrorLog("SetEntityEffect", MultiLang::entity_not_model);
+	}
+}
+
+void bbSetBrushEffect(Brush* b, gxEffect* effect) {
+	debugBrush(b, "SetBrushEffect");
+	b->setEffect(effect);
+}
+
+void bbSetEffectFloat(gxEffect* effect, BBStr* name, float value) {
+	if (!effect || !name) return;
+	effect->setFloat(*name, value);
+	delete name;
+}
+
+void bbSetEffectVector(gxEffect* effect, BBStr* name, float x, float y, float z, float w) {
+	if (!effect || !name) return;
+	float vec[4] = { x, y, z, w };
+	effect->setVector(*name, vec);
+	delete name;
+}
+
+void bbSetEffectMatrix(gxEffect* effect, BBStr* name,
+	float m11, float m12, float m13, float m14,
+	float m21, float m22, float m23, float m24,
+	float m31, float m32, float m33, float m34,
+	float m41, float m42, float m43, float m44) {
+	if (!effect || !name) return;
+	D3DXMATRIX mat = {
+		m11, m12, m13, m14,
+		m21, m22, m23, m24,
+		m31, m32, m33, m34,
+		m41, m42, m43, m44
+	};
+	effect->setMatrix(*name, mat);
+	delete name;
+}
 
 //////////////////////
 // SURFACE COMMANDS //
@@ -2101,6 +2165,14 @@ void blitz3d_link(void (*rtSym)(const char* sym, void* pc)) {
 	rtSym("TextureBumpEnvMat%texture%x%y#envmat", bbTextureBumpEnvMat);
 	rtSym("TextureBumpEnvScale%texture#envmat", bbTextureBumpEnvScale);
 	rtSym("TextureBumpEnvOffset%texture#envoffset", bbTextureBumpEnvOffset);
+
+	rtSym("%LoadEffect$filename", bbLoadEffect);
+	rtSym("FreeEffect%effect", bbFreeEffect);
+	rtSym("SetEntityEffect%entity%effect", bbSetEntityEffect);
+	rtSym("SetBrushEffect%brush%effect", bbSetBrushEffect);
+	rtSym("SetEffectFloat%effect$name#value", bbSetEffectFloat);
+	rtSym("SetEffectVector%effect$name#x#y#z#w", bbSetEffectVector);
+	rtSym("SetEffectMatrix%effect$name#m11#m12#m13#m14#m21#m22#m23#m24#m31#m32#m33#m34#m41#m42#m43#m44", bbSetEffectMatrix);
 
 	rtSym("ScaleTexture%texture#u_scale#v_scale", bbScaleTexture);
 	rtSym("RotateTexture%texture#angle", bbRotateTexture);

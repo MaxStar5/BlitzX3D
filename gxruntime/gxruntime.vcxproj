@@ -142,6 +142,7 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="ddutil.cpp" />
+    <ClCompile Include="gxeffect.cpp" />
     <ClCompile Include="gxfont.cpp" />
     <ClCompile Include="gxaudio.cpp" />
     <ClCompile Include="gxcanvas.cpp" />
@@ -171,6 +172,7 @@
   <ItemGroup>
     <ClInclude Include="asmcoder.h" />
     <ClInclude Include="ddutil.h" />
+    <ClInclude Include="gxeffect.h" />
     <ClInclude Include="gxfont.h" />
     <ClInclude Include="gxaudio.h" />
     <ClInclude Include="gxcanvas.h" />

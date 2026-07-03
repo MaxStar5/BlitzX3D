@@ -2,9 +2,11 @@
 #define GXSCENE_H
 
 #include <map>
-#include <d3d.h>
+#include <d3d9.h>
+#include <d3dx9.h>
 
 #include "gxlight.h"
+#include "gxeffect.h"
 
 class gxCanvas;
 
@@ -12,6 +14,7 @@ class gxMesh;
 class gxLight;
 class gxGraphics;
 class gxTexture;
+class gxEffect;
 
 class gxScene {
 public:
@@ -78,6 +81,7 @@ public:
 			DWORD bumpEnvScale;
 			DWORD bumpEnvOffset;
 		}tex_states[MAX_TEXTURES];
+		gxEffect* effect;
 	};
 
 	//state
@@ -103,6 +107,7 @@ public:
 	void setViewMatrix(const Matrix* matrix);
 	void setWorldMatrix(const Matrix* matrix);
 	void setRenderState(const RenderState& state);
+	void setEffect(gxEffect* effect);
 
 	//rendering
 	bool begin(const std::vector<gxLight*>& lights);
@@ -116,6 +121,7 @@ public:
 
 	//info
 	int getTrianglesDrawn()const;
+	gxEffect* getEffect() const;
 
 	DWORD textureLodBias;
 	int textureAnisotropic;
@@ -146,6 +152,9 @@ private:
 	TexState texstate[MAX_TEXTURES];
 	int n_texs, tris_drawn;
 
+	gxEffect* currentEffect;
+	D3DXMATRIX currentWorld, currentView, currentProj;
+
 	std::set<gxLight*> _allLights;
 	std::vector<gxLight*> _curLights;
 
@@ -166,6 +175,7 @@ private:
 	void setFogMode();
 	void setTriCull();
 	void setTexState(int index, const TexState& state, bool set_blend);
+	void setEffectInternal(gxEffect* e);
 };
 
 #endif

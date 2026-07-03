@@ -1,5 +1,6 @@
 #include "std.h"
 #include "gxgraphics.h"
+#include "gxeffect.h"
 #include "gxruntime.h"
 #include "../gxruntime/gxutf8.h"
 
@@ -81,6 +82,30 @@ gxGraphics::~gxGraphics() {
 	if (dir3dDev) dir3dDev->Release();
 	if (frontBuffer && frontBuffer != backBuffer) frontBuffer->Release();
 	if (backBuffer) backBuffer->Release();
+}
+
+gxEffect* gxGraphics::createEffect(const std::string& filename) {
+	ID3DXEffect* effect = nullptr;
+	ID3DXBuffer* errors = nullptr;
+	HRESULT hr = D3DXCreateEffectFromFile(dir3dDev, filename.c_str(), nullptr, nullptr, 0, nullptr, &effect, &errors);
+	if (FAILED(hr)) {
+		if (errors) {
+			runtime->debugLog((const char*)errors->GetBufferPointer());
+			errors->Release();
+		}
+		return nullptr;
+	}
+	gxEffect* e = new gxEffect(this, effect);
+	effect_set.insert(e);
+	return e;
+}
+
+gxEffect* gxGraphics::verifyEffect(gxEffect* e) {
+	return effect_set.count(e) ? e : nullptr;
+}
+
+void gxGraphics::freeEffect(gxEffect* e) {
+	if (effect_set.erase(e)) delete e;
 }
 
 void gxGraphics::setGamma(int r, int g, int b, float dr, float dg, float db) {

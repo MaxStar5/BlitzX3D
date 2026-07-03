@@ -19,6 +19,7 @@ public:
 	void setBlend(int blend);
 	void setFX(int fx);
 	void setTexture(int index, const Texture& t, int frame);
+	void setEffect(gxEffect* effect);
 
 	const Vector& getColor()const;
 	float getAlpha()const;
@@ -28,6 +29,7 @@ public:
 	Texture getTexture(int index)const;
 
 	const gxScene::RenderState& getRenderState()const;
+	gxEffect* getEffect() const;
 
 	bool operator<(const Brush& b)const;
 
