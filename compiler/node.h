@@ -5,14 +5,11 @@
 #include "toker.h"
 #include "environ.h"
 #include "codegen.h"
-#include "arena.h"
 
 struct VarNode;
 struct ConstNode;
 
 struct Node {
-	DECLARE_ARENA_ALLOCATION()
-
 	virtual ~Node() {}
 
 	//used user funcs...

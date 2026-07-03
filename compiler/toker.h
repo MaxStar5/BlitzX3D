@@ -6,7 +6,6 @@
 #define TOKER_H
 
 #include <vector>
-#include <unordered_map>
 
 enum {
 	DIM = 0x8000, GOTO, GOSUB, EXIT, RETURN,
@@ -48,7 +47,7 @@ public:
 
 	static int chars_toked;
 
-	static std::unordered_map<std::string, int>& getKeywords();
+	static std::map<std::string, int>& getKeywords();
 
 private:
 	struct Toke {
@@ -69,10 +68,6 @@ private:
 	void nextline();
 	bool isValidIdentifier(const std::string& str);
 	int curr_row, curr_toke;
-
-	std::vector<ConditionalState> conditionalStack;
-	bool skipLine;
-	bool noMacro;
 };
 
 #endif
