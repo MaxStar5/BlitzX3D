@@ -2,6 +2,7 @@
 #include "model.h"
 
 extern gxScene* gx_scene;
+extern gxGraphics* gx_graphics;
 
 class Model::MeshQueue {
 	union {
@@ -29,7 +30,7 @@ public:
 	}
 	void render() {
 		gx_scene->setRenderState(brush.getRenderState());
-		gx_scene->setEffect(effect);
+		gx_scene->setEffect(gx_graphics->verifyEffect(effect) ? effect : nullptr);
 		gx_scene->render(mesh, fv, vc, ft, tc);
 	}
 	void* operator new(size_t sz) {
