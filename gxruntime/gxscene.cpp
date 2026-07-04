@@ -486,7 +486,9 @@ void gxScene::setZMode(int n) {
 }
 
 void gxScene::setViewMatrix(const Matrix* m) {
-	if(m) {
+	D3DMATRIX prev = viewmatrix;
+
+	if (m) {
 		memcpy(&viewmatrix._11, m->elements[0], 12);
 		memcpy(&viewmatrix._21, m->elements[1], 12);
 		memcpy(&viewmatrix._31, m->elements[2], 12);
@@ -502,10 +504,13 @@ void gxScene::setViewMatrix(const Matrix* m) {
 		viewmatrix = inv_viewmatrix = nullmatrix;
 	}
 
+	if (memcmp(&viewmatrix, &prev, sizeof(D3DMATRIX)) == 0) return;
 	dir3dDev->SetTransform(D3DTS_VIEW, &viewmatrix);
 }
 
 void gxScene::setWorldMatrix(const Matrix* m) {
+	D3DMATRIX prev = worldmatrix;
+
 	if (m) {
 		memcpy(&currentWorld._11, m->elements[0], 12);
 		memcpy(&currentWorld._21, m->elements[1], 12);
@@ -517,6 +522,8 @@ void gxScene::setWorldMatrix(const Matrix* m) {
 		D3DXMatrixIdentity(&currentWorld);
 		worldmatrix = nullmatrix;
 	}
+
+	if (memcmp(&worldmatrix, &prev, sizeof(D3DMATRIX)) == 0) return;
 	dir3dDev->SetTransform(D3DTS_WORLD, &worldmatrix);
 }
 
