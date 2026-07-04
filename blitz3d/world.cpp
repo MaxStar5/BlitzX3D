@@ -406,6 +406,7 @@ void World::render(Camera* cam, Mirror* mirror) {
 	}
 
 	gx_scene->setZMode(gxScene::ZMODE_NORMAL);
+	std::stable_sort(unord_mods.begin(), unord_mods.end(), [](const Model* a, const Model* b) { return a->getBrush() < b->getBrush(); });
 	for (Model* mod : unord_mods) {
 		if(!mod->doAutoFade(cam_tform.v)) continue;
 		render(mod, rc);
