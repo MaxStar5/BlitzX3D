@@ -9,6 +9,7 @@
 
 #include <fstream>
 #include <sstream>
+#include <cstring>
 
 IMPLEMENT_DYNAMIC(MainFrame, CFrameWnd)
 BEGIN_MESSAGE_MAP(MainFrame, CFrameWnd)
@@ -107,6 +108,140 @@ static std::string getPath(const std::string& f) {
 	n = t.rfind('/'); if (n != std::string::npos) t = t.substr(0, n);
 	n = t.rfind('\\'); if (n != std::string::npos) t = t.substr(0, n);
 	return t;
+}
+
+static bool ApplyIconToExe(const std::string& exePath, const std::string& icoPath) {
+
+#pragma pack(push, 2)
+	typedef struct {
+		WORD idReserved;
+		WORD idType;
+		WORD idCount;
+	} ICONDIR;
+
+	typedef struct {
+		BYTE bWidth;
+		BYTE bHeight;
+		BYTE bColorCount;
+		BYTE bReserved;
+		WORD wPlanes;
+		WORD wBitCount;
+		DWORD dwBytesInRes;
+		DWORD dwImageOffset;
+	} ICONDIRENTRY;
+
+	typedef struct {
+		WORD idReserved;
+		WORD idType;
+		WORD idCount;
+	} GRPICONDIR;
+
+	typedef struct {
+		BYTE  bWidth;
+		BYTE  bHeight;
+		BYTE  bColorCount;
+		BYTE  bReserved;
+		WORD  wPlanes;
+		WORD  wBitCount;
+		DWORD dwBytesInRes;
+		WORD  nID;
+	} GRPICONDIRENTRY;
+#pragma pack(pop)
+
+	HANDLE hFile = CreateFileA(icoPath.c_str(), GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
+	if (hFile == INVALID_HANDLE_VALUE) return false;
+
+	ICONDIR dir;
+	DWORD bytesRead;
+	if (!ReadFile(hFile, &dir, sizeof(dir), &bytesRead, NULL) || bytesRead != sizeof(dir)) {
+		CloseHandle(hFile);
+		return false;
+	}
+	if (dir.idReserved != 0 || dir.idType != 1 || dir.idCount == 0) {
+		CloseHandle(hFile);
+		return false;
+	}
+
+	std::vector<ICONDIRENTRY> entries(dir.idCount);
+	DWORD entrySize = sizeof(ICONDIRENTRY) * dir.idCount;
+	if (!ReadFile(hFile, entries.data(), entrySize, &bytesRead, NULL) || bytesRead != entrySize) {
+		CloseHandle(hFile);
+		return false;
+	}
+
+	struct ImageData {
+		std::vector<BYTE> data;
+	};
+
+	std::vector<ImageData> images(dir.idCount);
+	for (WORD i = 0; i < dir.idCount; ++i) {
+		if (SetFilePointer(hFile, entries[i].dwImageOffset, NULL, FILE_BEGIN) == INVALID_SET_FILE_POINTER) {
+			CloseHandle(hFile);
+			return false;
+		}
+
+		images[i].data.resize(entries[i].dwBytesInRes);
+		if (!ReadFile(hFile, images[i].data.data(), entries[i].dwBytesInRes, &bytesRead, NULL) || bytesRead != entries[i].dwBytesInRes) {
+			CloseHandle(hFile);
+			return false;
+		}
+	}
+	CloseHandle(hFile);
+
+	HANDLE hUpdate = BeginUpdateResourceA(exePath.c_str(), FALSE);
+	if (!hUpdate) return false;
+
+	bool success = true;
+
+	for (WORD i = 0; i < dir.idCount; ++i) {
+		WORD iconId = i + 1;
+		UpdateResourceA(hUpdate, RT_ICON, MAKEINTRESOURCEA(iconId), MAKELANGID(LANG_CHINESE, SUBLANG_CHINESE_SIMPLIFIED), images[i].data.data(), (DWORD)images[i].data.size());
+	}
+
+	if (success)
+	{
+		GRPICONDIR grpDir;
+
+		grpDir.idReserved = 0;
+		grpDir.idType = 1;
+		grpDir.idCount = dir.idCount;
+
+		std::vector<BYTE> groupData(sizeof(GRPICONDIR) + sizeof(GRPICONDIRENTRY) * dir.idCount);
+
+		memcpy(groupData.data(), &grpDir, sizeof(GRPICONDIR));
+
+		GRPICONDIRENTRY* grpEntries = (GRPICONDIRENTRY*) (groupData.data() + sizeof(GRPICONDIR));
+
+		for (WORD i = 0; i < dir.idCount; ++i)
+		{
+			grpEntries[i].bWidth = entries[i].bWidth;
+
+			grpEntries[i].bHeight = entries[i].bHeight;
+
+			grpEntries[i].bColorCount = entries[i].bColorCount;
+
+			grpEntries[i].bReserved = entries[i].bReserved;
+
+			grpEntries[i].wPlanes = entries[i].wPlanes;
+
+			grpEntries[i].wBitCount = entries[i].wBitCount;
+
+			grpEntries[i].dwBytesInRes = entries[i].dwBytesInRes;
+
+			grpEntries[i].nID = i + 1;
+		}
+
+		if (!UpdateResourceA(hUpdate, RT_GROUP_ICON, MAKEINTRESOURCEA(1), MAKELANGID(LANG_NEUTRAL, SUBLANG_NEUTRAL), groupData.data(), (DWORD)groupData.size()))
+		{
+			success = false;
+		}
+	}
+
+	if (!EndUpdateResourceA(hUpdate, !success)) {
+		return false;
+	}
+
+	return success;
 }
 
 MainFrame::MainFrame() :exit_flag(false) {
@@ -715,7 +850,24 @@ void MainFrame::build(bool exec, bool publish) {
 		fd.m_ofn.lpstrInitialDir = "./";
 		if (fd.DoModal() == IDCANCEL) return;
 
-		opts += "-o \"" + std::string(fd.GetPathName()) + "\" ";
+		std::string outExePath = (LPCTSTR)fd.GetPathName();
+		opts += "-o \"" + outExePath + "\" ";
+
+		std::string iconPath;
+		CFileDialog iconDlg(TRUE, "ico", NULL, OFN_FILEMUSTEXIST | OFN_HIDEREADONLY, "Icon files (*.ico)|*.ico||");
+		iconDlg.m_ofn.lpstrTitle = "Select an icon to embed (optional)";
+		if (iconDlg.DoModal() == IDOK) {
+			iconPath = iconDlg.GetPathName();
+		}
+
+		compile(prefs.homeDir + "/bin/blitzcc -q " + opts + " \"" + src_file + "\" " + prefs.cmd_line);
+
+		if (!iconPath.empty()) {
+			if (!ApplyIconToExe(outExePath, iconPath)) {
+				AfxMessageBox("Warning: Could not apply the selected icon to the executable.", MB_ICONWARNING);
+			}
+		}
+		return;
 	}
 	else if (!exec) {
 		opts += "-c ";
