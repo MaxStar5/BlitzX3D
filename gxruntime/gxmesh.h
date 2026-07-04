@@ -7,6 +7,8 @@ class gxGraphics;
 
 class gxMesh {
 public:
+    static const int MESH_DYNAMIC = 1;
+
     struct dxVertex {
         float coords[3];
         float normal[3];

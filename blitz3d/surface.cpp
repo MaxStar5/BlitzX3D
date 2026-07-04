@@ -125,10 +125,10 @@ gxMesh* Surface::getMesh(const std::vector<Bone>& bones) {
 		if(mesh) gx_graphics->freeMesh(mesh);
 		mesh_vs = vertices.size();
 		mesh_ts = triangles.size();
-		mesh = gx_graphics->createMesh(mesh_vs, mesh_ts, 0);
+		mesh = gx_graphics->createMesh(mesh_vs, mesh_ts, gxMesh::MESH_DYNAMIC);
 	}
 
-	mesh->lock(true);
+	if (!mesh || !mesh->lock(true)) return mesh;
 	for(; valid_vs < vertices.size(); ++valid_vs) {
 		const Vertex& v = vertices[valid_vs];
 		if(v.bone_bones[0] == 255) {
