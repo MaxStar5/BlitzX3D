@@ -1,5 +1,6 @@
 #include "std.h"
 #include "model.h"
+#include <algorithm>
 
 extern gxScene* gx_scene;
 extern gxGraphics* gx_graphics;
@@ -28,6 +29,9 @@ public:
 	int getQueueType()const {
 		return q_type;
 	}
+
+	const Brush& getBrush() const { return brush; }
+
 	void render() {
 		gx_scene->setRenderState(brush.getRenderState());
 		gx_scene->setEffect(gx_graphics->verifyEffect(effect) ? effect : nullptr);
@@ -124,7 +128,8 @@ void Model::enqueue(gxMesh* mesh, int fv, int vc, int ft, int tc, const Brush& b
 
 void Model::renderQueue(int type) {
 	std::vector<MeshQueue*>* que = &queues[type];
-	for(; que->size(); que->pop_back()) {
+	std::stable_sort(que->begin(), que->end(), [](const MeshQueue* a, const MeshQueue* b) { return a->getBrush() < b->getBrush(); });
+	for (; que->size(); que->pop_back()) {
 		MeshQueue* q = que->back();
 		q->render();
 		delete q;

@@ -29,6 +29,12 @@ void gxScene::setSamp(int n, int s, int t) {
 	d3d_samp[n][s] = t;
 }
 
+void gxScene::setTex(int n, IDirect3DBaseTexture9* t) {
+	if (d3d_tex[n] == t) return;
+	dir3dDev->SetTexture(n, t);
+	d3d_tex[n] = t;
+}
+
 gxScene::gxScene(gxGraphics* g, gxCanvas* t) :
 	graphics(g), target(t), dir3dDev(g->dir3dDev),
 	n_texs(0), tris_drawn(0) {
@@ -41,6 +47,7 @@ gxScene::gxScene(gxGraphics* g, gxCanvas* t) :
 	memset(d3d_rs, 0x55, sizeof(d3d_rs));
 	memset(d3d_tss, 0x55, sizeof(d3d_tss));
 	memset(d3d_samp, 0x55, sizeof(d3d_samp));
+	memset(d3d_tex, 0x55, sizeof(d3d_tex));
 	memset(&lastRenderState, 0, sizeof(lastRenderState));
 	lastRenderStateValid = false;
 
@@ -168,7 +175,7 @@ void gxScene::setTexState(int n, const TexState& state, bool tex_blend) {
 	int tc_index = state.flags & TEX_COORDS2 ? 1 : 0;
 
 	//set canvas
-	dir3dDev->SetTexture(n, state.canvas->getTexSurface());
+	setTex(n, state.canvas->getTexSurface());
 
 	//set addressing modes
 	setSamp(n, D3DSAMP_ADDRESSU, (flags & gxCanvas::CANVAS_TEX_CLAMPU) ? D3DTADDRESS_CLAMP : D3DTADDRESS_WRAP);
@@ -368,7 +375,7 @@ void gxScene::setHWMultiTex(bool e) {
 	for(int n = 0; n < 8; ++n) {
 		setTSS(n, D3DTSS_COLOROP, D3DTOP_DISABLE);
 		setTSS(n, D3DTSS_ALPHAOP, D3DTOP_DISABLE);
-		dir3dDev->SetTexture(n, 0);
+		setTex(n, nullptr);
 	}
 	for(int k = 0; k < MAX_TEXTURES; ++k) {
 		memset(&texstate[k], 0, sizeof(texstate[k]));
@@ -653,7 +660,7 @@ void gxScene::setRenderState(const RenderState& rs) {
 		hw->canvas = 0;
 		setTSS(n_texs, D3DTSS_COLOROP, D3DTOP_DISABLE);
 		setTSS(n_texs, D3DTSS_ALPHAOP, D3DTOP_DISABLE);
-		dir3dDev->SetTexture(n_texs, 0);
+		setTex(n_texs, nullptr);
 	}
 	lastRenderState = rs;
 	lastRenderStateValid = true;
@@ -671,7 +678,7 @@ bool gxScene::begin(const std::vector<gxLight*>& lights) {
 		texstate[n].canvas = 0;
 		setTSS(n, D3DTSS_COLOROP, D3DTOP_DISABLE);
 		setTSS(n, D3DTSS_ALPHAOP, D3DTOP_DISABLE);
-		dir3dDev->SetTexture(n, 0);
+		setTex(n, nullptr);
 		setSamp(n, D3DSAMP_MIPMAPLODBIAS, textureLodBias);
 	}
 

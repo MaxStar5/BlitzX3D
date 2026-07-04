@@ -161,6 +161,7 @@ private:
 	int d3d_rs[160];
 	int d3d_tss[8][32];
 	int d3d_samp[8][16];
+	IDirect3DBaseTexture9* d3d_tex[8];
 
 	RenderState lastRenderState;
 	bool lastRenderStateValid;
@@ -168,6 +169,7 @@ private:
 	void setRS(int n, int t);
 	void setTSS(int n, int s, int t);
 	void setSamp(int n, int s, int t);
+	void setTex(int n, IDirect3DBaseTexture9* t);
 
 	void setLights();
 	void setZMode();
