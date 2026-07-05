@@ -149,11 +149,46 @@ void ddUtil::copy(IDirect3DDevice9* dev, IDirect3DSurface9* dest_surf, int dx, i
     HRESULT hr = dev->StretchRect(src_surf, &srcRect, dest_surf, &destRect, D3DTEXF_LINEAR);
     if (SUCCEEDED(hr)) return;
 
-    D3DLOCKED_RECT src_lr, dst_lr;
     D3DSURFACE_DESC src_desc, dst_desc;
     src_surf->GetDesc(&src_desc);
     dest_surf->GetDesc(&dst_desc);
 
+    bool dstIsRT = (dst_desc.Usage & D3DUSAGE_RENDERTARGET) != 0;
+    if (dstIsRT && dev) {
+        IDirect3DSurface9* staging = nullptr;
+        if (SUCCEEDED(dev->CreateOffscreenPlainSurface(dw, dh, dst_desc.Format, D3DPOOL_SYSTEMMEM, &staging, nullptr))) {
+            D3DLOCKED_RECT src_lr, stg_lr;
+            if (SUCCEEDED(src_surf->LockRect(&src_lr, nullptr, D3DLOCK_READONLY))) {
+                if (SUCCEEDED(staging->LockRect(&stg_lr, nullptr, 0))) {
+                    PixelFormat src_fmt(src_desc.Format);
+                    PixelFormat dst_fmt(dst_desc.Format);
+
+                    unsigned char* src_p = (unsigned char*)src_lr.pBits + sy * src_lr.Pitch + sx * src_fmt.getPitch();
+                    unsigned char* stg_p = (unsigned char*)stg_lr.pBits;
+
+                    for (int y = 0; y < dh; ++y) {
+                        unsigned char* src_row = src_p + src_lr.Pitch * (y * sh / dh);
+                        unsigned char* stg_row = stg_p + stg_lr.Pitch * y;
+                        for (int x = 0; x < dw; ++x) {
+                            dst_fmt.setPixel(stg_row + x * dst_fmt.getPitch(),
+                                dst_fmt.fromARGB(src_fmt.toARGB(
+                                    src_fmt.getPixel(src_row + src_fmt.getPitch() * (x * sw / dw)))));
+                        }
+                    }
+
+                    staging->UnlockRect();
+                    RECT stagedRect = { 0, 0, dw, dh };
+                    POINT destPoint = { dx, dy };
+                    dev->UpdateSurface(staging, &stagedRect, dest_surf, &destPoint);
+                }
+                src_surf->UnlockRect();
+            }
+            staging->Release();
+        }
+        return;
+    }
+
+    D3DLOCKED_RECT src_lr, dst_lr;
     if (FAILED(src_surf->LockRect(&src_lr, nullptr, D3DLOCK_READONLY))) return;
     if (FAILED(dest_surf->LockRect(&dst_lr, nullptr, 0))) {
         src_surf->UnlockRect();

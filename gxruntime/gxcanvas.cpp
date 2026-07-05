@@ -903,6 +903,48 @@ void gxCanvas::blitstretch(int x, int y, int w, int h,
     damage(dest_r);
 }
 
+static void cpuBlitAlpha(gxCanvas* dest, const RECT& dest_r, gxCanvas* src, const RECT& src_r, unsigned color_argb) {
+    int dw = dest_r.right - dest_r.left;
+    int dh = dest_r.bottom - dest_r.top;
+
+    if (!dest->lock()) return;
+    if (!src->lock()) { dest->unlock(); return; }
+
+    unsigned tintR = (color_argb >> 16) & 0xff;
+    unsigned tintG = (color_argb >> 8) & 0xff;
+    unsigned tintB = color_argb & 0xff;
+    unsigned tintA = (color_argb >> 24) & 0xff;
+
+    const PixelFormat& sf = src->format;
+    const PixelFormat& df = dest->format;
+
+    for (int y = 0; y < dh; ++y) {
+        for (int x = 0; x < dw; ++x) {
+            unsigned srcArgb = sf.toARGB(src->getPixelFast(src_r.left + x, src_r.top + y));
+            unsigned srcA = ((srcArgb >> 24) & 0xff) * tintA / 255;
+            if (srcA == 0) continue;
+
+            int dx = dest_r.left + x, dy = dest_r.top + y;
+            if (srcA >= 255) {
+                unsigned outArgb = 0xff000000 | (tintR << 16) | (tintG << 8) | tintB;
+                dest->setPixelFast(dx, dy, df.fromARGB(outArgb));
+                continue;
+            }
+
+            unsigned dstArgb = df.toARGB(dest->getPixelFast(dx, dy));
+            unsigned dstR = (dstArgb >> 16) & 0xff, dstG = (dstArgb >> 8) & 0xff, dstB = dstArgb & 0xff;
+            unsigned outR = (tintR * srcA + dstR * (255 - srcA)) / 255;
+            unsigned outG = (tintG * srcA + dstG * (255 - srcA)) / 255;
+            unsigned outB = (tintB * srcA + dstB * (255 - srcA)) / 255;
+            dest->setPixelFast(dx, dy, df.fromARGB(0xff000000 | (outR << 16) | (outG << 8) | outB));
+        }
+    }
+
+    src->unlock();
+    dest->unlock();
+    dest->damage(dest_r);
+}
+
 void gxCanvas::blitAlpha(int x, int y, gxCanvas* src,
     int src_x, int src_y, int src_w, int src_h,
     unsigned color_argb, bool filter) {
@@ -916,6 +958,7 @@ void gxCanvas::blitAlpha(int x, int y, gxCanvas* src,
     if (!::clip(src->clip_rect, &src_r, &dest_r)) return;
 
     if (!isRenderTarget(surf)) {
+        cpuBlitAlpha(this, dest_r, src, src_r, color_argb);
         return;
     }
 
