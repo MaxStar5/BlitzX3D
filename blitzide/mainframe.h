@@ -4,6 +4,7 @@
 #include "editor.h"
 #include "htmlhelp.h"
 #include "tabber.h"
+#include "update.h"
 #include <filesystem>
 
 class MainFrame : public CFrameWnd,public HelpListener,EditorListener,TabberListener{

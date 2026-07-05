@@ -181,6 +181,7 @@
       <PrecompiledHeaderFile Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">stdafx.h</PrecompiledHeaderFile>
     </ClCompile>
     <ClCompile Include="tabber.cpp" />
+    <ClCompile Include="update.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="blitzide.rc" />
@@ -197,6 +198,7 @@
     <ClInclude Include="resource.h" />
     <ClInclude Include="stdafx.h" />
     <ClInclude Include="tabber.h" />
+    <ClInclude Include="update.h" />
   </ItemGroup>
   <ItemGroup>
     <Image Include="b3dlogo.bmp" />

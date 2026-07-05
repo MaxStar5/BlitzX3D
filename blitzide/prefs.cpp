@@ -89,6 +89,8 @@ void Prefs::open()
 	inipp::get_value(ini.sections["EDITOR"], "ToolbarImage", img_toolbar);
 	inipp::get_value(ini.sections["EDITOR"], "NoBackup", noBackup);
 
+	inipp::get_value(ini.sections["UPDATE"], "IgnoreVersion", ignore_version_update);
+
 	std::string recentFile;
 	for (int i = 1; i < 11; i++)
 	{
@@ -143,6 +145,9 @@ void Prefs::close()
 	editorSection.insert(std::make_pair("ToolbarImage", img_toolbar));
 	editorSection.insert(std::make_pair("NoBackup", boolToString(noBackup)));
 
+	auto& updateSection = ini.sections["UPDATE"];
+	updateSection.insert(std::make_pair("IgnoreVersion", ignore_version_update));
+
 	auto& recentFilesSection = ini.sections["RECENT_FILES"];
 	for (int i = 1; i < 11; i++)
 	{
@@ -184,6 +189,7 @@ void Prefs::setDefault()
 	img_toolbar = "toolbar.bmp";
 
 	recentFiles.clear();
+	ignore_version_update.clear();
 
 	createFonts();
 }

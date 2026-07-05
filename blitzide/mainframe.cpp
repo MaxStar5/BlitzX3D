@@ -4,6 +4,7 @@
 #include "about.h"
 #include "blitzide.h"
 #include "libs.h"
+#include "update.h"
 
 #include <mmsystem.h>
 
@@ -323,6 +324,8 @@ int MainFrame::OnCreate(LPCREATESTRUCT lpCreateStruct) {
 	else {
 		SetCurrentDirectory((prefs.homeDir + "/samples").c_str());
 	}
+
+	checkForUpdate();
 
 	return 0;
 }

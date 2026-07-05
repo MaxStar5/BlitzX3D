@@ -36,6 +36,8 @@ public:
 
 	std::string cmd_line;
 
+	std::string ignore_version_update;
+
 	void open();
 	void close();
 
