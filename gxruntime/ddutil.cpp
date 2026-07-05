@@ -239,7 +239,12 @@ IDirect3DTexture9* ddUtil::createTextureSurface(int w, int h, int flags, gxGraph
     if (renderTarget) {
         usage = D3DUSAGE_RENDERTARGET;
         pool = D3DPOOL_DEFAULT;
-        mipLevels = 1; // need to make drivers generate these later on
+        mipLevels = 1;
+        D3DCAPS9 caps;
+        if (SUCCEEDED(dev->GetDeviceCaps(&caps)) && (caps.Caps2 & D3DCAPS2_CANAUTOGENMIPMAP)) {
+            usage |= D3DUSAGE_AUTOGENMIPMAP;
+            mipLevels = 0;
+        }
     }
 
     D3DFORMAT fmt = (hasAlpha || hasMask) ? D3DFMT_A8R8G8B8 : D3DFMT_X8R8G8B8;
@@ -366,10 +371,16 @@ IDirect3DTexture9* ddUtil::loadTextureSurface(const std::string& file, int flags
 
     FREE_IMAGE_FORMAT fif = FreeImage_GetFileType(file.c_str(), 0);
     if (fif == FIF_UNKNOWN) fif = FreeImage_GetFIFFromFilename(file.c_str());
-    if (fif == FIF_UNKNOWN) { g_lastImageError = "Unknown format: " + file; return nullptr; }
+    if (fif == FIF_UNKNOWN) {
+        g_lastImageError = "Unknown format: " + file;
+        return nullptr;
+    }
 
     FIBITMAP* fib = FreeImage_Load(fif, file.c_str(), 0);
-    if (!fib) { g_lastImageError = "Load failed: " + file; return nullptr; }
+    if (!fib) {
+        g_lastImageError = "Load failed: " + file;
+        return nullptr;
+    }
 
     FIBITMAP* fib32;
     if (FreeImage_GetBPP(fib) == 32) {
@@ -378,7 +389,10 @@ IDirect3DTexture9* ddUtil::loadTextureSurface(const std::string& file, int flags
     else {
         fib32 = FreeImage_ConvertTo32Bits(fib);
         FreeImage_Unload(fib);
-        if (!fib32) { g_lastImageError = "ConvertTo32Bits failed: " + file; return nullptr; }
+        if (!fib32) {
+            g_lastImageError = "ConvertTo32Bits failed: " + file;
+            return nullptr;
+        }
     }
 
     int w = FreeImage_GetWidth(fib32);
@@ -394,14 +408,41 @@ IDirect3DTexture9* ddUtil::loadTextureSurface(const std::string& file, int flags
     D3DFORMAT fmt = D3DFMT_A8R8G8B8;
     if (flags & gxCanvas::CANVAS_TEX_HICOLOR) fmt = D3DFMT_A4R4G4B4;
 
-    IDirect3DTexture9* tex = nullptr;
     IDirect3DDevice9* dev = gfx->dir3dDev;
     if (!dev) { FreeImage_Unload(fib32); return nullptr; }
 
+    DWORD usage = 0;
+    D3DPOOL pool = D3DPOOL_MANAGED;
+    UINT mipLevels = 1;
+
+    if (renderTarget) {
+        usage = D3DUSAGE_RENDERTARGET;
+        pool = D3DPOOL_DEFAULT;
+        if (hasMips) {
+            mipLevels = 1;
+            D3DCAPS9 caps;
+            if (SUCCEEDED(dev->GetDeviceCaps(&caps)) && (caps.Caps2 & D3DCAPS2_CANAUTOGENMIPMAP)) {
+                usage |= D3DUSAGE_AUTOGENMIPMAP;
+                mipLevels = 0;
+            }
+        }
+    }
+    else {
+        if (hasMips) mipLevels = 0;
+    }
+
+    IDirect3DTexture9* tex = nullptr;
+    HRESULT hr = dev->CreateTexture(adjW, adjH, mipLevels, usage, fmt, pool, &tex, nullptr);
+    if (FAILED(hr)) {
+        FreeImage_Unload(fib32);
+        return nullptr;
+    }
+
     if (renderTarget) {
         IDirect3DSurface9* tempSurf = nullptr;
-        HRESULT hr = dev->CreateOffscreenPlainSurface(adjW, adjH, D3DFMT_A8R8G8B8, D3DPOOL_SYSTEMMEM, &tempSurf, nullptr);
+        hr = dev->CreateOffscreenPlainSurface(adjW, adjH, D3DFMT_A8R8G8B8, D3DPOOL_SYSTEMMEM, &tempSurf, nullptr);
         if (FAILED(hr)) {
+            tex->Release();
             FreeImage_Unload(fib32);
             return nullptr;
         }
@@ -410,6 +451,7 @@ IDirect3DTexture9* ddUtil::loadTextureSurface(const std::string& file, int flags
         hr = tempSurf->LockRect(&lr, nullptr, 0);
         if (FAILED(hr)) {
             tempSurf->Release();
+            tex->Release();
             FreeImage_Unload(fib32);
             return nullptr;
         }
@@ -463,25 +505,13 @@ IDirect3DTexture9* ddUtil::loadTextureSurface(const std::string& file, int flags
 
         tempSurf->UnlockRect();
 
-        hr = dev->CreateTexture(adjW, adjH, 1, D3DUSAGE_RENDERTARGET, D3DFMT_A8R8G8B8, D3DPOOL_DEFAULT, &tex, nullptr);
-        if (FAILED(hr)) {
-            tempSurf->Release();
-            FreeImage_Unload(fib32);
-            return nullptr;
-        }
-
         IDirect3DSurface9* texSurf = nullptr;
         hr = tex->GetSurfaceLevel(0, &texSurf);
-        if (FAILED(hr)) {
-            tex->Release();
-            tempSurf->Release();
-            FreeImage_Unload(fib32);
-            return nullptr;
+        if (SUCCEEDED(hr)) {
+            RECT rect = { 0, 0, adjW, adjH };
+            hr = dev->UpdateSurface(tempSurf, &rect, texSurf, nullptr);
+            texSurf->Release();
         }
-
-        RECT rect = { 0, 0, adjW, adjH };
-        hr = dev->UpdateSurface(tempSurf, &rect, texSurf, nullptr);
-        texSurf->Release();
         tempSurf->Release();
 
         if (FAILED(hr)) {
@@ -492,13 +522,6 @@ IDirect3DTexture9* ddUtil::loadTextureSurface(const std::string& file, int flags
 
     }
     else {
-        UINT mipLevels = hasMips ? 0 : 1;
-        HRESULT hr = dev->CreateTexture(adjW, adjH, mipLevels, 0, fmt, D3DPOOL_MANAGED, &tex, nullptr);
-        if (FAILED(hr)) {
-            FreeImage_Unload(fib32);
-            return nullptr;
-        }
-
         D3DLOCKED_RECT lr;
         hr = tex->LockRect(0, &lr, nullptr, 0);
         if (FAILED(hr)) {
@@ -554,7 +577,9 @@ IDirect3DTexture9* ddUtil::loadTextureSurface(const std::string& file, int flags
 
         tex->UnlockRect(0);
 
-        if (hasMips) buildMipMaps(tex);
+        if (hasMips && !(usage & D3DUSAGE_AUTOGENMIPMAP)) {
+            ddUtil::buildMipMaps(tex);
+        }
     }
 
     FreeImage_Unload(fib32);
