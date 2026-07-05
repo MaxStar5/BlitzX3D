@@ -7,13 +7,12 @@
 #include <regex>
 #include <chrono>
 #include <functional>
-#include <unordered_map>
 
 int Toker::chars_toked;
 
 std::map<std::string, std::string> MacroDefines;
 
-static std::unordered_map<std::string, int> alphaTokes, lowerTokes;
+static std::map<std::string, int> alphaTokes, lowerTokes;
 
 static void makeKeywords()
 {
@@ -112,8 +111,9 @@ static void makeKeywords()
     alphaTokes["End While"] = WEND;
 #endif
 
-    std::unordered_map<std::string, int>::const_iterator it;
-    for (it = alphaTokes.begin(); it != alphaTokes.end(); ++it) {
+    std::map<std::string, int>::const_iterator it;
+    for (it = alphaTokes.begin(); it != alphaTokes.end(); ++it)
+    {
         lowerTokes[tolower(it->first)] = it->second;
     }
     made = true;
@@ -129,7 +129,7 @@ Toker::Toker(const std::string& file, std::istream& in, bool debug, bool preproc
     nextline();
 }
 
-std::unordered_map<std::string, int>& Toker::getKeywords()
+std::map<std::string, int>& Toker::getKeywords()
 {
     makeKeywords();
     return alphaTokes;
@@ -506,7 +506,7 @@ void Toker::nextline()
                 }
             }
 
-            auto it = lowerTokes.find(ident);
+            std::map<std::string, int>::iterator it = lowerTokes.find(ident);
 
             if (it == lowerTokes.end())
             {
