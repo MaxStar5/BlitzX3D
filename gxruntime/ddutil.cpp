@@ -186,20 +186,33 @@ IDirect3DSurface9* ddUtil::createDisplaySurface(int w, int h, gxGraphics* gfx) {
 }
 
 IDirect3DTexture9* ddUtil::createTextureSurface(int w, int h, int flags, gxGraphics* gfx) {
+    return createTextureSurface(w, h, flags, gfx, false);
+}
+
+IDirect3DTexture9* ddUtil::createTextureSurface(int w, int h, int flags, gxGraphics* gfx, bool renderTarget) {
     IDirect3DDevice9* dev = gfx->dir3dDev;
+    if (!dev) return nullptr;
     adjustTexSize(&w, &h, dev);
 
     bool hasAlpha = (flags & gxCanvas::CANVAS_TEX_ALPHA) != 0;
     bool hasMask = (flags & gxCanvas::CANVAS_TEX_MASK) != 0;
     bool hasMips = (flags & gxCanvas::CANVAS_TEX_MIPMAP) != 0;
-    bool isCube = (flags & gxCanvas::CANVAS_TEX_CUBE) != 0;
+
+    DWORD usage = 0;
+    D3DPOOL pool = D3DPOOL_MANAGED;
+    UINT mipLevels = hasMips ? 0 : 1;
+    if (renderTarget) {
+        usage = D3DUSAGE_RENDERTARGET;
+        pool = D3DPOOL_DEFAULT;
+        mipLevels = 1; // need to make drivers generate these later on
+    }
 
     D3DFORMAT fmt = (hasAlpha || hasMask) ? D3DFMT_A8R8G8B8 : D3DFMT_X8R8G8B8;
     if (flags & gxCanvas::CANVAS_TEX_HICOLOR) fmt = D3DFMT_A4R4G4B4;
 
-    UINT mipLevels = hasMips ? 0 : 1;
     IDirect3DTexture9* tex = nullptr;
-    dev->CreateTexture(w, h, mipLevels, 0, fmt, D3DPOOL_MANAGED, &tex, nullptr);
+    HRESULT hr = dev->CreateTexture(w, h, mipLevels, usage, fmt, pool, &tex, nullptr);
+    if (FAILED(hr)) return nullptr;
     return tex;
 }
 
@@ -310,6 +323,10 @@ IDirect3DSurface9* ddUtil::loadDisplaySurface(const std::string& file, int flags
 }
 
 IDirect3DTexture9* ddUtil::loadTextureSurface(const std::string& file, int flags, gxGraphics* gfx) {
+    return loadTextureSurface(file, flags, gfx, false);
+}
+
+IDirect3DTexture9* ddUtil::loadTextureSurface(const std::string& file, int flags, gxGraphics* gfx, bool renderTarget) {
     g_lastImageError.clear();
 
     FREE_IMAGE_FORMAT fif = FreeImage_GetFileType(file.c_str(), 0);
@@ -342,73 +359,169 @@ IDirect3DTexture9* ddUtil::loadTextureSurface(const std::string& file, int flags
     D3DFORMAT fmt = D3DFMT_A8R8G8B8;
     if (flags & gxCanvas::CANVAS_TEX_HICOLOR) fmt = D3DFMT_A4R4G4B4;
 
-    UINT mipLevels = hasMips ? 0 : 1;
-
     IDirect3DTexture9* tex = nullptr;
-    HRESULT hr = gfx->dir3dDev->CreateTexture(adjW, adjH, mipLevels, 0, fmt, D3DPOOL_MANAGED, &tex, nullptr);
-    if (FAILED(hr)) {
-        g_lastImageError = "CreateTexture failed: " + file;
-        FreeImage_Unload(fib32);
-        return nullptr;
-    }
+    IDirect3DDevice9* dev = gfx->dir3dDev;
+    if (!dev) { FreeImage_Unload(fib32); return nullptr; }
 
-    D3DLOCKED_RECT lr;
-    hr = tex->LockRect(0, &lr, nullptr, 0);
-    if (FAILED(hr)) {
-        g_lastImageError = "LockRect failed: " + file;
-        tex->Release();
-        FreeImage_Unload(fib32);
-        return nullptr;
-    }
+    if (renderTarget) {
+        IDirect3DSurface9* tempSurf = nullptr;
+        HRESULT hr = dev->CreateOffscreenPlainSurface(adjW, adjH, D3DFMT_A8R8G8B8, D3DPOOL_SYSTEMMEM, &tempSurf, nullptr);
+        if (FAILED(hr)) {
+            FreeImage_Unload(fib32);
+            return nullptr;
+        }
 
-    BYTE* bits = (BYTE*)lr.pBits;
+        D3DLOCKED_RECT lr;
+        hr = tempSurf->LockRect(&lr, nullptr, 0);
+        if (FAILED(hr)) {
+            tempSurf->Release();
+            FreeImage_Unload(fib32);
+            return nullptr;
+        }
 
-    if (hasMask) {
-        buildMask(fib32, bits, lr.Pitch, w, h);
-    }
-    else if (hasAlpha) {
-        if (hasActualAlpha) {
+        BYTE* bits = (BYTE*)lr.pBits;
+        int pitch = lr.Pitch;
+
+        if (hasMask) {
+            buildMask(fib32, bits, pitch, w, h);
+        }
+        else if (hasAlpha) {
+            if (hasActualAlpha) {
+                for (int y = 0; y < h && y < adjH; ++y) {
+                    BYTE* src = FreeImage_GetScanLine(fib32, h - 1 - y);
+                    DWORD* dst = (DWORD*)(bits + y * pitch);
+                    for (int x = 0; x < w && x < adjW; ++x) {
+                        RGBQUAD* p = (RGBQUAD*)(src + x * 4);
+                        dst[x] = ((DWORD)p->rgbReserved << 24) |
+                            ((DWORD)p->rgbRed << 16) |
+                            ((DWORD)p->rgbGreen << 8) |
+                            p->rgbBlue;
+                    }
+                    // zero padding so it never bleeds into bilinear samples
+                    if (w < adjW) memset(dst + w, 0, (adjW - w) * sizeof(DWORD));
+                }
+                for (int y = h; y < adjH; ++y) memset(bits + y * pitch, 0, adjW * sizeof(DWORD));
+            }
+            else {
+                buildAlpha(fib32, bits, pitch, w, h, false);
+                if (w < adjW) {
+                    for (int y = 0; y < h; ++y) {
+                        memset(bits + y * pitch + w * sizeof(DWORD), 0, (adjW - w) * sizeof(DWORD));
+                    }
+                }
+                for (int y = h; y < adjH; ++y) memset(bits + y * pitch, 0, adjW * sizeof(DWORD));
+            }
+        }
+        else {
             for (int y = 0; y < h && y < adjH; ++y) {
                 BYTE* src = FreeImage_GetScanLine(fib32, h - 1 - y);
-                DWORD* dst = (DWORD*)(bits + y * lr.Pitch);
+                DWORD* dst = (DWORD*)(bits + y * pitch);
                 for (int x = 0; x < w && x < adjW; ++x) {
                     RGBQUAD* p = (RGBQUAD*)(src + x * 4);
-                    dst[x] = ((DWORD)p->rgbReserved << 24) |
-                        ((DWORD)p->rgbRed << 16) |
-                        ((DWORD)p->rgbGreen << 8) |
-                        p->rgbBlue;
+                    dst[x] = 0xff000000 | ((DWORD)p->rgbRed << 16) | ((DWORD)p->rgbGreen << 8) | p->rgbBlue;
+                }
+                // zero padding so it never bleeds into bilinear samples
+                if (w < adjW) memset(dst + w, 0, (adjW - w) * sizeof(DWORD));
+            }
+            for (int y = h; y < adjH; ++y) memset(bits + y * pitch, 0, adjW * sizeof(DWORD));
+        }
+
+        tempSurf->UnlockRect();
+
+        hr = dev->CreateTexture(adjW, adjH, 1, D3DUSAGE_RENDERTARGET, D3DFMT_A8R8G8B8, D3DPOOL_DEFAULT, &tex, nullptr);
+        if (FAILED(hr)) {
+            tempSurf->Release();
+            FreeImage_Unload(fib32);
+            return nullptr;
+        }
+
+        IDirect3DSurface9* texSurf = nullptr;
+        hr = tex->GetSurfaceLevel(0, &texSurf);
+        if (FAILED(hr)) {
+            tex->Release();
+            tempSurf->Release();
+            FreeImage_Unload(fib32);
+            return nullptr;
+        }
+
+        RECT rect = { 0, 0, adjW, adjH };
+        hr = dev->UpdateSurface(tempSurf, &rect, texSurf, nullptr);
+        texSurf->Release();
+        tempSurf->Release();
+
+        if (FAILED(hr)) {
+            tex->Release();
+            FreeImage_Unload(fib32);
+            return nullptr;
+        }
+
+    }
+    else {
+        UINT mipLevels = hasMips ? 0 : 1;
+        HRESULT hr = dev->CreateTexture(adjW, adjH, mipLevels, 0, fmt, D3DPOOL_MANAGED, &tex, nullptr);
+        if (FAILED(hr)) {
+            FreeImage_Unload(fib32);
+            return nullptr;
+        }
+
+        D3DLOCKED_RECT lr;
+        hr = tex->LockRect(0, &lr, nullptr, 0);
+        if (FAILED(hr)) {
+            tex->Release();
+            FreeImage_Unload(fib32);
+            return nullptr;
+        }
+
+        BYTE* bits = (BYTE*)lr.pBits;
+        int pitch = lr.Pitch;
+
+        if (hasMask) {
+            buildMask(fib32, bits, pitch, w, h);
+        }
+        else if (hasAlpha) {
+            if (hasActualAlpha) {
+                for (int y = 0; y < h && y < adjH; ++y) {
+                    BYTE* src = FreeImage_GetScanLine(fib32, h - 1 - y);
+                    DWORD* dst = (DWORD*)(bits + y * pitch);
+                    for (int x = 0; x < w && x < adjW; ++x) {
+                        RGBQUAD* p = (RGBQUAD*)(src + x * 4);
+                        dst[x] = ((DWORD)p->rgbReserved << 24) |
+                            ((DWORD)p->rgbRed << 16) |
+                            ((DWORD)p->rgbGreen << 8) |
+                            p->rgbBlue;
+                    }
+                    if (w < adjW) memset(dst + w, 0, (adjW - w) * sizeof(DWORD));
+                }
+                for (int y = h; y < adjH; ++y) memset(bits + y * pitch, 0, adjW * sizeof(DWORD));
+            }
+            else {
+                buildAlpha(fib32, bits, pitch, w, h, false);
+                if (w < adjW) {
+                    for (int y = 0; y < h; ++y) {
+                        memset(bits + y * pitch + w * sizeof(DWORD), 0, (adjW - w) * sizeof(DWORD));
+                    }
+                }
+                for (int y = h; y < adjH; ++y) memset(bits + y * pitch, 0, adjW * sizeof(DWORD));
+            }
+        }
+        else {
+            for (int y = 0; y < h && y < adjH; ++y) {
+                BYTE* src = FreeImage_GetScanLine(fib32, h - 1 - y);
+                DWORD* dst = (DWORD*)(bits + y * pitch);
+                for (int x = 0; x < w && x < adjW; ++x) {
+                    RGBQUAD* p = (RGBQUAD*)(src + x * 4);
+                    dst[x] = 0xff000000 | ((DWORD)p->rgbRed << 16) | ((DWORD)p->rgbGreen << 8) | p->rgbBlue;
                 }
                 if (w < adjW) memset(dst + w, 0, (adjW - w) * sizeof(DWORD));
             }
-            for (int y = h; y < adjH; ++y) memset(bits + y * lr.Pitch, 0, adjW * sizeof(DWORD));
+            for (int y = h; y < adjH; ++y) memset(bits + y * pitch, 0, adjW * sizeof(DWORD));
         }
-        else {
-            buildAlpha(fib32, bits, lr.Pitch, w, h, false);
-            if (w < adjW) {
-                for (int y = 0; y < h; ++y) {
-                    memset(bits + y * lr.Pitch + w * sizeof(DWORD), 0, (adjW - w) * sizeof(DWORD));
-                }
-            }
-            for (int y = h; y < adjH; ++y) memset(bits + y * lr.Pitch, 0, adjW * sizeof(DWORD));
-        }
-    }
-    else {
-        for (int y = 0; y < h && y < adjH; ++y) {
-            BYTE* src = FreeImage_GetScanLine(fib32, h - 1 - y);
-            DWORD* dst = (DWORD*)(bits + y * lr.Pitch);
-            for (int x = 0; x < w && x < adjW; ++x) {
-                RGBQUAD* p = (RGBQUAD*)(src + x * 4);
-                dst[x] = 0xff000000 | ((DWORD)p->rgbRed << 16) | ((DWORD)p->rgbGreen << 8) | p->rgbBlue;
-            }
-            // zero padding so it never bleeds into bilinear samples
-            if (w < adjW) memset(dst + w, 0, (adjW - w) * sizeof(DWORD));
-        }
-        for (int y = h; y < adjH; ++y) memset(bits + y * lr.Pitch, 0, adjW * sizeof(DWORD));
+
+        tex->UnlockRect(0);
+
+        if (hasMips) buildMipMaps(tex);
     }
 
-    tex->UnlockRect(0);
     FreeImage_Unload(fib32);
-
-    if (hasMips) buildMipMaps(tex);
     return tex;
 }

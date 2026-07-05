@@ -61,6 +61,7 @@ private:
 
 	mutable int locked_pitch, locked_cnt, lock_mod_cnt, remip_cnt;
 	mutable unsigned char* locked_surf;
+	mutable bool lock_is_rt;
 
 	mutable int cm_pitch;
 	mutable unsigned* cm_mask;
