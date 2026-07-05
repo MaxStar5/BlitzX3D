@@ -137,22 +137,30 @@ Tile* Codegen_x86::munchUnary(TNode* t) {
 }
 
 Tile* Codegen_x86::munchLogical(TNode* t) {
-	string s, s1, s2;
+	std::string s, s1, s2;
 	Tile* l, * r, * q;
-	switch (t->op) {
-	case IR_LOR:
-		s1 = "\tor\t%l,%l\n\tjnz\t" + t->sconst + "\n";
-		s2 = "\tor\t%l,%r\n" + t->sconst;
+	switch(t->op) {
+		case IR_AND:
+			s1 = "\tand\t%l,%l\n\tjz\t" + t->sconst + "\n";
+			s2 = "\tand\t%l,%r\n" + t->sconst;
 
-		l = munchReg(t->l); r = munchReg(t->r);
-		q = new Tile(s2, new Tile(s1, l), r);
-		q->forceOrder = true;
-		return q;
-		break;
-	case IR_AND:s = "\tand\t%l,%r\n"; break;
-	case IR_OR:s = "\tor\t%l,%r\n"; break;
-	case IR_XOR:s = "\txor\t%l,%r\n"; break;
-	default:return 0;
+			l = munchReg(t->l); r = munchReg(t->r);
+			q = new Tile(s2, new Tile(s1, l), r);
+			q->forceOrder = true;
+			return q;
+			break;
+		case IR_LOR:
+			s1 = "\tor\t%l,%l\n\tjnz\t" + t->sconst + "\n";
+			s2 = "\tor\t%l,%r\n" + t->sconst;
+
+			l = munchReg(t->l); r = munchReg(t->r);
+			q = new Tile(s2, new Tile(s1, l), r);
+			q->forceOrder = true;
+			return q;
+			break;
+		case IR_OR:s = "\tor\t%l,%r\n"; break;
+		case IR_XOR:s = "\txor\t%l,%r\n"; break;
+		default:return 0;
 	}
 	return new Tile(s, munchReg(t->l), munchReg(t->r));
 }
