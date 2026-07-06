@@ -1011,11 +1011,10 @@ bbImage* bbLoadImage(BBStr* s)
 bbImage* bbLoadAnimImage(BBStr* s, int w, int h, int first, int cnt) {
     std::string t = *s; delete s;
 
-    gxCanvas* pic = gx_graphics->loadCanvas(t, gxCanvas::CANVAS_TEXTURE);
-    if (!pic) {
-        // MessageBoxA(NULL, "loadCanvas (CANVAS_TEXTURE) failed", "LoadAnimImage", MB_OK);
-        return 0;
-    }
+    IDirect3DTexture9* picTex = ddUtil::loadTextureSurface(t, 0, gx_graphics, false);
+    if (!picTex) return 0;
+    gxCanvas* pic = new gxCanvas(gx_graphics, picTex, gxCanvas::CANVAS_TEXTURE);
+    gx_graphics->adoptCanvas(pic);
 
     int fpr = pic->getWidth() / w;
     int fpp = pic->getHeight() / h * fpr;
@@ -1029,12 +1028,15 @@ bbImage* bbLoadAnimImage(BBStr* s, int w, int h, int first, int cnt) {
 
     std::vector<gxCanvas*> frames;
     for (int k = 0; k < cnt; ++k) {
-        gxCanvas* c = gx_graphics->createCanvas(w, h, gxCanvas::CANVAS_TEXTURE);
-        if (!c) {
+        IDirect3DTexture9* tex = ddUtil::createTextureSurface(w, h, 0, gx_graphics, false);
+        if (!tex) {
             for (int i = 0; i < k; ++i) gx_graphics->freeCanvas(frames[i]);
             gx_graphics->freeCanvas(pic);
             return 0;
         }
+        gxCanvas* c = new gxCanvas(gx_graphics, tex, gxCanvas::CANVAS_TEXTURE);
+        gx_graphics->adoptCanvas(c);
+
         c->blit(0, 0, pic, src_x, src_y, w, h, true);
         c->backup();
         if (auto_midhandle) c->setHandle(w / 2, h / 2);
