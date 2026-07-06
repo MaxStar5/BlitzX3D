@@ -1037,6 +1037,8 @@ bbImage* bbLoadAnimImage(BBStr* s, int w, int h, int first, int cnt) {
         gxCanvas* c = new gxCanvas(gx_graphics, tex, gxCanvas::CANVAS_TEXTURE);
         gx_graphics->adoptCanvas(c);
 
+        c->setLogicalSize(w, h);
+
         c->blit(0, 0, pic, src_x, src_y, w, h, true);
         c->backup();
         if (auto_midhandle) c->setHandle(w / 2, h / 2);
