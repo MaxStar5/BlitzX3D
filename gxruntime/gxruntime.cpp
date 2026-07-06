@@ -8,6 +8,32 @@
 #include "../freeimage/freeimage.h"
 
 #include <sstream>
+#include <shellapi.h>
+
+static bool SetModernDPIAwareness() {
+	HMODULE hShcore = LoadLibraryW(L"shcore.dll");
+	if (!hShcore) return false;
+
+	typedef HRESULT(WINAPI* SetProcessDpiAwarenessFunc)(int);
+	SetProcessDpiAwarenessFunc pSetProcessDpiAwareness = (SetProcessDpiAwarenessFunc)GetProcAddress(hShcore, "SetProcessDpiAwareness");
+
+	if (!pSetProcessDpiAwareness) {
+		FreeLibrary(hShcore);
+		return false;
+	}
+
+	const int PROCESS_PER_MONITOR_DPI_AWARE = 2;
+	HRESULT hr = pSetProcessDpiAwareness(PROCESS_PER_MONITOR_DPI_AWARE);
+	FreeLibrary(hShcore);
+
+	return SUCCEEDED(hr);
+}
+
+void SetAppDPIAware() {
+	if (SetModernDPIAwareness()) { return; }
+	//fallback for old ass pcs
+	SetProcessDPIAware();
+}
 
 static void DebugMsg(const char* msg) {
 	// MessageBoxA(NULL, msg, "Graphics Debug", MB_OK);
@@ -82,6 +108,7 @@ enum { WM_STOP = WM_APP + 1, WM_RUN, WM_END };
 // STATIC STARTUP //
 ////////////////////
 gxRuntime* gxRuntime::openRuntime(HINSTANCE hinst, const std::string& cmd_line, Debugger* d) {
+	SetAppDPIAware();
 	if(runtime) return 0;
 
 	//create debugger
