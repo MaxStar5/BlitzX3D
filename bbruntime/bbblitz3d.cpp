@@ -832,6 +832,19 @@ void bbSetEffectMatrix(gxEffect* effect, BBStr* name,
 	delete name;
 }
 
+void bbSetEffectTexture(gxEffect* effect, BBStr* name, Texture* texture, int frame) {
+	if (!effect || !name) { delete name; return; }
+	if (!gx_graphics->verifyEffect(effect)) { delete name; return; }
+	IDirect3DBaseTexture9* d3dTex = nullptr;
+	if (texture) {
+		if (gxCanvas* c = texture->getCanvas(frame)) {
+			d3dTex = c->getTexture();
+		}
+	}
+	effect->setTexture(*name, d3dTex);
+	delete name;
+}
+
 //////////////////////
 // SURFACE COMMANDS //
 //////////////////////
@@ -2176,6 +2189,7 @@ void blitz3d_link(void (*rtSym)(const char* sym, void* pc)) {
 	rtSym("SetEffectFloat%effect$name#value", bbSetEffectFloat);
 	rtSym("SetEffectVector%effect$name#x#y#z#w", bbSetEffectVector);
 	rtSym("SetEffectMatrix%effect$name#m11#m12#m13#m14#m21#m22#m23#m24#m31#m32#m33#m34#m41#m42#m43#m44", bbSetEffectMatrix);
+	rtSym("SetEffectTexture%effect$name%texture%frame", bbSetEffectTexture);
 
 	rtSym("ScaleTexture%texture#u_scale#v_scale", bbScaleTexture);
 	rtSym("RotateTexture%texture#angle", bbRotateTexture);
