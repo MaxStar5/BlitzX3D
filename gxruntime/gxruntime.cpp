@@ -157,8 +157,11 @@ gxRuntime::gxRuntime(HINSTANCE hi, const std::string& cl, HWND hw) :
 
 	FreeImage_Initialise(true);
 
-	d3d = Direct3DCreate9(D3D_SDK_VERSION);
-	if (!d3d) {
+	memset(&d3ddmEx, 0, sizeof(d3ddmEx));
+	d3ddmEx.Size = sizeof(D3DDISPLAYMODEEX);
+
+	if (FAILED(Direct3DCreate9Ex(D3D_SDK_VERSION, &d3d))) {
+		d3d = nullptr;
 		debugLog("Direct3D9 not available");
 	}
 
@@ -895,7 +898,7 @@ gxGraphics* gxRuntime::openWindowedGraphics(int w, int h, int d, bool d3d) {
 	d3dpp.BackBufferFormat = (mode.Format == D3DFMT_R8G8B8 || mode.Format == D3DFMT_A8R8G8B8 || mode.Format == D3DFMT_X8R8G8B8) ? mode.Format : D3DFMT_X8R8G8B8;
 
 	DWORD vp_flag = pickVertexProcessingFlag(this->d3d, curr_driver->adapter);
-	if (FAILED(this->d3d->CreateDevice(curr_driver->adapter, D3DDEVTYPE_HAL, hwnd, vp_flag, &d3dpp, &d3dDevice))) return 0;
+	if (FAILED(this->d3d->CreateDeviceEx(curr_driver->adapter, D3DDEVTYPE_HAL, hwnd, vp_flag, &d3dpp, nullptr, &d3dDevice))) return 0;
 
 	if (FAILED(d3dDevice->GetBackBuffer(0, 0, D3DBACKBUFFER_TYPE_MONO, &backBuffer))) {
 		d3dDevice->Release(); d3dDevice = 0;
@@ -944,8 +947,16 @@ gxGraphics* gxRuntime::openExclusiveGraphics(int w, int h, int d, bool d3d) {
 	d3dpp.EnableAutoDepthStencil = FALSE;
 	d3dpp.Flags = D3DPRESENTFLAG_LOCKABLE_BACKBUFFER;
 
+	memset(&d3ddmEx, 0, sizeof(d3ddmEx));
+	d3ddmEx.Size = sizeof(D3DDISPLAYMODEEX);
+	d3ddmEx.Width = w;
+	d3ddmEx.Height = h;
+	d3ddmEx.Format = format;
+	d3ddmEx.RefreshRate = 0;
+	d3ddmEx.ScanLineOrdering = D3DSCANLINEORDERING_PROGRESSIVE;
+
 	DWORD vp_flag = pickVertexProcessingFlag(this->d3d, curr_driver->adapter);
-	if (FAILED(this->d3d->CreateDevice(curr_driver->adapter, D3DDEVTYPE_HAL, hwnd, vp_flag, &d3dpp, &d3dDevice))) {
+	if (FAILED(this->d3d->CreateDeviceEx(curr_driver->adapter, D3DDEVTYPE_HAL, hwnd, vp_flag, &d3dpp, &d3ddmEx, &d3dDevice))) {
 		return 0;
 	}
 
@@ -1090,11 +1101,16 @@ void gxRuntime::closeGraphics(gxGraphics* g) {
 
 bool gxRuntime::graphicsLost() {
 	if (!d3dDevice) return false;
-	HRESULT hr = d3dDevice->TestCooperativeLevel();
-	if (hr == D3DERR_DEVICELOST) return true;
-	if (hr == D3DERR_DEVICENOTRESET) {
-		d3dDevice->Reset(&d3dpp);
+	HRESULT hr = d3dDevice->CheckDeviceState(hwnd);
+	if (hr == D3DERR_DEVICELOST || hr == D3DERR_DEVICEHUNG || hr == D3DERR_DEVICEREMOVED) return true;
+
+	if (hr == D3DERR_DEVICENOTRESET || hr == S_PRESENT_MODE_CHANGED) {
+		if (FAILED(d3dDevice->ResetEx(&d3dpp, d3dpp.Windowed ? nullptr : &d3ddmEx))) return true;
+		if (backBuffer) { backBuffer->Release(); backBuffer = nullptr; }
+		if (frontBuffer) { frontBuffer->Release(); frontBuffer = nullptr; }
 		d3dDevice->GetBackBuffer(0, 0, D3DBACKBUFFER_TYPE_MONO, &backBuffer);
+		frontBuffer = backBuffer;
+		if (frontBuffer) frontBuffer->AddRef();
 	}
 	return false;
 }

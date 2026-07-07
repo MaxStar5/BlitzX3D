@@ -299,6 +299,13 @@ void gxCanvas::restore() {
     IDirect3DDevice9* dev = graphics->dir3dDev;
     if (!dev) return;
 
+    if (tex) {
+        if (surf) surf->Release();
+        tex->Release();
+    }
+    else if (plain_surf) {
+        plain_surf->Release();
+    }
     tex = nullptr;
     surf = nullptr;
     plain_surf = nullptr;
@@ -563,7 +570,7 @@ static IDirect3DTexture9* getOrBuildBlitTex(IDirect3DDevice9* dev, gxCanvas* src
     int logH = src->logical_h;
 
     IDirect3DTexture9* newTex = nullptr;
-    if (FAILED(dev->CreateTexture(texW, texH, 1, 0, D3DFMT_A8R8G8B8, D3DPOOL_MANAGED, &newTex, nullptr)))
+    if (FAILED(dev->CreateTexture(texW, texH, 1, D3DUSAGE_DYNAMIC, D3DFMT_A8R8G8B8, D3DPOOL_DEFAULT, &newTex, nullptr)))
         return nullptr;
 
     IDirect3DSurface9* texSurf = nullptr;

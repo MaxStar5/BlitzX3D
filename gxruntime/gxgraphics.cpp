@@ -7,11 +7,15 @@
 extern gxRuntime* gx_runtime;
 static Debugger* debugger;
 
-gxGraphics::gxGraphics(gxRuntime* rt, IDirect3DDevice9* dev, IDirect3DSurface9* front, IDirect3DSurface9* back, bool d3d) : runtime(rt), dir3dDev(dev), frontBuffer(front), backBuffer(back), gfx_lost(false), dummy_mesh(0) {
+gxGraphics::gxGraphics(gxRuntime* rt, IDirect3DDevice9Ex* dev, IDirect3DSurface9* front, IDirect3DSurface9* back, bool d3d) : runtime(rt), dir3dDev(dev), frontBuffer(front), backBuffer(back), gfx_lost(false), dummy_mesh(0) {
 
 	if (dir3dDev) dir3dDev->AddRef();
 	if (frontBuffer) frontBuffer->AddRef();
 	if (backBuffer) backBuffer->AddRef();
+
+	dir3d = rt->d3d;
+	if (dir3d) dir3d->AddRef();
+	present_params = rt->d3dpp;
 
 	front_canvas = new gxCanvas(this, frontBuffer, 0);
 	// MessageBoxA(NULL, "front_canvas created", "Debug", MB_OK);
@@ -80,6 +84,7 @@ gxGraphics::~gxGraphics() {
 	FT_Done_FreeType(ftLibrary);
 
 	if (dir3dDev) dir3dDev->Release();
+	if (dir3d) dir3d->Release();
 	if (frontBuffer && frontBuffer != backBuffer) frontBuffer->Release();
 	if (backBuffer) backBuffer->Release();
 }
@@ -123,15 +128,15 @@ void gxGraphics::getGamma(int r, int g, int b, float* dr, float* dg, float* db) 
 bool gxGraphics::restore() {
 	if (!dir3dDev) return false;
 
-	HRESULT hr = dir3dDev->TestCooperativeLevel();
-	if (hr == D3DERR_DEVICELOST) return false;
+	HRESULT hr = dir3dDev->CheckDeviceState(runtime->hwnd);
+	if (hr == D3DERR_DEVICELOST || hr == D3DERR_DEVICEHUNG || hr == D3DERR_DEVICEREMOVED) return false;
 
-	if (hr == D3DERR_DEVICENOTRESET) {
+	if (hr == D3DERR_DEVICENOTRESET || hr == S_PRESENT_MODE_CHANGED) {
 		if (present_params.Windowed) {
 			present_params.Flags |= D3DPRESENTFLAG_LOCKABLE_BACKBUFFER;
 		}
 
-		hr = dir3dDev->Reset(&present_params);
+		hr = dir3dDev->ResetEx(&present_params, present_params.Windowed ? nullptr : &runtime->d3ddmEx);
 		if (FAILED(hr)) return false;
 
 		IDirect3DSurface9* newBack = nullptr;
@@ -227,10 +232,18 @@ bool gxGraphics::changeDisplayMode(int width, int height, bool fullscreen, bool 
 		present_params.PresentationInterval = D3DPRESENT_INTERVAL_IMMEDIATE;
 	}
 
-	HRESULT hr = dir3dDev->Reset(&present_params);
+	memset(&runtime->d3ddmEx, 0, sizeof(runtime->d3ddmEx));
+	runtime->d3ddmEx.Size = sizeof(D3DDISPLAYMODEEX);
+	runtime->d3ddmEx.Width = width;
+	runtime->d3ddmEx.Height = height;
+	runtime->d3ddmEx.Format = present_params.BackBufferFormat;
+	runtime->d3ddmEx.RefreshRate = 0;
+	runtime->d3ddmEx.ScanLineOrdering = D3DSCANLINEORDERING_PROGRESSIVE;
+
+	HRESULT hr = dir3dDev->ResetEx(&present_params, fullscreen ? &runtime->d3ddmEx : nullptr);
 	if (FAILED(hr)) {
 		char buf[256];
-		sprintf(buf, "Reset failed: 0x%08X", hr);
+		sprintf(buf, "ResetEx failed: 0x%08X", hr);
 		runtime->debugLog(buf);
 		return false;
 	}
@@ -303,9 +316,9 @@ void gxGraphics::vwait() { // stubby stbu stub
 
 gxGraphics::DeviceState gxGraphics::getDeviceState() {
 	if (!dir3dDev) return DEVICE_LOST;
-	HRESULT hr = dir3dDev->TestCooperativeLevel();
-	if (hr == D3DERR_DEVICELOST) return DEVICE_LOST;
-	if (hr == D3DERR_DEVICENOTRESET) return DEVICE_NEEDS_RESET;
+	HRESULT hr = dir3dDev->CheckDeviceState(runtime->hwnd);
+	if (hr == D3DERR_DEVICELOST || hr == D3DERR_DEVICEHUNG || hr == D3DERR_DEVICEREMOVED) return DEVICE_LOST;
+	if (hr == D3DERR_DEVICENOTRESET || hr == S_PRESENT_MODE_CHANGED) return DEVICE_NEEDS_RESET;
 	return DEVICE_OK;
 }
 
@@ -461,7 +474,7 @@ gxMesh* gxGraphics::createMesh(int max_verts, int max_tris, int flags) {
 
 	bool dynamic = (flags & gxMesh::MESH_DYNAMIC) != 0;
 	DWORD usage = D3DUSAGE_WRITEONLY | (dynamic ? D3DUSAGE_DYNAMIC : 0);
-	D3DPOOL pool = dynamic ? D3DPOOL_DEFAULT : D3DPOOL_MANAGED;
+	D3DPOOL pool = D3DPOOL_DEFAULT;
 
 	int safe_verts = max_verts > 0 ? max_verts : 1;
 	int safe_tris = max_tris > 0 ? max_tris : 1;
