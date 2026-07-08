@@ -19,8 +19,8 @@ public:
     bool setFloat(const std::string& name, float value);
     bool setVector(const std::string& name, const float vec[4]);
     bool setMatrix(const std::string& name, const D3DXMATRIX& mat);
-
     void setAutoMatrices(const D3DXMATRIX& world, const D3DXMATRIX& view, const D3DXMATRIX& proj);
+    bool setTexture(const std::string& name, IDirect3DBaseTexture9* tex);
 
     bool begin(UINT* passes);
     bool beginPass(UINT pass);

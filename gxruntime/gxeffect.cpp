@@ -58,6 +58,14 @@ void gxEffect::setAutoMatrices(const D3DXMATRIX& world,
     setMatrix("WorldViewProj", wvp);
 }
 
+bool gxEffect::setTexture(const std::string& name, IDirect3DBaseTexture9* tex) {
+    if (!effect) return false;
+    D3DXHANDLE h = getHandle(name);
+    if (!h) return false;
+    HRESULT hr = effect->SetTexture(h, tex);
+    return SUCCEEDED(hr);
+}
+
 bool gxEffect::begin(UINT* passes) {
     return SUCCEEDED(effect->Begin(passes, 0));
 }
