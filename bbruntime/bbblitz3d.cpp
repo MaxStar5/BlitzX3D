@@ -2119,12 +2119,11 @@ void blitz3d_open() {
 void blitz3d_close() {
 	if (!gx_scene) return;
 	gxScene* scene = gx_scene;
-	gx_scene = 0;
 	bbClearWorld(1, 1, 1);
 	Texture::clearFilters();
 	loader_mat_map.clear();
 	delete world;
-	world = 0;
+	gx_scene = 0;
 	if (gx_graphics) gx_graphics->freeScene(scene);
 }
 
