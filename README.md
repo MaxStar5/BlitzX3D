@@ -1,11 +1,11 @@
 # BlitzX3D
 
+> [!IMPORTANT]
+> **Project Status: End of Life (EOL)**
+>
+> BlitzX3D is no longer under active development and has reached end of life. No new features, bug fixes, or compatibility updates are planned. The repository will remain available for historical reference, learning, and for anyone interested in building upon the project.
+
 This is a fork of Blitz3D TSS, originally based on Blitz3D and maintained by ZiYueCommentary.
-
-This project was made to explore updates to rendering, audio, performance, and compatibility whilst keeping the original Blitz3D workflow intact.
-
-## Extending BlitzX3D
-Please read [this document](EXTENDING.md).
 
 ## How to Build
 
@@ -20,12 +20,9 @@ Please read [this document](EXTENDING.md).
 ### Steps
 
 1. Open `blitz3d.sln` in Visual Studio 2022.
-2. Select Release or Debug config and rebuild the entire solution.
-3. All done! You can find output files in the `_release` and `_release/bin` dirs. Feel free to delete `.pdb` and `.ilk` files here.
+2. Select the **Release** or **Debug** configuration and rebuild the entire solution.
+3. All done! You can find the output files in the `_release` and `_release/bin` directories. Feel free to delete any `.pdb` and `.ilk` files.
 
-- **Note:** BlitzX3D plans on using the OpenAL audio backend,
-when redistributing programs built with BlitzX3D in the future, ensure the required OpenAL runtime libraries are included with your application if not already present on the system.
+## In Memory of Mark Sibly
 
-## In memory of Mark Sibly
-
-[Mark Sibly](https://github.com/blitz-research), the author of Blitz3D, died on 12 December 2024. 🕯️
+[Mark Sibly](https://github.com/blitz-research), the creator of Blitz3D, passed away on 12 December 2024. 🕯️
