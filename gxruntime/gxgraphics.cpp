@@ -339,7 +339,13 @@ int gxGraphics::getAvailVidmem() const { return 0; }
 int gxGraphics::getTotalVidmem() const { return 0; }
 
 gxMovie* gxGraphics::openMovie(const std::string& file, int flags) {
-	return 0;
+	gxMovie* movie = new gxMovie(this, file);
+	if (!movie->isValid()) {
+		delete movie;
+		return nullptr;
+	}
+	movie_set.insert(movie);
+	return movie;
 }
 
 gxMovie* gxGraphics::verifyMovie(gxMovie* m) {
