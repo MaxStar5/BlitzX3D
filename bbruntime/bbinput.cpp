@@ -308,6 +308,28 @@ int  bbDirectInputEnabled() {
 	return gx_runtime->directInputEnabled();
 }
 
+BBStr* bbGetKeyName(int key) {
+	UINT scanCode = MapVirtualKeyA(key, MAPVK_VK_TO_VSC);
+	if (scanCode == 0) { return new BBStr(""); }
+
+	bool extended = (key == VK_INSERT || key == VK_DELETE || key == VK_HOME || key == VK_END || key == VK_PRIOR || key == VK_NEXT || key == VK_LEFT || key == VK_RIGHT || key == VK_UP || key == VK_DOWN || key == VK_NUMLOCK || key == VK_DIVIDE || key == VK_SNAPSHOT);
+
+	LONG lParam = (scanCode << 16) | (extended ? 0x01000000 : 0);
+
+	wchar_t wname[128];
+	int result = GetKeyNameTextW(lParam, wname, 128);
+	if (result == 0) { return new BBStr(""); }
+
+	int len = WideCharToMultiByte(CP_UTF8, 0, wname, -1, nullptr, 0, nullptr, nullptr);
+	if (len <= 0) { return new BBStr(""); }
+
+	std::string utf8(len, 0);
+	WideCharToMultiByte(CP_UTF8, 0, wname, -1, &utf8[0], len, nullptr, nullptr);
+	utf8.pop_back();
+
+	return new BBStr(utf8);
+}
+
 void input_link(void (*rtSym)(const char* sym, void* pc)) {
 	rtSym("%KeyDown%key", bbKeyDown);
 	rtSym("%KeyHit%key", bbKeyHit);
@@ -360,4 +382,6 @@ void input_link(void (*rtSym)(const char* sym, void* pc)) {
 
 	rtSym("EnableDirectInput%enable", bbEnableDirectInput);
 	rtSym("%DirectInputEnabled", bbDirectInputEnabled);
+
+	rtSym("$GetKeyName%key", bbGetKeyName);
 }

@@ -57,4 +57,6 @@ void	 bbJoyVibrate(int port, float left, float right);
 void	 bbStopJoyVibrate(int port);
 void	 bbFlushJoy();
 
+// i aint nothin like yall
+BBStr* bbGetKeyName(int key);
 #endif

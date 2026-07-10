@@ -84,6 +84,10 @@ int bbExecFile(BBStr* f) {
     return n;
 }
 
+int bbGetGraphicsLevel() {
+    return 93;
+}
+
 void bbDelay(int ms) {
     if (!gx_runtime->delay(ms)) RTEX(0);
 }
