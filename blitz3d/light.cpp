@@ -9,7 +9,7 @@ Light::Light(int type) {
 }
 
 Light::~Light() {
-	gx_scene->freeLight(light);
+	if (gx_scene) gx_scene->freeLight(light);
 }
 
 void Light::setRange(float r) {

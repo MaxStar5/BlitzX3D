@@ -21,10 +21,10 @@ class gxEffect;
 
 class gxGraphics {
 public:
-	IDirect3DDevice9* dir3dDev;
+	IDirect3DDevice9Ex* dir3dDev;
 	IDirect3DSurface9* frontBuffer;
 	IDirect3DSurface9* backBuffer;
-	IDirect3D9* dir3d;
+	IDirect3D9Ex* dir3d;
 
 	D3DFORMAT           zbuffFmt;
 	D3DPRESENT_PARAMETERS present_params;
@@ -33,7 +33,7 @@ public:
 
 	bool running_on_wine;
 
-	gxGraphics(gxRuntime* runtime, IDirect3DDevice9* device, IDirect3DSurface9* front, IDirect3DSurface9* back, bool d3d);
+	gxGraphics(gxRuntime* runtime, IDirect3DDevice9Ex* device, IDirect3DSurface9* front, IDirect3DSurface9* back, bool d3d);
 	~gxGraphics();
 
 	bool restore();

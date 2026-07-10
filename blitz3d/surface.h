@@ -110,6 +110,8 @@ private:
 	int mesh_vs, mesh_ts;
 	int valid_vs, valid_ts;
 	Monitor* mon;
+	std::vector<Bone> last_bones;
+	bool skin_valid = false;
 };
 
 #endif

@@ -26,11 +26,12 @@ public:
     gxGraphics* graphics;
     gxFileSystem* fileSystem;
 
-    IDirect3D9* d3d;
-    IDirect3DDevice9* d3dDevice;
+    IDirect3D9Ex* d3d;
+    IDirect3DDevice9Ex* d3dDevice;
     IDirect3DSurface9* backBuffer;
     IDirect3DSurface9* frontBuffer;
     D3DPRESENT_PARAMETERS d3dpp;
+    D3DDISPLAYMODEEX d3ddmEx;
 
     float scale_x = .0f, scale_y = .0f;
 

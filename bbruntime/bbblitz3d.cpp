@@ -832,16 +832,14 @@ void bbSetEffectMatrix(gxEffect* effect, BBStr* name,
 	delete name;
 }
 
-void bbSetEffectTexture(gxEffect* effect, BBStr* name, Texture* texture, int frame) {
-	if (!effect || !name) { delete name; return; }
+void bbSetEffectTexture(gxEffect* effect, BBStr* name, Texture* tex) {
+	if (!effect || !tex) return;
 	if (!gx_graphics->verifyEffect(effect)) { delete name; return; }
-	IDirect3DBaseTexture9* d3dTex = nullptr;
-	if (texture) {
-		if (gxCanvas* c = texture->getCanvas(frame)) {
-			d3dTex = c->getTexture();
-		}
+	gxCanvas* c = tex->getCanvas(0);
+	if (c) {
+		IDirect3DBaseTexture9* d3dtex = c->getTexSurface();
+		effect->setTexture(*name, d3dtex);
 	}
-	effect->setTexture(*name, d3dTex);
 	delete name;
 }
 
@@ -2137,12 +2135,11 @@ void blitz3d_open() {
 void blitz3d_close() {
 	if (!gx_scene) return;
 	gxScene* scene = gx_scene;
-	gx_scene = 0;
 	bbClearWorld(1, 1, 1);
 	Texture::clearFilters();
 	loader_mat_map.clear();
 	delete world;
-	world = 0;
+	gx_scene = 0;
 	if (gx_graphics) gx_graphics->freeScene(scene);
 }
 
@@ -2194,7 +2191,7 @@ void blitz3d_link(void (*rtSym)(const char* sym, void* pc)) {
 	rtSym("SetEffectFloat%effect$name#value", bbSetEffectFloat);
 	rtSym("SetEffectVector%effect$name#x#y#z#w", bbSetEffectVector);
 	rtSym("SetEffectMatrix%effect$name#m11#m12#m13#m14#m21#m22#m23#m24#m31#m32#m33#m34#m41#m42#m43#m44", bbSetEffectMatrix);
-	rtSym("SetEffectTexture%effect$name%texture%frame", bbSetEffectTexture);
+	rtSym("SetEffectTexture%effect$name%texture", bbSetEffectTexture);
 
 	rtSym("ScaleTexture%texture#u_scale#v_scale", bbScaleTexture);
 	rtSym("RotateTexture%texture#angle", bbRotateTexture);

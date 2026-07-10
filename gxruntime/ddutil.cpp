@@ -234,17 +234,19 @@ IDirect3DTexture9* ddUtil::createTextureSurface(int w, int h, int flags, gxGraph
     bool hasMips = (flags & gxCanvas::CANVAS_TEX_MIPMAP) != 0;
 
     DWORD usage = 0;
-    D3DPOOL pool = D3DPOOL_MANAGED;
+    D3DPOOL pool = D3DPOOL_DEFAULT;
     UINT mipLevels = hasMips ? 0 : 1;
     if (renderTarget) {
         usage = D3DUSAGE_RENDERTARGET;
-        pool = D3DPOOL_DEFAULT;
         mipLevels = 1;
         D3DCAPS9 caps;
         if (SUCCEEDED(dev->GetDeviceCaps(&caps)) && (caps.Caps2 & D3DCAPS2_CANAUTOGENMIPMAP)) {
             usage |= D3DUSAGE_AUTOGENMIPMAP;
             mipLevels = 0;
         }
+    }
+    else {
+        usage = D3DUSAGE_DYNAMIC;
     }
 
     D3DFORMAT fmt = (hasAlpha || hasMask) ? D3DFMT_A8R8G8B8 : D3DFMT_X8R8G8B8;
@@ -412,12 +414,11 @@ IDirect3DTexture9* ddUtil::loadTextureSurface(const std::string& file, int flags
     if (!dev) { FreeImage_Unload(fib32); return nullptr; }
 
     DWORD usage = 0;
-    D3DPOOL pool = D3DPOOL_MANAGED;
+    D3DPOOL pool = D3DPOOL_DEFAULT;
     UINT mipLevels = 1;
 
     if (renderTarget) {
         usage = D3DUSAGE_RENDERTARGET;
-        pool = D3DPOOL_DEFAULT;
         if (hasMips) {
             mipLevels = 1;
             D3DCAPS9 caps;
@@ -428,6 +429,7 @@ IDirect3DTexture9* ddUtil::loadTextureSurface(const std::string& file, int flags
         }
     }
     else {
+        usage = D3DUSAGE_DYNAMIC;
         if (hasMips) mipLevels = 0;
     }
 

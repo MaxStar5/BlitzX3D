@@ -119,6 +119,16 @@ gxMesh* Surface::getMesh() {
 
 gxMesh* Surface::getMesh(const std::vector<Bone>& bones) {
 
+	bool bones_changed = true;
+	if (skin_valid && mesh && !mesh->dirty() && last_bones.size() == bones.size() && mesh_vs >= vertices.size() && mesh_ts >= triangles.size())
+	{
+		bones_changed = (memcmp(last_bones.data(), bones.data(), sizeof(Bone) * bones.size()) != 0);
+	}
+
+	if (!bones_changed && valid_vs == vertices.size() && valid_ts == triangles.size()) {
+		return mesh;
+	}
+
 	valid_vs = valid_ts = 0;
 
 	if(mesh_vs < vertices.size() || mesh_ts < triangles.size()) {
@@ -126,6 +136,7 @@ gxMesh* Surface::getMesh(const std::vector<Bone>& bones) {
 		mesh_vs = vertices.size();
 		mesh_ts = triangles.size();
 		mesh = gx_graphics->createMesh(mesh_vs, mesh_ts, gxMesh::MESH_DYNAMIC);
+		skin_valid = false;
 	}
 
 	if (!mesh || !mesh->lock(true)) return mesh;
@@ -159,5 +170,9 @@ gxMesh* Surface::getMesh(const std::vector<Bone>& bones) {
 		mesh->setTriangle(valid_ts, t.verts[0], t.verts[1], t.verts[2]);
 	}
 	mesh->unlock();
+
+	last_bones = bones;
+	skin_valid = true;
+
 	return mesh;
 }
