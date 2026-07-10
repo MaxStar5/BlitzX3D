@@ -45,12 +45,6 @@ bool gxEffect::setMatrix(const std::string& name, const D3DXMATRIX& mat) {
     return SUCCEEDED(effect->SetMatrix(h, &mat));
 }
 
-bool gxEffect::setTexture(const std::string& name, IDirect3DBaseTexture9* tex) {
-    D3DXHANDLE h = getHandle(name);
-    if (!h) return false;
-    return SUCCEEDED(effect->SetTexture(h, tex));
-}
-
 void gxEffect::setAutoMatrices(const D3DXMATRIX& world,
     const D3DXMATRIX& view,
     const D3DXMATRIX& proj) {
