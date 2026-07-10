@@ -390,7 +390,16 @@ int bbAvailVirtual() {
 //Note: modify canvas->backup() to NOT release backup image!
 Texture* bbLoadTexture(BBStr* file, int flags) {
 	debug3d("LoadTexture");
-	Texture* t = new Texture(*file, flags); delete file;
+	std::string path = *file;
+	if (g_texturePathMutator) {
+		BBStr* newPath = g_texturePathMutator(file);
+		if (newPath) {
+			path = *newPath;
+			delete newPath;
+		}
+	}
+	delete file;
+	Texture* t = new Texture(path, flags);
 	if (!t->getCanvas(0)) { delete t; return 0; }
 	texture_set.insert(t);
 	return t;

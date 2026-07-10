@@ -96,6 +96,8 @@ static unsigned curr_clsColor;
 
 static std::vector<GfxMode> gfx_modes;
 
+TexturePathMutator g_texturePathMutator = nullptr;
+
 static inline void debugImage(bbImage* i, const char* function, int frame = 0)
 {
     if (!image_set.count(i)) ErrorLog(function, MultiLang::image_not_exist);
@@ -991,10 +993,18 @@ void bbCloseMovie(gxMovie* movie)
 
 bbImage* bbLoadImage(BBStr* s)
 {
-    std::string t = *s; delete s;
-    gxCanvas* c = gx_graphics->loadCanvas(t, 0);
+    std::string path = *s;
+    if (g_texturePathMutator) {
+        BBStr* newPath = g_texturePathMutator(s);
+        if (newPath) {
+            path = *newPath;
+            delete newPath;
+        }
+    }
+    delete s;
+    gxCanvas* c = gx_graphics->loadCanvas(path, 0);
     if (!c) {
-        std::string errMsg = "Failed to load image: " + t;
+        std::string errMsg = "Failed to load image: " + path;
         const std::string& libErr = ddUtil::getLastImageError();
         if (!libErr.empty()) errMsg += " (" + libErr + ")";
         RTEX(errMsg.c_str());
@@ -1009,9 +1019,17 @@ bbImage* bbLoadImage(BBStr* s)
 }
 
 bbImage* bbLoadAnimImage(BBStr* s, int w, int h, int first, int cnt) {
-    std::string t = *s; delete s;
+    std::string path = *s;
+    if (g_texturePathMutator) {
+        BBStr* newPath = g_texturePathMutator(s);
+        if (newPath) {
+            path = *newPath;
+            delete newPath;
+        }
+    }
+    delete s;
 
-    IDirect3DTexture9* picTex = ddUtil::loadTextureSurface(t, 0, gx_graphics, false);
+    IDirect3DTexture9* picTex = ddUtil::loadTextureSurface(path, 0, gx_graphics, false);
     if (!picTex) return 0;
     gxCanvas* pic = new gxCanvas(gx_graphics, picTex, gxCanvas::CANVAS_TEXTURE);
     gx_graphics->adoptCanvas(pic);
@@ -1336,6 +1354,10 @@ void bbTFormImage(bbImage* i, float a, float b, float c, float d)
 void bbSetTFormMethod(int method) {
     if (method < 0 || method > 2) method = 1;
     tform_method = method;
+}
+
+void bbSetTextureLoadPathMutator(TexturePathMutator mutator) {
+    g_texturePathMutator = mutator;
 }
 
 void bbScaleImage(bbImage* i, float w, float h)
@@ -1752,6 +1774,7 @@ void graphics_link(void (*rtSym)(const char* sym, void* pc))
     rtSym("TFormImage%image#a#b#c#d", bbTFormImage);
     rtSym("SetTFormMethod%method", bbSetTFormMethod);
     rtSym("TFormFilter%enable", bbTFormFilter);
+    rtSym("SetTextureLoadPathMutator%mutator", bbSetTextureLoadPathMutator);
 
     rtSym("%ImagesOverlap%image1%x1%y1%image2%x2%y2", bbImagesOverlap);
     rtSym("%ImagesCollide%image1%x1%y1%frame1%image2%x2%y2%frame2", bbImagesCollide);
