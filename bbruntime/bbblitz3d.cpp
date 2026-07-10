@@ -1513,6 +1513,11 @@ void  bbFreeEntity(Entity* e) {
 	delete e;
 }
 
+
+int bbEntityExist(Entity* e) {
+	return entity_set.contains(e);
+}
+
 void  bbHideEntity(Entity* e) {
 	debugEntity(e, "HideEntity");
 	e->setEnabled(false);
@@ -2435,6 +2440,7 @@ void blitz3d_link(void (*rtSym)(const char* sym, void* pc)) {
 	rtSym("ShowEntity%entity", bbShowEntity);
 	rtSym("%EntityHidden%entity", bbEntityHidden);
 	rtSym("FreeEntity%entity", bbFreeEntity);
+	rtSym("%EntityExist%entity", bbEntityExist);
 
 	rtSym("NameEntity%entity$name", bbNameEntity);
 	rtSym("$EntityName%entity", bbEntityName);
