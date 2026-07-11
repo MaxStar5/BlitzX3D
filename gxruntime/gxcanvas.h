@@ -5,6 +5,7 @@
 
 class gxFont;
 class gxGraphics;
+class gxEffect;
 
 
 class gxCanvas {
@@ -45,6 +46,9 @@ public:
 	bool clip(RECT* d, RECT* s) const;
 	void damage(const RECT& r)  const;
 
+	void set2DEffect(gxEffect* effect);
+	gxEffect* get2DEffect() const;
+
 	IDirect3DSurface9* surf;             // the "active" surf
 	IDirect3DSurface9* z_surf;           // depth/stencil surf
 
@@ -66,7 +70,7 @@ private:
 	mutable int cm_pitch;
 	mutable unsigned* cm_mask;
 
-
+	gxEffect* effect2D;
 	gxFont* font;
 	RECT viewport;
 	int origin_x, origin_y, handle_x, handle_y;

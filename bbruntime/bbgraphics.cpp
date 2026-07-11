@@ -814,6 +814,20 @@ int bbColorBlue()
     return gx_canvas->getColor() & 0xff;
 }
 
+void bbSet2DEffect(gxEffect* effect) {
+    if (!gx_canvas) return;
+    gx_canvas->set2DEffect(effect);
+}
+
+void bbClear2DEffect() {
+    if (!gx_canvas) return;
+    gx_canvas->set2DEffect(nullptr);
+}
+
+gxEffect* bbGet2DEffect() {
+    return gx_canvas ? gx_canvas->get2DEffect() : nullptr;
+}
+
 void bbClsColor(int r, int g, int b)
 {
     gx_canvas->setClsColor(curr_clsColor = (r << 16) | (g << 8) | b);
@@ -1723,7 +1737,9 @@ void graphics_link(void (*rtSym)(const char* sym, void* pc))
     rtSym("$ConvertToUTF8$str", bbConvertToUTF8);
     rtSym("CopyRect%source_x%source_y%width%height%dest_x%dest_y%src_buffer=0%dest_buffer=0", bbCopyRect);
     rtSym("CopyRectStretch%source_x%source_y%width%height%dest_x%dest_y%dest_w%dest_h%src_buffer=0%dest_buffer=0", bbCopyRectStretch);
-
+    rtSym("Set2DEffect%effect", bbSet2DEffect);
+    rtSym("Clear2DEffect", bbClear2DEffect);
+    rtSym("%Get2DEffect", bbGet2DEffect);
 
     //fonts
     rtSym("%LoadFont$fontname%height=12%bold=0%italic=0%underlined=0", bbLoadFont);

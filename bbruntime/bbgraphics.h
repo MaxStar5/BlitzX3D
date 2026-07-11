@@ -72,6 +72,9 @@ void	 bbGetColor(int x, int y);
 int		 bbColorRed();
 int		 bbColorGreen();
 int		 bbColorBlue();
+void bbSet2DEffect(gxEffect* effect);
+void bbClear2DEffect();
+gxEffect* bbGet2DEffect();
 
 BBStr* bbConvertToANSI(BBStr* str);
 BBStr* bbConvertToUTF8(BBStr* str);

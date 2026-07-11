@@ -154,7 +154,7 @@ gxCanvas::gxCanvas(gxGraphics* g, IDirect3DSurface9* s, int f) :
     graphics(g), plain_surf(s), tex(nullptr), cube_tex(nullptr), surf(s), z_surf(nullptr),
     flags(f), cube_mode(CUBEMODE_REFLECTION | CUBESPACE_WORLD),
     t_surf(nullptr), cm_mask(nullptr), locked_cnt(0), mod_cnt(0), remip_cnt(0),
-    blit_tex(nullptr), blit_tex_mod_cnt(-1), blit_tex_mask(~0u), lock_is_rt(false) {
+    blit_tex(nullptr), blit_tex_mod_cnt(-1), blit_tex_mask(~0u), lock_is_rt(false), effect2D(nullptr) {
     memset(cube_surfs, 0, sizeof(cube_surfs));
 
     D3DSURFACE_DESC desc;
@@ -178,7 +178,7 @@ gxCanvas::gxCanvas(gxGraphics* g, IDirect3DTexture9* t, int f) :
     graphics(g), plain_surf(nullptr), tex(t), cube_tex(nullptr), surf(nullptr), z_surf(nullptr),
     flags(f), cube_mode(CUBEMODE_REFLECTION | CUBESPACE_WORLD),
     t_surf(nullptr), cm_mask(nullptr), locked_cnt(0), mod_cnt(0), remip_cnt(0),
-    blit_tex(nullptr), blit_tex_mod_cnt(-1), blit_tex_mask(~0u), lock_is_rt(false) {
+    blit_tex(nullptr), blit_tex_mod_cnt(-1), blit_tex_mask(~0u), lock_is_rt(false), effect2D(nullptr) {
     memset(cube_surfs, 0, sizeof(cube_surfs));
 
     tex->GetSurfaceLevel(0, &surf);
@@ -206,7 +206,7 @@ gxCanvas::gxCanvas(gxGraphics* g, IDirect3DCubeTexture9* ct, int f) :
     graphics(g), plain_surf(nullptr), tex(nullptr), cube_tex(ct), surf(nullptr), z_surf(nullptr),
     flags(f), cube_mode(CUBEMODE_REFLECTION | CUBESPACE_WORLD),
     t_surf(nullptr), cm_mask(nullptr), locked_cnt(0), mod_cnt(0), remip_cnt(0),
-    blit_tex(nullptr), blit_tex_mod_cnt(-1), blit_tex_mask(~0u), lock_is_rt(false) {
+    blit_tex(nullptr), blit_tex_mod_cnt(-1), blit_tex_mask(~0u), lock_is_rt(false), effect2D(nullptr){
 
     D3DCUBEMAP_FACES faceMap[6] = {
         D3DCUBEMAP_FACE_NEGATIVE_X,
@@ -359,6 +359,14 @@ bool gxCanvas::clip(RECT* d) const {
 }
 bool gxCanvas::clip(RECT* d, RECT* s) const {
     return ::clip(viewport, d, s);
+}
+
+void gxCanvas::set2DEffect(gxEffect* effect) {
+    effect2D = effect;
+}
+
+gxEffect* gxCanvas::get2DEffect() const {
+    return effect2D;
 }
 
 void gxCanvas::updateBitMask(const RECT& r) const {
@@ -556,6 +564,59 @@ void gxCanvas::oval(int x1, int y1, int w, int h, bool solid) {
         p_xa = xa; p_xb = xb;
     }
     damage(dest);
+}
+
+static void drawQuadWithEffect(IDirect3DDevice9* dev, gxEffect* effect, IDirect3DTexture9* tex, const RECT& dst, const RECT& src, int texW, int texH, bool useAlpha = false, unsigned color_argb = 0xFFFFFFFF) {
+    D3DXMATRIX proj, view, world;
+    D3DXMatrixIdentity(&world);
+    D3DXMatrixIdentity(&view);
+    D3DVIEWPORT9 vp;
+    dev->GetViewport(&vp);
+    float w = (float)vp.Width;
+    float h = (float)vp.Height;
+    D3DXMatrixOrthoOffCenterLH(&proj, 0.0f, w, h, 0.0f, 0.0f, 1.0f);
+
+    effect->setAutoMatrices(world, view, proj);
+    if (tex) {
+        effect->setTexture("tex0", tex);
+    }
+    if (useAlpha) {
+        float color[4] = {
+            ((color_argb >> 16) & 0xFF) / 255.0f,
+            ((color_argb >> 8) & 0xFF) / 255.0f,
+            (color_argb & 0xFF) / 255.0f,
+            ((color_argb >> 24) & 0xFF) / 255.0f
+        };
+        effect->setVector("color", color);
+    }
+
+    UINT passes;
+    if (effect->begin(&passes)) {
+        float x0 = (float)dst.left - 0.5f;
+        float y0 = (float)dst.top - 0.5f;
+        float x1 = (float)dst.right - 0.5f;
+        float y1 = (float)dst.bottom - 0.5f;
+        float u0 = (float)src.left / texW;
+        float v0 = (float)src.top / texH;
+        float u1 = (float)src.right / texW;
+        float v1 = (float)src.bottom / texH;
+        struct QuadVertex { float x, y, z, rhw; float u, v; };
+        QuadVertex verts[4] = {
+            { x0, y0, 0.0f, 1.0f, u0, v0 },
+            { x1, y0, 0.0f, 1.0f, u1, v0 },
+            { x0, y1, 0.0f, 1.0f, u0, v1 },
+            { x1, y1, 0.0f, 1.0f, u1, v1 }
+        };
+        static const DWORD FVF = D3DFVF_XYZRHW | D3DFVF_TEX1;
+
+        for (UINT p = 0; p < passes; ++p) {
+            effect->beginPass(p);
+            dev->SetFVF(FVF);
+            dev->DrawPrimitiveUP(D3DPT_TRIANGLESTRIP, 2, verts, sizeof(QuadVertex));
+            effect->endPass();
+        }
+        effect->end();
+    }
 }
 
 static IDirect3DTexture9* getOrBuildBlitTex(IDirect3DDevice9* dev, gxCanvas* src, unsigned maskRGB) {
@@ -827,6 +888,30 @@ void gxCanvas::blit(int x, int y, gxCanvas* src, int src_x, int src_y,
 
     IDirect3DDevice9* dev = graphics->dir3dDev;
     if (!dev) return;
+
+    if (effect2D) {
+        FillModeGuard guard(dev);
+        unsigned maskRGB = solid ? ~0u : (src->format.toARGB(src->mask_surf) & 0x00ffffffu);
+        IDirect3DTexture9* blitTex = getOrBuildBlitTex(dev, src, maskRGB);
+        if (!blitTex) return;
+
+        SavedBlitState saved;
+        saveBlitState(dev, saved);
+
+        dev->SetRenderTarget(0, surf);
+        dev->SetDepthStencilSurface(nullptr);
+        D3DVIEWPORT9 vp = { 0, 0, (DWORD)clip_rect.right, (DWORD)clip_rect.bottom, 0.0f, 1.0f };
+        dev->SetViewport(&vp);
+
+        dev->BeginScene();
+        drawQuadWithEffect(dev, effect2D, blitTex, dest_r, src_r, src->clip_rect.right, src->clip_rect.bottom, false, 0);
+        dev->EndScene();
+
+        restoreBlitState(dev, saved);
+        damage(dest_r);
+        return;
+    }
+
     FillModeGuard guard(dev);
 
     unsigned maskRGB = solid ? ~0u : (src->format.toARGB(src->mask_surf) & 0x00ffffffu);
@@ -974,7 +1059,23 @@ void gxCanvas::blitAlpha(int x, int y, gxCanvas* src,
     FillModeGuard guard(dev);
 
     IDirect3DBaseTexture9* tex = src->getTexture();
-    if (!tex) {
+    if (!tex) return;
+
+    if (effect2D) {
+        SavedBlitState saved;
+        saveBlitState(dev, saved);
+
+        dev->SetRenderTarget(0, surf);
+        dev->SetDepthStencilSurface(nullptr);
+        D3DVIEWPORT9 vp = { 0, 0, (DWORD)clip_rect.right, (DWORD)clip_rect.bottom, 0.0f, 1.0f };
+        dev->SetViewport(&vp);
+
+        dev->BeginScene();
+        drawQuadWithEffect(dev, effect2D, (IDirect3DTexture9*)tex, dest_r, src_r, src->clip_rect.right, src->clip_rect.bottom, true, color_argb);
+        dev->EndScene();
+
+        restoreBlitState(dev, saved);
+        damage(dest_r);
         return;
     }
 
