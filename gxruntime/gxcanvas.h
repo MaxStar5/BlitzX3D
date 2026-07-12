@@ -35,6 +35,7 @@ public:
 	RECT clip_rect;
 
 	unsigned mask_surf, color_surf, color_argb, clsColor_surf;
+	bool has_mask;
 
 	void setModify(int n);
 	int  getModify() const;
@@ -165,6 +166,8 @@ public:
 	void getHandle(int* x, int* y)const;
 	void getViewport(int* x, int* y, int* w, int* h)const;
 	unsigned getMask()const;
+	bool hasMask()const { return has_mask; }
+	void copyMaskFrom(const gxCanvas* src) { mask_surf = src->mask_surf; has_mask = src->has_mask; }
 	unsigned getColor()const;
 	unsigned getClsColor()const;
 	IDirect3DBaseTexture9* getTexSurface() const;

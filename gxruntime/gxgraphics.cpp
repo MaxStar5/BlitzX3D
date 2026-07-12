@@ -375,9 +375,11 @@ gxCanvas* gxGraphics::createCanvas(int w, int h, int flags) {
 
 gxCanvas* gxGraphics::loadCanvas(const std::string& f, int flags) {
 	if (flags & gxCanvas::CANVAS_TEXTURE) {
-		IDirect3DTexture9* tex = ddUtil::loadTextureSurface(f, flags, this, true);
+		int srcW = 0, srcH = 0;
+		IDirect3DTexture9* tex = ddUtil::loadTextureSurface(f, flags, this, true, &srcW, &srcH);
 		if (!tex) return nullptr;
 		gxCanvas* c = new gxCanvas(this, tex, flags);
+		if (srcW > 0 && srcH > 0) c->setLogicalSize(srcW, srcH);
 		canvas_set.insert(c);
 		return c;
 	}

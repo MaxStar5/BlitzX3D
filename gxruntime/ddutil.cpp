@@ -365,10 +365,14 @@ IDirect3DSurface9* ddUtil::loadDisplaySurface(const std::string& file, int flags
 }
 
 IDirect3DTexture9* ddUtil::loadTextureSurface(const std::string& file, int flags, gxGraphics* gfx) {
-    return loadTextureSurface(file, flags, gfx, false);
+    return loadTextureSurface(file, flags, gfx, false, nullptr, nullptr);
 }
 
 IDirect3DTexture9* ddUtil::loadTextureSurface(const std::string& file, int flags, gxGraphics* gfx, bool renderTarget) {
+    return loadTextureSurface(file, flags, gfx, renderTarget, nullptr, nullptr);
+}
+
+IDirect3DTexture9* ddUtil::loadTextureSurface(const std::string& file, int flags, gxGraphics* gfx, bool renderTarget, int* outW, int* outH) {
     g_lastImageError.clear();
 
     FREE_IMAGE_FORMAT fif = FreeImage_GetFileType(file.c_str(), 0);
@@ -401,6 +405,8 @@ IDirect3DTexture9* ddUtil::loadTextureSurface(const std::string& file, int flags
     int h = FreeImage_GetHeight(fib32);
     int adjW = w, adjH = h;
     adjustTexSize(&adjW, &adjH, gfx->dir3dDev);
+    if (outW) *outW = w;
+    if (outH) *outH = h;
 
     bool hasMask = (flags & gxCanvas::CANVAS_TEX_MASK) != 0;
     bool hasAlpha = (flags & gxCanvas::CANVAS_TEX_ALPHA) != 0;

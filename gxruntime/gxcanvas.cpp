@@ -154,7 +154,7 @@ gxCanvas::gxCanvas(gxGraphics* g, IDirect3DSurface9* s, int f) :
     graphics(g), plain_surf(s), tex(nullptr), cube_tex(nullptr), surf(s), z_surf(nullptr),
     flags(f), cube_mode(CUBEMODE_REFLECTION | CUBESPACE_WORLD),
     t_surf(nullptr), cm_mask(nullptr), locked_cnt(0), mod_cnt(0), remip_cnt(0),
-    blit_tex(nullptr), blit_tex_mod_cnt(-1), blit_tex_mask(~0u), lock_is_rt(false), effect2D(nullptr) {
+    blit_tex(nullptr), blit_tex_mod_cnt(-1), blit_tex_mask(~0u), lock_is_rt(false), effect2D(nullptr), has_mask(false) {
     memset(cube_surfs, 0, sizeof(cube_surfs));
 
     D3DSURFACE_DESC desc;
@@ -169,6 +169,7 @@ gxCanvas::gxCanvas(gxGraphics* g, IDirect3DSurface9* s, int f) :
     mipmapNeeded = (flags & CANVAS_TEX_MIPMAP) != 0;
     cm_pitch = (clip_rect.right + 31) / 32 + 1;
     setMask(0); setColor(~0); setClsColor(0);
+    has_mask = false;
     setOrigin(0, 0); setHandle(0, 0);
     setFont(graphics->getDefaultFont());
     setViewport(0, 0, getWidth(), getHeight());
@@ -178,7 +179,7 @@ gxCanvas::gxCanvas(gxGraphics* g, IDirect3DTexture9* t, int f) :
     graphics(g), plain_surf(nullptr), tex(t), cube_tex(nullptr), surf(nullptr), z_surf(nullptr),
     flags(f), cube_mode(CUBEMODE_REFLECTION | CUBESPACE_WORLD),
     t_surf(nullptr), cm_mask(nullptr), locked_cnt(0), mod_cnt(0), remip_cnt(0),
-    blit_tex(nullptr), blit_tex_mod_cnt(-1), blit_tex_mask(~0u), lock_is_rt(false), effect2D(nullptr) {
+    blit_tex(nullptr), blit_tex_mod_cnt(-1), blit_tex_mask(~0u), lock_is_rt(false), effect2D(nullptr), has_mask(false) {
     memset(cube_surfs, 0, sizeof(cube_surfs));
 
     tex->GetSurfaceLevel(0, &surf);
@@ -195,6 +196,7 @@ gxCanvas::gxCanvas(gxGraphics* g, IDirect3DTexture9* t, int f) :
     mipmapNeeded = (flags & CANVAS_TEX_MIPMAP) != 0;
     cm_pitch = (clip_rect.right + 31) / 32 + 1;
     setMask(0); setColor(~0); setClsColor(0);
+    has_mask = false;
     setOrigin(0, 0); setHandle(0, 0);
     setFont(graphics->getDefaultFont());
     setViewport(0, 0, getWidth(), getHeight());
@@ -206,7 +208,7 @@ gxCanvas::gxCanvas(gxGraphics* g, IDirect3DCubeTexture9* ct, int f) :
     graphics(g), plain_surf(nullptr), tex(nullptr), cube_tex(ct), surf(nullptr), z_surf(nullptr),
     flags(f), cube_mode(CUBEMODE_REFLECTION | CUBESPACE_WORLD),
     t_surf(nullptr), cm_mask(nullptr), locked_cnt(0), mod_cnt(0), remip_cnt(0),
-    blit_tex(nullptr), blit_tex_mod_cnt(-1), blit_tex_mask(~0u), lock_is_rt(false), effect2D(nullptr){
+    blit_tex(nullptr), blit_tex_mod_cnt(-1), blit_tex_mask(~0u), lock_is_rt(false), effect2D(nullptr), has_mask(false) {
 
     D3DCUBEMAP_FACES faceMap[6] = {
         D3DCUBEMAP_FACE_NEGATIVE_X,
@@ -232,6 +234,7 @@ gxCanvas::gxCanvas(gxGraphics* g, IDirect3DCubeTexture9* ct, int f) :
     mipmapNeeded = (flags & CANVAS_TEX_MIPMAP) != 0;
     cm_pitch = (clip_rect.right + 31) / 32 + 1;
     setMask(0); setColor(~0); setClsColor(0);
+    has_mask = false;
     setOrigin(0, 0); setHandle(0, 0);
     setFont(graphics->getDefaultFont());
     setViewport(0, 0, getWidth(), getHeight());
@@ -431,7 +434,7 @@ void gxCanvas::damage(const RECT& r) const {
 
 void gxCanvas::setFont(gxFont* f) { font = f; }
 
-void gxCanvas::setMask(unsigned argb) { mask_surf = format.fromARGB(argb); }
+void gxCanvas::setMask(unsigned argb) { mask_surf = format.fromARGB(argb); has_mask = true; }
 
 void gxCanvas::setColor(unsigned argb) { argb |= 0xff000000; color_argb = argb; color_surf = format.fromARGB(argb); }
 

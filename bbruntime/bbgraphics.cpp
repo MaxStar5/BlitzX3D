@@ -97,7 +97,7 @@ public:
             int hx, hy;
             frames[k]->getHandle(&hx, &hy);
             c->setHandle(hx, hy);
-            c->setMask(frames[k]->getMask());
+            c->copyMaskFrom(frames[k]);
             frames[k] = c;
             gx_graphics->adoptCanvas(c);
         }
@@ -248,7 +248,7 @@ static gxCanvas* tformCanvas(gxCanvas* c, float m[2][2], int x_handle, int y_han
 
     gxCanvas* t = gx_graphics->createCanvas(iw, ih, 0);
     t->setHandle(-minx, -miny);
-    t->setMask(c->getMask());
+    t->copyMaskFrom(c);
 
     if (fabs(m[0][0] - 1.0f) < 0.001f && fabs(m[1][1] - 1.0f) < 0.001f &&
         fabs(m[0][1]) < 0.001f && fabs(m[1][0]) < 0.001f &&
@@ -1135,7 +1135,7 @@ bbImage* bbCopyImage(bbImage* i)
         if (auto_dirty) c->backup();
         t->setHandle(x, y);
         c->setHandle(x, y);
-        c->setMask(t->getMask());
+        c->copyMaskFrom(t);
         frames.push_back(c);
     }
     bbImage* t = new bbImage(frames, i->origWidth, i->origHeight);
@@ -1209,7 +1209,7 @@ void bbDrawImage(bbImage* i, int x, int y, int frame)
 {
     debugImage(i, "DrawImage", frame);
     gxCanvas* c = i->getFrames()[frame];
-    gx_canvas->blit(x, y, c, 0, 0, c->getWidth(), c->getHeight(), false);
+    gx_canvas->blit(x, y, c, 0, 0, c->getWidth(), c->getHeight(), !c->hasMask());
 }
 
 void bbDrawBlock(bbImage* i, int x, int y, int frame)
