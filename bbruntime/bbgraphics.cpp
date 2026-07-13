@@ -16,8 +16,17 @@ struct GfxMode
 class bbImage
 {
 public:
-    bbImage(const std::vector<gxCanvas*>& f) :frames(f)
-    {
+    int origWidth, origHeight;
+    bbImage(const std::vector<gxCanvas*>& f, int origW = -1, int origH = -1) : frames(f) {
+        if (origW == -1) {
+            origWidth = frames[0]->getWidth();
+            origHeight = frames[0]->getHeight();
+        }
+        else {
+            origWidth = origW;
+            origHeight = origH;
+        }
+        saveOrigPixels();
         savePixels();
     }
     ~bbImage()
@@ -53,6 +62,25 @@ public:
             c->unlock();
         }
     }
+    void saveOrigPixels()
+    {
+        origPixelData.resize(frames.size());
+        for (int k = 0; k < (int)frames.size(); ++k)
+        {
+            gxCanvas* c = frames[k];
+            int w = c->getWidth(), h = c->getHeight();
+            origPixelData[k].resize(w * h);
+            c->lock();
+            for (int y = 0; y < h; ++y)
+                for (int x = 0; x < w; ++x)
+                    origPixelData[k][y * w + x] = c->getPixelFast(x, y);
+            c->unlock();
+        }
+    }
+    const std::vector<uint32_t>& getOrigPixels(int frame) const
+    {
+        return origPixelData[frame];
+    }
     void restoreToDevice()
     {
         for (int k = 0; k < (int)frames.size(); ++k)
@@ -77,6 +105,7 @@ public:
 private:
     std::vector<gxCanvas*> frames;
     std::vector<std::vector<uint32_t>> pixelData;
+    std::vector<std::vector<uint32_t>> origPixelData;
     std::vector<int> widths, heights;
 };
 
@@ -1109,7 +1138,7 @@ bbImage* bbCopyImage(bbImage* i)
         c->setMask(t->getMask());
         frames.push_back(c);
     }
-    bbImage* t = new bbImage(frames);
+    bbImage* t = new bbImage(frames, i->origWidth, i->origHeight);
     image_set.insert(t);
     return t;
 }
@@ -1380,11 +1409,104 @@ void bbScaleImage(bbImage* i, float w, float h)
     bbTFormImage(i, w, 0, 0, h);
 }
 
+static unsigned sampleOrigPixel(const std::vector<uint32_t>& src, int srcW, int srcH, float sx, float sy)
+{
+    int ix = (int)floor(sx);
+    int iy = (int)floor(sy);
+    float fxfrac = sx - ix;
+    float fyfrac = sy - iy;
+
+    auto clampedPixel = [&](int xi, int yi) -> unsigned {
+        if (xi < 0) xi = 0; else if (xi >= srcW) xi = srcW - 1;
+        if (yi < 0) yi = 0; else if (yi >= srcH) yi = srcH - 1;
+        return src[yi * srcW + xi];
+        };
+
+    if (!filter) {
+        return clampedPixel(ix, iy);
+    }
+    else if (tform_method == 1) {
+        const int SHIFT = 16;
+        const int ONE = 1 << SHIFT;
+        int w1 = (int)((1.0f - fxfrac) * (1.0f - fyfrac) * ONE);
+        int w2 = (int)(fxfrac * (1.0f - fyfrac) * ONE);
+        int w3 = (int)((1.0f - fxfrac) * fyfrac * ONE);
+        int w4 = (int)(fxfrac * fyfrac * ONE);
+        unsigned c00 = clampedPixel(ix, iy);
+        unsigned c10 = clampedPixel(ix + 1, iy);
+        unsigned c01 = clampedPixel(ix, iy + 1);
+        unsigned c11 = clampedPixel(ix + 1, iy + 1);
+        int r = ((c00 >> 16) & 0xFF) * w1 + ((c10 >> 16) & 0xFF) * w2 + ((c01 >> 16) & 0xFF) * w3 + ((c11 >> 16) & 0xFF) * w4;
+        int g = ((c00 >> 8) & 0xFF) * w1 + ((c10 >> 8) & 0xFF) * w2 + ((c01 >> 8) & 0xFF) * w3 + ((c11 >> 8) & 0xFF) * w4;
+        int b = (c00 & 0xFF) * w1 + (c10 & 0xFF) * w2 + (c01 & 0xFF) * w3 + (c11 & 0xFF) * w4;
+        r = (r >> SHIFT) & 0xFF;
+        g = (g >> SHIFT) & 0xFF;
+        b = (b >> SHIFT) & 0xFF;
+        return (r << 16) | (g << 8) | b;
+    }
+    else {
+        float r = 0.0f, g = 0.0f, b = 0.0f, total_w = 0.0f;
+        for (int dy = -1; dy <= 2; ++dy) {
+            float wy = cubic_weight(fyfrac - dy);
+            if (wy == 0.0f) continue;
+            for (int dx = -1; dx <= 2; ++dx) {
+                float wx = cubic_weight(fxfrac - dx);
+                float w = wx * wy;
+                if (w == 0.0f) continue;
+                unsigned pix = clampedPixel(ix + dx, iy + dy);
+                r += ((pix >> 16) & 0xFF) * w;
+                g += ((pix >> 8) & 0xFF) * w;
+                b += (pix & 0xFF) * w;
+                total_w += w;
+            }
+        }
+        if (total_w > 0.0f) {
+            int rr = (int)(r / total_w + 0.5f);
+            int gg = (int)(g / total_w + 0.5f);
+            int bb = (int)(b / total_w + 0.5f);
+            if (rr < 0) rr = 0; else if (rr > 255) rr = 255;
+            if (gg < 0) gg = 0; else if (gg > 255) gg = 255;
+            if (bb < 0) bb = 0; else if (bb > 255) bb = 255;
+            return (rr << 16) | (gg << 8) | bb;
+        }
+        return 0;
+    }
+}
+
 void bbResizeImage(bbImage* i, float w, float h)
 {
     debugImage(i, "ResizeImage");
-    gxCanvas* c = i->getFrames()[0];
-    bbTFormImage(i, w / (float)c->getWidth(), 0, 0, h / (float)c->getHeight());
+    int iw = (int)w, ih = (int)h;
+    if (iw < 1) iw = 1;
+    if (ih < 1) ih = 1;
+
+    const std::vector<gxCanvas*>& f = i->getFrames();
+    for (int k = 0; k < (int)f.size(); ++k)
+    {
+        gxCanvas* c = f[k];
+        int hx, hy; c->getHandle(&hx, &hy);
+
+        const std::vector<uint32_t>& src = i->getOrigPixels(k);
+        int srcW = i->origWidth, srcH = i->origHeight;
+
+        gxCanvas* t = gx_graphics->createCanvas(iw, ih, 0);
+        t->setHandle(hx, hy);
+        t->copyMaskFrom(c);
+
+        t->lock();
+        for (int y = 0; y < ih; ++y) {
+            float sy = (y + 0.5f) * srcH / (float)ih;
+            for (int x = 0; x < iw; ++x) {
+                float sx = (x + 0.5f) * srcW / (float)iw;
+                unsigned color = sampleOrigPixel(src, srcW, srcH, sx, sy);
+                t->setPixelFast(x, y, color);
+            }
+        }
+        t->unlock();
+        // i have fourth degree burns all over my entire face
+        i->replaceFrame(k, t);
+        t->backup();
+    }
 }
 
 void bbRotateImage(bbImage* i, float d)
