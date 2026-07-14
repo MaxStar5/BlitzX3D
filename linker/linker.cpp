@@ -172,11 +172,29 @@ bool BBModule::createExe(const char* exe_file, const char* dll_file, bool laa) {
 	int sz = pc; out.write((char*)&sz, 4); out.write(data, pc);
 
 	//write symbols
-	sz = symbols.size(); out.write((char*)&sz, 4);
-	for(it = symbols.begin(); it != symbols.end(); ++it) {
-		std::string t = it->first + '\0';
+	std::vector<std::pair<std::string, int>> allSymbols;
+	for (auto& kv : symbols) {
+		allSymbols.emplace_back(kv.first, kv.second);
+	}
+
+	if (encryptEnabled) {
+		srand((unsigned int)time(nullptr));
+		for (auto& kv : symbols) {
+			if ((rand() % 100) < 70) {
+				int fakeAddr = rand() % pc;
+				allSymbols.emplace_back(kv.first, fakeAddr);
+			}
+		}
+	}
+
+	int totalCount = (int)allSymbols.size();
+	out.write((char*)&totalCount, 4);
+
+	for (auto& pair : allSymbols) {
+		std::string t = pair.first + '\0';
 		out.write(t.data(), t.size());
-		sz = it->second; out.write((char*)&sz, 4);
+		int val = pair.second;
+		out.write((char*)&val, 4);
 	}
 
 	//write relative relocs
@@ -198,18 +216,21 @@ bool BBModule::createExe(const char* exe_file, const char* dll_file, bool laa) {
 	size_t bufSize = buf.size();
 
 	if (encryptEnabled) {
+		const uint32_t SECTION = 0xFFFFFFFF;
 		srand((unsigned int)time(nullptr));
 		uint32_t key = (uint32_t)rand() | ((uint32_t)rand() << 16);
-		size_t finalSize = bufSize + 4;
+		size_t finalSize = 4 + 4 + bufSize;
 		char* finalData = new char[finalSize];
-		memcpy(finalData, &key, 4);
-		memcpy(finalData + 4, buf.data(), bufSize);
-		uint32_t* p = (uint32_t*)(finalData + 4);
+		char* ptr = finalData;
+		memcpy(ptr, &SECTION, 4); ptr += 4;
+		memcpy(ptr, &key, 4); ptr += 4;
+		memcpy(ptr, buf.data(), bufSize);
+		uint32_t* p = (uint32_t*)ptr;
 		for (size_t i = 0; i < bufSize / 4; ++i) {
 			p[i] ^= key;
 		}
 		for (size_t i = (bufSize / 4) * 4; i < bufSize; ++i) {
-			finalData[4 + i] ^= (char)(key >> ((i % 4) * 8));
+			ptr[i] ^= (char)(key >> ((i % 4) * 8));
 		}
 		if (!addSection(".b3dmod", finalData, (int)finalSize)) {
 			delete[] finalData;

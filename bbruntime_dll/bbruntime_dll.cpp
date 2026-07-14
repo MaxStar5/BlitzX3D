@@ -395,15 +395,20 @@ static void link() {
 	size_t dataSize = 0;
 
 	if (pSectionData && sectionSize >= 4) {
-		uint32_t key = *(uint32_t*)pSectionData;
-		p = (char*)pSectionData + 4;
-		dataSize = sectionSize - 4;
-		uint32_t* pData = (uint32_t*)p;
-		for (size_t i = 0; i < dataSize / 4; ++i) {
-			pData[i] ^= key;
-		}
-		for (size_t i = (dataSize / 4) * 4; i < dataSize; ++i) {
-			((char*)p)[i] ^= (char)(key >> ((i % 4) * 8));
+		const uint32_t SECTION = 0xFFFFFFFF;
+		char* dataPtr = (char*)pSectionData + 4;
+		size_t remaining = sectionSize - 4;
+		if (remaining >= 4) {
+			uint32_t key = *(uint32_t*)dataPtr;
+			p = dataPtr + 4;
+			dataSize = remaining - 4;
+			uint32_t* pData = (uint32_t*)p;
+			for (size_t i = 0; i < dataSize / 4; ++i) {
+				pData[i] ^= key;
+			}
+			for (size_t i = (dataSize / 4) * 4; i < dataSize; ++i) {
+				((char*)p)[i] ^= (char)(key >> ((i % 4) * 8));
+			}
 		}
 	}
 	else {
