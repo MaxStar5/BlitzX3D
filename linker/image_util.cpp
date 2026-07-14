@@ -1,5 +1,6 @@
 #include "std.h"
 #include "image_util.h"
+#include <cstring>
 
 #pragma pack( push,1 )
 struct Head {
@@ -340,6 +341,43 @@ bool replaceRsrc(int type, int id, int lang, void* data, int data_sz) {
 		closeRsrcTree(s);
 	}
 	return false;
+}
+
+bool addSection(const char* name, const void* data, int size) {
+	if (!img_file) return false;
+
+	int alignedSize = (size + (opts->file_align - 1)) & ~(opts->file_align - 1);
+	int virtSize = (size + (opts->sect_align - 1)) & ~(opts->sect_align - 1);
+
+	int lastVirtAddr = 0, lastRawAddr = 0;
+	for (auto* s : sections) {
+		int vaEnd = s->sect.virt_addr + s->sect.virt_size;
+		if (vaEnd > lastVirtAddr) lastVirtAddr = vaEnd;
+		int raEnd = s->sect.data_addr + s->sect.data_size;
+		if (raEnd > lastRawAddr) lastRawAddr = raEnd;
+	}
+	int newVirtAddr = (lastVirtAddr + (opts->sect_align - 1)) & ~(opts->sect_align - 1);
+	int newRawAddr = (lastRawAddr + (opts->file_align - 1)) & ~(opts->file_align - 1);
+
+	Section* sec = new Section;
+	memset(&sec->sect, 0, sizeof(Sect));
+	strncpy(sec->sect.name, name, 8);
+	sec->sect.virt_size = virtSize;
+	sec->sect.virt_addr = newVirtAddr;
+	sec->sect.data_size = alignedSize;
+	sec->sect.data_addr = newRawAddr;
+	sec->sect.chars = 0x60000020;
+
+	sec->data = new char[alignedSize];
+	memset(sec->data, 0, alignedSize);
+	memcpy(sec->data, data, size);
+
+	sections.push_back(sec);
+
+	opts->image_size = newVirtAddr + virtSize;
+	head->num_sects++;
+
+	return true;
 }
 
 void closeImage() {

@@ -350,10 +350,26 @@ static int findSym(const std::string& t) {
 	return 0;
 }
 
+static void* findSectionData(const char* sectionName, DWORD* pSize) {
+	HMODULE hMod = GetModuleHandle(nullptr);
+	PIMAGE_DOS_HEADER pDos = (PIMAGE_DOS_HEADER)hMod;
+	if (pDos->e_magic != IMAGE_DOS_SIGNATURE) return nullptr;
+	PIMAGE_NT_HEADERS pNt = (PIMAGE_NT_HEADERS)((BYTE*)pDos + pDos->e_lfanew);
+	if (pNt->Signature != IMAGE_NT_SIGNATURE) return nullptr;
+	PIMAGE_SECTION_HEADER pSection = IMAGE_FIRST_SECTION(pNt);
+	for (int i = 0; i < pNt->FileHeader.NumberOfSections; ++i) {
+		if (memcmp(pSection->Name, sectionName, 8) == 0) {
+			*pSize = pSection->Misc.VirtualSize;
+			return (BYTE*)hMod + pSection->VirtualAddress;
+		}
+		pSection++;
+	}
+	return nullptr;
+}
+
 static void link() {
 
-	while(const char* sc = runtime->nextSym()) {
-
+	while (const char* sc = runtime->nextSym()) {
 		std::string t(sc);
 
 		if(t[0] == '_') {
@@ -373,15 +389,38 @@ static void link() {
 		runtime_syms["_f" + tolower(t)] = runtime->symValue(sc);
 	}
 
-	HRSRC hres = FindResource(0, MAKEINTRESOURCE(1111), RT_RCDATA); if(!hres) fail();
-	HGLOBAL hglo = LoadResource(0, hres); if(!hglo) fail();
-	void* p = LockResource(hglo); if(!p) fail();
+	DWORD sectionSize = 0;
+	void* pSectionData = findSectionData(".b3dmod", &sectionSize);
+	void* p = nullptr;
+	size_t dataSize = 0;
+
+	if (pSectionData && sectionSize >= 4) {
+		uint32_t key = *(uint32_t*)pSectionData;
+		p = (char*)pSectionData + 4;
+		dataSize = sectionSize - 4;
+		uint32_t* pData = (uint32_t*)p;
+		for (size_t i = 0; i < dataSize / 4; ++i) {
+			pData[i] ^= key;
+		}
+		for (size_t i = (dataSize / 4) * 4; i < dataSize; ++i) {
+			((char*)p)[i] ^= (char)(key >> ((i % 4) * 8));
+		}
+	}
+	else {
+		HRSRC hres = FindResource(0, MAKEINTRESOURCE(1111), RT_RCDATA);
+		if (!hres) fail();
+		HGLOBAL hglo = LoadResource(0, hres);
+		if (!hglo) fail();
+		p = LockResource(hglo);
+		if (!p) fail();
+		dataSize = SizeofResource(0, hres);
+	}
 
 	int sz = *(int*)p; p = (int*)p + 1;
 
 	//replace malloc for service pack 2 Data Execution Prevention (DEP).
 	module_pc = VirtualAlloc(0, sz, MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE);
-
+	if (!module_pc) fail();
 	memcpy(module_pc, p, sz);
 	p = (char*)p + sz;
 

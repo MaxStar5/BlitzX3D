@@ -1,6 +1,8 @@
 #include "std.h"
 #include "linker.h"
 #include "image_util.h"
+#include <cstdlib>
+#include <ctime>
 
 class BBModule : public Module {
 public:
@@ -9,6 +11,8 @@ public:
 
 	void* link(Module* libs);
 	bool createExe(const char* exe_file, const char* dll_file, bool laa);
+
+	void setEncryption(bool enable) override { encryptEnabled = enable; }
 
 	int getPC();
 
@@ -25,6 +29,7 @@ private:
 	char* data;
 	int data_sz, pc;
 	bool linked;
+	bool encryptEnabled;
 
 	std::map<std::string, int> symbols;
 	std::map<int, std::string> rel_relocs, abs_relocs;
@@ -48,7 +53,7 @@ private:
 	}
 };
 
-BBModule::BBModule() :data(0), data_sz(0), pc(0), linked(false) {
+BBModule::BBModule() :data(0), data_sz(0), pc(0), linked(false), encryptEnabled(false) {
 }
 
 BBModule::~BBModule() {
@@ -143,12 +148,12 @@ bool BBModule::createExe(const char* exe_file, const char* dll_file, bool laa) {
 	//find proc address of bbWinMain
 	HMODULE hmod = LoadLibrary(dll_file); if(!hmod) return false;
 	int proc = (int)GetProcAddress(hmod, "_bbWinMain@0");
-	int entry = proc - (int)hmod; FreeLibrary(hmod); if(!proc) return false;
+	int entry = proc - (int)hmod;
+	FreeLibrary(hmod);
+	if (!proc) return false;
 
-	if(!CopyFile(dll_file, exe_file, false)) return false;
-
-	if(!openImage(exe_file)) return false;
-
+	if (!CopyFile(dll_file, exe_file, false)) return false;
+	if (!openImage(exe_file)) return false;
 	makeExe(entry, laa);
 
 	//create module
@@ -190,8 +195,32 @@ bool BBModule::createExe(const char* exe_file, const char* dll_file, bool laa) {
 		sz = rit->first; out.write((char*)&sz, 4);
 	}
 
-	replaceRsrc(10, 1111, 1033, buf.data(), buf.size());
+	size_t bufSize = buf.size();
 
+	if (encryptEnabled) {
+		srand((unsigned int)time(nullptr));
+		uint32_t key = (uint32_t)rand() | ((uint32_t)rand() << 16);
+		size_t finalSize = bufSize + 4;
+		char* finalData = new char[finalSize];
+		memcpy(finalData, &key, 4);
+		memcpy(finalData + 4, buf.data(), bufSize);
+		uint32_t* p = (uint32_t*)(finalData + 4);
+		for (size_t i = 0; i < bufSize / 4; ++i) {
+			p[i] ^= key;
+		}
+		for (size_t i = (bufSize / 4) * 4; i < bufSize; ++i) {
+			finalData[4 + i] ^= (char)(key >> ((i % 4) * 8));
+		}
+		if (!addSection(".b3dmod", finalData, (int)finalSize)) {
+			delete[] finalData;
+			closeImage();
+			return false;
+		}
+		delete[] finalData;
+	}
+	else {
+		replaceRsrc(10, 1111, 1033, buf.data(), (int)bufSize);
+	}
 	closeImage();
 
 	return true;
