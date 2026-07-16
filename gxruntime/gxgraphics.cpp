@@ -145,14 +145,14 @@ bool gxGraphics::restore() {
 
 		if (runtime->backBuffer) runtime->backBuffer->Release();
 		runtime->backBuffer = newBack;
-		newBack->AddRef();
+		bool wasAliased = front_canvas && back_canvas && front_canvas->surf == back_canvas->surf;
 
 		if (back_canvas && back_canvas->surf) {
 			back_canvas->surf->Release();
 			back_canvas->surf = newBack;
 			newBack->AddRef();
 		}
-		if (front_canvas && front_canvas->surf == back_canvas->surf) {
+		if (front_canvas && wasAliased) {
 			front_canvas->surf->Release();
 			front_canvas->surf = newBack;
 			newBack->AddRef();
