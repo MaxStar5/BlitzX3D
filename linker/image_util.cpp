@@ -366,7 +366,7 @@ bool addSection(const char* name, const void* data, int size) {
 	sec->sect.virt_addr = newVirtAddr;
 	sec->sect.data_size = alignedSize;
 	sec->sect.data_addr = newRawAddr;
-	sec->sect.chars = 0x60000020;
+	sec->sect.chars = 0xC0000040;
 
 	sec->data = new char[alignedSize];
 	memset(sec->data, 0, alignedSize);

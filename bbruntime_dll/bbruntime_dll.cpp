@@ -434,8 +434,9 @@ static void link() {
 	cnt = *(int*)p; p = (int*)p + 1;
 	for(k = 0; k < cnt; ++k) {
 		Sym sym = getSym(&p);
-		if(sym.value < (int)module_pc || sym.value >= (int)module_pc + sz) fail();
-		module_syms[sym.name] = sym.value;
+		if (sym.value < (int)module_pc || sym.value >= (int)module_pc + sz) fail();
+		if (module_syms.find(sym.name) == module_syms.end())
+			module_syms[sym.name] = sym.value;
 	}
 
 	cnt = *(int*)p; p = (int*)p + 1;
