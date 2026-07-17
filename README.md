@@ -1,6 +1,18 @@
 # BlitzX3D
 This is a fork of Blitz3D TSS, originally based on Blitz3D and maintained by ZiYueCommentary.
 
+## License
+
+Please read the license files before using, modifying, or distributing this
+project!!!
+
+BlitzX3D contains code derived from Blitz3D. The original Blitz3D code remains
+licensed under the zlib/libpng License.
+
+Original BlitzX3D contributions by Chris A. (krimbopple) are licensed under the
+BlitzX3D Community License.
+
+
 ## How to Build
 
 ### Prepare
