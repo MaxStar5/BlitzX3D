@@ -3,6 +3,7 @@
 #include "image_util.h"
 #include <cstdlib>
 #include <ctime>
+#include "cryptseed.h"
 
 class BBModule : public Module {
 public:
@@ -216,14 +217,17 @@ bool BBModule::createExe(const char* exe_file, const char* dll_file, bool laa) {
 	size_t bufSize = buf.size();
 
 	if (encryptEnabled) {
-		const uint32_t SECTION = 0xFFFFFFFF;
 		srand((unsigned int)time(nullptr));
 		uint32_t key = (uint32_t)rand() | ((uint32_t)rand() << 16);
+		uint32_t salt = (uint32_t)rand() | ((uint32_t)rand() << 16);
+
+		uint32_t storedKey = key ^ b3dMixKey(RUNTIME_KEY_SEED, salt);
+
 		size_t finalSize = 4 + 4 + bufSize;
 		char* finalData = new char[finalSize];
 		char* ptr = finalData;
-		memcpy(ptr, &SECTION, 4); ptr += 4;
-		memcpy(ptr, &key, 4); ptr += 4;
+		memcpy(ptr, &salt, 4);       ptr += 4;
+		memcpy(ptr, &storedKey, 4);  ptr += 4;
 		memcpy(ptr, buf.data(), bufSize);
 		uint32_t* p = (uint32_t*)ptr;
 		for (size_t i = 0; i < bufSize / 4; ++i) {

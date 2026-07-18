@@ -19,6 +19,7 @@
 #include <ctime>
 #include <DbgHelp.h>
 #pragma comment(lib, "Dbghelp.lib")
+#include "../linker/cryptseed.h"
 
 static void writeMiniDump(EXCEPTION_POINTERS* pExp) {
 	char path[MAX_PATH];
@@ -394,21 +395,19 @@ static void link() {
 	void* p = nullptr;
 	size_t dataSize = 0;
 
-	if (pSectionData && sectionSize >= 4) {
-		const uint32_t SECTION = 0xFFFFFFFF;
-		char* dataPtr = (char*)pSectionData + 4;
-		size_t remaining = sectionSize - 4;
-		if (remaining >= 4) {
-			uint32_t key = *(uint32_t*)dataPtr;
-			p = dataPtr + 4;
-			dataSize = remaining - 4;
-			uint32_t* pData = (uint32_t*)p;
-			for (size_t i = 0; i < dataSize / 4; ++i) {
-				pData[i] ^= key;
-			}
-			for (size_t i = (dataSize / 4) * 4; i < dataSize; ++i) {
-				((char*)p)[i] ^= (char)(key >> ((i % 4) * 8));
-			}
+	if (pSectionData && sectionSize >= 8) {
+		char* dataPtr = (char*)pSectionData;
+		uint32_t salt = *(uint32_t*)dataPtr;  dataPtr += 4;
+		uint32_t storedKey = *(uint32_t*)dataPtr;  dataPtr += 4;
+		uint32_t key = storedKey ^ b3dMixKey(RUNTIME_KEY_SEED, salt);
+		p = dataPtr;
+		dataSize = sectionSize - 8;
+		uint32_t* pData = (uint32_t*)p;
+		for (size_t i = 0; i < dataSize / 4; ++i) {
+			pData[i] ^= key;
+		}
+		for (size_t i = (dataSize / 4) * 4; i < dataSize; ++i) {
+			((char*)p)[i] ^= (char)(key >> ((i % 4) * 8));
 		}
 	}
 	else {

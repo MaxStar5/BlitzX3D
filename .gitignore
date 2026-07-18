@@ -18,3 +18,4 @@ _release/*.ttf
 */objs/*
 *.zip
 temp
+linker/cryptseed.h

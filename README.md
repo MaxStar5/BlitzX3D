@@ -23,6 +23,12 @@ BlitzX3D Community License.
   - C++ ATL for latest v145 build tools (x86 & x64)
   - ASP.NET and web development
   - A Brain
+    
+### Before building `linker` or `bbruntime_dll`:
+
+1. Copy `linker/cryptseed.h.example` to `linker/cryptseed.h`.
+2. Open `cryptseed.h` and change `RUNTIME_KEY_SEED` to any nonzero value of your own choosing.
+   
 ### Steps
 
 1. Open `blitz3d.sln` in Visual Studio 2022.
