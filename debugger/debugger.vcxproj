@@ -168,6 +168,8 @@
     <ClCompile Include="debugtree.cpp" />
     <ClCompile Include="mainframe.cpp" />
     <ClCompile Include="prefs.cpp" />
+    <ClCompile Include="profiler.cpp" />
+    <ClCompile Include="profilerview.cpp" />
     <ClCompile Include="sourcefile.cpp" />
     <ClCompile Include="stdafx.cpp">
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">Create</PrecompiledHeader>
@@ -182,6 +184,8 @@
     <ClInclude Include="debugtree.h" />
     <ClInclude Include="mainframe.h" />
     <ClInclude Include="prefs.h" />
+    <ClInclude Include="profiler.h" />
+    <ClInclude Include="profilerview.h" />
     <ClInclude Include="resource.h" />
     <ClInclude Include="sourcefile.h" />
     <ClInclude Include="stdafx.h" />

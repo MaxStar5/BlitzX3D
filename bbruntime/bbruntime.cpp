@@ -3,6 +3,7 @@
 #include "bbruntime.h"
 #include "../gxruntime/gxutf8.h"
 #include "../MultiLang/MultiLang.h"
+#include "../debugger/debugger.h"
 #include <codecvt>
 
 std::string* ErrorMessagePool::memoryAccessViolation = 0;
@@ -181,6 +182,20 @@ void bbDebugLog(BBStr* t) {
 }
 
 void _bbDebugStmt(int pos, const char* file) {
+    static int memPushCounter = 0;
+    if (++memPushCounter >= 2000) {
+        memPushCounter = 0;
+        extern BBMemStats bbGetMemStats();
+        BBMemStats ms = bbGetMemStats();
+        DbgSysMemStats sys;
+        sys.tag = DBGSYS_MEMSTATS;
+        sys.objCnt = ms.objCnt;
+        sys.unrelObjCnt = ms.unrelObjCnt;
+        sys.stringCnt = ms.stringCnt;
+        sys.workingSetBytes = ms.workingSetBytes;
+        gx_runtime->debugSys(&sys);
+    }
+
     if (gx_runtime->debugStmt(pos, file)) {
         return;
     }
