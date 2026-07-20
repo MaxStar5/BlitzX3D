@@ -8,6 +8,18 @@
 #include "profiler.h"
 #include "profilerview.h"
 
+enum ELogSeverity
+{
+	LOG_INFO = 0,
+	LOG_WARNING,
+	LOG_ERROR
+};
+
+struct LogEntry {
+	ELogSeverity severity;
+	std::string text;
+};
+
 class MainFrame : public CFrameWnd, public Debugger {
 
 	Tabber tabber;
@@ -21,6 +33,9 @@ class MainFrame : public CFrameWnd, public Debugger {
 	Profiler profiler;
 	std::map<const char*, int> file_tabs;
 	std::map<const char*, SourceFile*> files;
+	CComboBox m_filterCombo;
+	std::vector<LogEntry> m_logEntries;
+	int m_currentFilter;
 
 	int state, step_level, cur_pos;
 	const char* cur_file;
@@ -49,6 +64,9 @@ public:
 	void setRuntime(void* mod, void* env);
 	SourceFile* sourceFile(const char* file);
 
+	void AddLogEntry(ELogSeverity severity, const std::string& text);
+	void RefreshLogDisplay();
+
 	DECLARE_DYNAMIC(MainFrame)
 	DECLARE_MESSAGE_MAP()
 
@@ -56,6 +74,7 @@ public:
 	afx_msg void OnSize(UINT type, int w, int h);
 	afx_msg void OnClose();
 	afx_msg void OnTimer(UINT_PTR id);
+	afx_msg void OnFilterSelChange();
 
 	afx_msg void cmdStop();
 	afx_msg void cmdRun();
