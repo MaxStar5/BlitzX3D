@@ -31,9 +31,8 @@ BlitzX3D Community License.
 ### Steps
 
 1. Open `blitz3d.sln` in Visual Studio 2022.
-2. Download the latest FFmpeg LGPL build from: https://github.com/sudo-nautilus/FFmpeg-Builds-Win32/releases/tag/latest. Get `ffmpeg-master-latest-win32-lgpl-shared.zip`, extract it, and copy the `bin`, `lib`, and `include` folders into the project's ffmpeg directory, replacing any existing files if prompted
-3. Select the **Release** configuration and rebuild the entire solution.
-4. All done! You can find the output files in the `_release` and `_release/bin` directories. Feel free to delete any `.pdb` and `.ilk` files.
+2. Select the **Release** configuration and rebuild the entire solution.
+3. All done! You can find the output files in the `_release` and `_release/bin` directories. Feel free to delete any `.pdb` and `.ilk` files.
 
 ## In Memory of Mark Sibly
 

@@ -4,16 +4,6 @@ The original Blitz3D source code and all third-party components remain licensed
 under their respective original licenses, including the zlib/libpng License
 where applicable.
 
-The following BlitzX3D Community License applies ONLY to original works
-authored by Chris A. (krimbopple) for the BlitzX3D project. It does not replace,
-modify, revoke, or supersede any license governing the original Blitz3D source
-code or any other third-party component.
-
-Where a source file contains both Original Blitz3D Code and BlitzX3D
-Contributions, the Original Blitz3D Code continues to be governed by its
-original license, while Chris A. (krimbopple) licenses only the original
-BlitzX3D Contributions under the terms below.
-
 ===============================================================================
 BLITZX3D COMMUNITY LICENSE
 Version 1.0
