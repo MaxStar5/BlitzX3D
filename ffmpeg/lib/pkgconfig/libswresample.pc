@@ -1,13 +1,14 @@
-prefix=${pcfiledir}/../..
+prefix=/s/BlitzX3D-FFmpeg/build
 exec_prefix=${prefix}
-libdir=${prefix}/lib
-includedir=${prefix}/include
+libdir=/s/BlitzX3D-FFmpeg/build/lib
+includedir=/s/BlitzX3D-FFmpeg/build/include
 
 Name: libswresample
 Description: FFmpeg audio resampling library
 Version: 7.2.100
-Requires: 
-Requires.private: libavutil >= 61.2.100
+Requires: libavutil >= 61.5.100
+Requires.private: 
 Conflicts:
 Libs: -L${libdir}  -lswresample 
+Libs.private: 
 Cflags: -I${includedir}

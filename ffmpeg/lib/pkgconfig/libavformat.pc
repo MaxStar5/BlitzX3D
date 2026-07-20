@@ -1,13 +1,14 @@
-prefix=${pcfiledir}/../..
+prefix=/s/BlitzX3D-FFmpeg/build
 exec_prefix=${prefix}
-libdir=${prefix}/lib
-includedir=${prefix}/include
+libdir=/s/BlitzX3D-FFmpeg/build/lib
+includedir=/s/BlitzX3D-FFmpeg/build/include
 
 Name: libavformat
 Description: FFmpeg container format library
-Version: 63.3.100
-Requires: 
-Requires.private: libavcodec >= 63.5.100, libswresample >= 7.2.100, libavutil >= 61.2.100
+Version: 63.5.101
+Requires: libavcodec >= 63.6.101, libavutil >= 61.5.100
+Requires.private: 
 Conflicts:
 Libs: -L${libdir}  -lavformat 
+Libs.private: 
 Cflags: -I${includedir}

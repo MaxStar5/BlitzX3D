@@ -1,13 +1,14 @@
-prefix=${pcfiledir}/../..
+prefix=/s/BlitzX3D-FFmpeg/build
 exec_prefix=${prefix}
-libdir=${prefix}/lib
-includedir=${prefix}/include
+libdir=/s/BlitzX3D-FFmpeg/build/lib
+includedir=/s/BlitzX3D-FFmpeg/build/include
 
 Name: libavutil
 Description: FFmpeg utility library
-Version: 61.2.100
+Version: 61.5.100
 Requires: 
 Requires.private: 
 Conflicts:
-Libs: -L${libdir}  -lavutil 
+Libs: -L${libdir}  -lavutil user32.lib bcrypt.lib
+Libs.private: 
 Cflags: -I${includedir}
