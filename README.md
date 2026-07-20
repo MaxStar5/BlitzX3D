@@ -17,12 +17,11 @@ BlitzX3D Community License.
 
 ### Prepare
 
-- Visual Studio Community 2026
+- Visual Studio Community 2022
   - Desktop development with C++
-  - C++ MFC for latest v145 build tools (x86 & x64)
-  - C++ ATL for latest v145 build tools (x86 & x64)
+  - C++ MFC for latest v143 build tools (x86 & x64)
+  - C++ ATL for latest v143 build tools (x86 & x64)
   - ASP.NET and web development
-  - A Brain
     
 ### Before building `linker` or `bbruntime_dll`:
 
@@ -31,7 +30,7 @@ BlitzX3D Community License.
    
 ### Steps
 
-1. Open `blitz3d.sln` in Visual Studio 2026.
+1. Open `blitz3d.sln` in Visual Studio 2022.
 2. Download the latest FFmpeg LGPL build from: https://github.com/sudo-nautilus/FFmpeg-Builds-Win32/releases/tag/latest. Get `ffmpeg-master-latest-win32-lgpl-shared.zip`, extract it, and copy the `bin`, `lib`, and `include` folders into the project's ffmpeg directory, replacing any existing files if prompted
 3. Select the **Release** configuration and rebuild the entire solution.
 4. All done! You can find the output files in the `_release` and `_release/bin` directories. Feel free to delete any `.pdb` and `.ilk` files.
