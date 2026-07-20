@@ -40,6 +40,8 @@ class Profiler {
 	std::vector<MemSample> memHistory;
 	int lastMemSampleMs;
 	__int64 lastWorkingSetBytes;
+	std::vector<std::vector<std::string>> stackSamples;
+	int sampleIntervalMs;
 
 public:
 	Profiler();
@@ -80,6 +82,10 @@ public:
 		}
 		return sum;
 	}
+
+	void sampleStack();
+	void clearSamples();
+	const std::vector<std::vector<std::string>>& getStackSamples() const { return stackSamples; }
 };
 
 #endif

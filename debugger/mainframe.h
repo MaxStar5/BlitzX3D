@@ -7,6 +7,7 @@
 #include "debugtree.h"
 #include "profiler.h"
 #include "profilerview.h"
+#include "flamegraph.h"
 
 enum ELogSeverity
 {
@@ -31,6 +32,7 @@ class MainFrame : public CFrameWnd, public Debugger {
 	LocalsTree locals_tree;
 	ProfilerPanel profiler_panel;
 	Profiler profiler;
+	FlameGraphPanel flame_graph_panel;
 	std::map<const char*, int> file_tabs;
 	std::map<const char*, SourceFile*> files;
 	CComboBox m_filterCombo;
@@ -75,6 +77,8 @@ public:
 	afx_msg void OnClose();
 	afx_msg void OnTimer(UINT_PTR id);
 	afx_msg void OnFilterSelChange();
+	afx_msg void OnDestroy();
+	afx_msg void OnTabSelChange(NMHDR* pNMHDR, LRESULT* pResult);
 
 	afx_msg void cmdStop();
 	afx_msg void cmdRun();

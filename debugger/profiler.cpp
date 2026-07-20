@@ -21,6 +21,7 @@ void Profiler::reset() {
 	lastMemSampleMs = 0;
 	lastWorkingSetBytes = 0;
 	startTicks = nowTicks();
+	clearSamples();
 }
 
 void Profiler::enter(const std::string& func) {
@@ -69,4 +70,18 @@ void Profiler::sampleMemory(int objCnt, int unrelObjCnt, int stringCnt, __int64 
 	s.stringCnt = stringCnt;
 	s.workingSetBytes = workingSetBytes;
 	memHistory.push_back(s);
+}
+
+void Profiler::sampleStack() {
+	if (!enabled) return;
+	std::vector<std::string> sample;
+	sample.reserve(stack.size());
+	for (const auto& f : stack) {
+		sample.push_back(f.func);
+	}
+	stackSamples.push_back(sample);
+}
+
+void Profiler::clearSamples() {
+	stackSamples.clear();
 }
