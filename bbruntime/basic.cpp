@@ -90,8 +90,8 @@ int _bbStrCompare(BBStr* lhs, BBStr* rhs) {
 
 int _bbStrToInt(BBStr* s) {
 	int n = 0;
-	try { n = std::stoi(*s); }
-	catch (...) { /* bad data to 0 */ }
+	auto [ptr, ec] = std::from_chars(s->data(), s->data() + s->size(), n);
+	if (ec != std::errc()) n = 0;
 	delete s;
 	return n;
 }
@@ -102,14 +102,20 @@ BBStr* _bbStrFromInt(int n) {
 
 float _bbStrToFloat(BBStr* s) {
 	float n = 0.f;
-	try { n = std::stof(*s); }
-	catch (...) { /* bad data to 0.f */ }
+	auto [ptr, ec] = std::from_chars(s->data(), s->data() + s->size(), n);
+	if (ec != std::errc()) n = 0.f;
 	delete s;
 	return n;
 }
 
 BBStr* _bbStrFromFloat(float n) {
-	return new BBStr(ftoa_s(n));
+	char buf[64];
+	auto [ptr, ec] = std::to_chars(buf, buf + sizeof(buf), n, std::chars_format::general, 7);
+	if (ec != std::errc()) {
+		// fallback to sprintf in case of failure but that shouldn't happen
+		std::snprintf(buf, sizeof(buf), "%.7g", static_cast<double>(n));
+	}
+	return new BBStr(buf, ptr - buf);
 }
 
 BBStr* _bbStrConst(const char* s) {
@@ -417,12 +423,11 @@ BBStr* _bbObjToStr(BBObj* obj) {
 
 int _bbObjToHandle(BBObj* obj) {
 	if (!obj || !obj->fields) return 0;
-	auto it = object_map.find(obj);
-	if (it != object_map.end()) return it->second;
-	++next_handle;
-	object_map[obj] = next_handle;
-	handle_map[next_handle] = obj;
-	return next_handle;
+	auto [it, inserted] = object_map.emplace(obj, ++next_handle);
+	if (inserted) {
+		handle_map.emplace(next_handle, obj);
+	}
+	return it->second;
 }
 
 BBObj* _bbObjFromHandle(int handle, BBObjType* type) {
