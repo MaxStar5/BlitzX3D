@@ -6,6 +6,7 @@
 #include FT_FREETYPE_H
 #include <vector>
 #include <map>
+#include <unordered_map>
 
 class gxCanvas;
 class gxGraphics;
@@ -69,7 +70,7 @@ private:
 
 	int height;
 	FT_Face freeTypeFace;
-	std::map<int, GlyphData> glyphData;
+	std::unordered_map<int, GlyphData> glyphData;
 	gxGraphics* graphics;
 	std::string filename;
 };

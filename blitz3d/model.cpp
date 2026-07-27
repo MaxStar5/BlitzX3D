@@ -128,7 +128,7 @@ void Model::enqueue(gxMesh* mesh, int fv, int vc, int ft, int tc, const Brush& b
 
 void Model::renderQueue(int type) {
 	std::vector<MeshQueue*>* que = &queues[type];
-	std::stable_sort(que->begin(), que->end(), [](const MeshQueue* a, const MeshQueue* b) { return a->getBrush() < b->getBrush(); });
+	std::sort(que->begin(), que->end(), [](const MeshQueue* a, const MeshQueue* b) { return a->getBrush() < b->getBrush(); });
 	for (; que->size(); que->pop_back()) {
 		MeshQueue* q = que->back();
 		q->render();

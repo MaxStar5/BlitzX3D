@@ -36,7 +36,7 @@ gxFont::gxFont(FT_Library ftLibrary, gxGraphics* gfx, const std::string& fn, int
 
 	glyphHeight = height;
 	renderAtlas('T');
-	std::map<int, GlyphData>::iterator it = glyphData.find('T');
+	std::unordered_map<int, GlyphData>::iterator it = glyphData.find('T');
 	if(it != glyphData.end()) {
 		const GlyphData& gd = it->second;
 
@@ -217,7 +217,7 @@ void gxFont::render(gxCanvas* dest, unsigned color_argb, int x, int y, const std
 }
 
 int gxFont::charWidth(int chr) {
-	std::map<int, GlyphData>::iterator it = glyphData.find(chr);
+	std::unordered_map<int, GlyphData>::iterator it = glyphData.find(chr);
 	if(it == glyphData.end()) {
 		renderAtlas(chr);
 		it = glyphData.find(chr);
@@ -226,7 +226,7 @@ int gxFont::charWidth(int chr) {
 }
 
 int gxFont::charAdvance(int chr) {
-	std::map<int, GlyphData>::iterator it = glyphData.find(chr);
+	std::unordered_map<int, GlyphData>::iterator it = glyphData.find(chr);
 	if(it == glyphData.end()) {
 		renderAtlas(chr);
 		it = glyphData.find(chr);
@@ -244,7 +244,7 @@ int gxFont::stringWidth(const std::string& text) {
 	for(int i = 0; i < text.size();) {
 		int codepointLen = UTF8::measureCodepoint(text[i]);
 		int chr = UTF8::decodeCharacter(text.c_str(), i);
-		std::map<int, GlyphData>::iterator it = glyphData.find(chr);
+		std::unordered_map<int, GlyphData>::iterator it = glyphData.find(chr);
 		if(it == glyphData.end()) {
 			renderAtlas(chr);
 			it = glyphData.find(chr);
