@@ -14,14 +14,15 @@ class Model::MeshQueue {
 	Brush brush;
 	gxEffect* effect;
 	int q_type;
+	uint64_t stateKey;
 
 	static MeshQueue* pool;
 
 public:
 	MeshQueue() {}
 
-	MeshQueue(gxMesh* m, int fv, int vc, int ft, int tc, const Brush& b, gxEffect* e = nullptr) :
-		mesh(m), fv(fv), vc(vc), ft(ft), tc(tc), brush(b), effect(e) {
+	MeshQueue(gxMesh* m, int fv, int vc, int ft, int tc, const Brush& b, gxEffect* e = nullptr, uint64_t key) :
+		mesh(m), fv(fv), vc(vc), ft(ft), tc(tc), brush(b), effect(e), stateKey(key) {
 		int n = brush.getBlend();
 		q_type = (n == gxScene::BLEND_REPLACE) ? QUEUE_OPAQUE : QUEUE_TRANSPARENT;
 	}
@@ -31,6 +32,7 @@ public:
 	}
 
 	const Brush& getBrush() const { return brush; }
+	uint64_t getStateKey() const { return stateKey; }
 
 	void render() {
 		gx_scene->setRenderState(brush.getRenderState());
@@ -56,6 +58,26 @@ public:
 };
 
 Model::MeshQueue* Model::MeshQueue::pool;
+
+static uint64_t computeStateKey(const Brush& b, gxEffect* e) {
+	const auto& rs = b.getRenderState();
+	uint64_t key = 0;
+
+	key ^= (uint64_t)rs.blend;
+	key ^= (uint64_t)rs.fx << 8;
+	key ^= (uint64_t)(rs.alpha * 255.0f) << 16;
+	key ^= (uint64_t)(rs.shininess * 255.0f) << 24;
+
+	for (int i = 0; i < gxScene::MAX_TEXTURES; ++i) {
+		if (rs.tex_states[i].canvas) {
+			uint64_t ptr = (uint64_t)(uintptr_t)rs.tex_states[i].canvas;
+			key ^= (ptr << (i * 8)) ^ (ptr >> (64 - i * 8));
+		}
+	}
+
+	if (e) key ^= (uint64_t)(uintptr_t)e << 32;
+	return key;
+}
 
 Model::Model() :
 	space(RENDER_SPACE_LOCAL),
@@ -119,21 +141,26 @@ void Model::enqueue(MeshQueue* q) {
 }
 
 void Model::enqueue(gxMesh* mesh, int fv, int vc, int ft, int tc) {
-	enqueue(new MeshQueue(mesh, fv, vc, ft, tc, render_brush, renderEffect));
+	uint64_t key = computeStateKey(render_brush, renderEffect);
+	enqueue(new MeshQueue(mesh, fv, vc, ft, tc, render_brush, renderEffect, key));
 }
 
 void Model::enqueue(gxMesh* mesh, int fv, int vc, int ft, int tc, const Brush& brush) {
-	enqueue(new MeshQueue(mesh, fv, vc, ft, tc, brush, renderEffect));
+	uint64_t key = computeStateKey(brush, renderEffect);
+	enqueue(new MeshQueue(mesh, fv, vc, ft, tc, brush, renderEffect, key));
 }
 
 void Model::renderQueue(int type) {
-	std::vector<MeshQueue*>* que = &queues[type];
-	std::sort(que->begin(), que->end(), [](const MeshQueue* a, const MeshQueue* b) { return a->getBrush() < b->getBrush(); });
-	for (; que->size(); que->pop_back()) {
-		MeshQueue* q = que->back();
+	auto& que = queues[type];
+	std::sort(que.begin(), que.end(), [](const MeshQueue* a, const MeshQueue* b) {
+			return a->getStateKey() < b->getStateKey();
+		});
+
+	for (auto q : que) {
 		q->render();
 		delete q;
 	}
+	que.clear();
 }
 
 void Model::setEffect(gxEffect* e) {

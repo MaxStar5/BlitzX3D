@@ -438,17 +438,19 @@ void World::render(Model* mod, const RenderContext& rc) {
 	}
 
 	if(trans || mod->queueSize(Model::QUEUE_TRANSPARENT)) {
-		transparents.push(mod);
+		transparents.push_back(mod);
 	}
 }
 
 void World::flushTransparent() {
-
+	std::sort(transparents.begin(), transparents.end(), [](const Model* a, const Model* b) {
+			float da = cam_tform.v.distance(a->getRenderTform().v);
+			float db = cam_tform.v.distance(b->getRenderTform().v);
+			return da > db; 
+		});
 	bool local = true;
-
-	for(; transparents.size(); transparents.pop()) {
-		Model* mod = transparents.top();
-		if(mod->getRenderSpace() == Model::RENDER_SPACE_LOCAL) {
+	for (auto mod : transparents) {
+		if (mod->getRenderSpace() == Model::RENDER_SPACE_LOCAL) {
 			gx_scene->setWorldMatrix((gxScene::Matrix*)&mod->getRenderTform());
 			local = true;
 		}
@@ -458,4 +460,5 @@ void World::flushTransparent() {
 		}
 		mod->renderQueue(Model::QUEUE_TRANSPARENT);
 	}
+	transparents.clear();
 }

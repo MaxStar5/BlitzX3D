@@ -35,9 +35,48 @@ void gxScene::setTex(int n, IDirect3DBaseTexture9* t) {
 	d3d_tex[n] = t;
 }
 
+static uint64_t computeRenderStateKey(const gxScene::RenderState& rs) {
+	uint64_t key = 0;
+
+	key ^= (uint64_t)rs.blend;
+	key ^= (uint64_t)rs.fx << 8;
+	key ^= (uint64_t)(rs.alpha * 255.0f) << 16;
+	key ^= (uint64_t)(rs.shininess * 255.0f) << 24;
+
+	if (rs.effect) key ^= (uint64_t)(uintptr_t)rs.effect << 32;
+
+	for (int i = 0; i < gxScene::MAX_TEXTURES; ++i) {
+		const auto& ts = rs.tex_states[i];
+		if (!ts.canvas) continue;
+
+		uint64_t ptr = (uint64_t)(uintptr_t)ts.canvas;
+		key ^= (ptr << (i * 8)) ^ (ptr >> (64 - i * 8));
+
+		key ^= (uint64_t)ts.blend << (i * 4 + 32);
+		key ^= (uint64_t)ts.flags << (i * 4 + 40);
+
+		key ^= (uint64_t)ts.bumpEnvMat[0][0] << (i * 3);
+		key ^= (uint64_t)ts.bumpEnvMat[0][1] << (i * 3 + 1);
+		key ^= (uint64_t)ts.bumpEnvMat[1][0] << (i * 3 + 2);
+		key ^= (uint64_t)ts.bumpEnvMat[1][1] << (i * 3 + 3);
+		key ^= (uint64_t)ts.bumpEnvScale << (i * 3 + 4);
+		key ^= (uint64_t)ts.bumpEnvOffset << (i * 3 + 5);
+
+		if (ts.matrix) {
+			const float* m = &ts.matrix->elements[0][0];
+			for (int j = 0; j < 12; ++j) {
+				uint32_t bits = *reinterpret_cast<const uint32_t*>(m + j);
+				key ^= (uint64_t)bits << (j % 32);
+				key ^= (uint64_t)bits >> (32 - (j % 32));
+			}
+		}
+	}
+	return key;
+}
+
 gxScene::gxScene(gxGraphics* g, gxCanvas* t) :
 	graphics(g), target(t), dir3dDev(g->dir3dDev),
-	n_texs(0), tris_drawn(0) {
+	n_texs(0), tris_drawn(0), lastStateKey(0) {
 
 	currentEffect = nullptr;
 	D3DXMatrixIdentity(&currentWorld);
@@ -530,18 +569,11 @@ void gxScene::setWorldMatrix(const Matrix* m) {
 void gxScene::setRenderState(const RenderState& rs) {
 	setEffect(rs.effect);
 
-	if (lastRenderStateValid && memcmp(&rs, &lastRenderState, sizeof(RenderState)) == 0) {
-		bool hasTexture = false;
-		for (int k = 0; k < MAX_TEXTURES; ++k) {
-			if (rs.tex_states[k].canvas) {
-				hasTexture = true;
-				break;
-			}
-		}
-		if (!hasTexture) {
-			return;
-		}
+	uint64_t key = computeRenderStateKey(rs);
+	if (key == lastStateKey) {
+		return;
 	}
+	lastStateKey = key;
 
 	bool setmat = false;
 	if (memcmp(rs.color, &material.Diffuse.r, 12)) {

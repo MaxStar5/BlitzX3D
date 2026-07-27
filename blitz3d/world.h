@@ -44,6 +44,7 @@ private:
 	};
 
 	std::unordered_map<int, std::vector<CollInfo>> _collInfo;
+	std::vector<Model*> transparents;
 
 	void collide(Object* src);
 	void render(Camera* c, Mirror* m);

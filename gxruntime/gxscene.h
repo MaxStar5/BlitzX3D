@@ -166,6 +166,8 @@ private:
 	RenderState lastRenderState;
 	bool lastRenderStateValid;
 
+	uint64_t lastStateKey;
+
 	void setRS(int n, int t);
 	void setTSS(int n, int s, int t);
 	void setSamp(int n, int s, int t);
