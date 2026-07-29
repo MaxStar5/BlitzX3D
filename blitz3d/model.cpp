@@ -15,14 +15,24 @@ class Model::MeshQueue {
 	gxEffect* effect;
 	int q_type;
 	uint64_t stateKey;
+	std::vector<float> bone_data;
+	int bone_cnt;
 
 	static MeshQueue* pool;
 
 public:
 	MeshQueue() {}
 
-	MeshQueue(gxMesh* m, int fv, int vc, int ft, int tc, const Brush& b, gxEffect* e = nullptr, uint64_t key) :
-		mesh(m), fv(fv), vc(vc), ft(ft), tc(tc), brush(b), effect(e), stateKey(key) {
+	MeshQueue(gxMesh* m, int fv, int vc, int ft, int tc, const Brush& b, gxEffect* e, uint64_t key) :
+		mesh(m), fv(fv), vc(vc), ft(ft), tc(tc), brush(b), effect(e), stateKey(key), bone_cnt(0) {
+		int n = brush.getBlend();
+		q_type = (n == gxScene::BLEND_REPLACE) ? QUEUE_OPAQUE : QUEUE_TRANSPARENT;
+	}
+
+	MeshQueue(gxMesh* m, int fv, int vc, int ft, int tc, const Brush& b, gxEffect* e, uint64_t key,
+		const float* bones, int n_bones) :
+		mesh(m), fv(fv), vc(vc), ft(ft), tc(tc), brush(b), effect(e), stateKey(key),
+		bone_data(bones, bones + n_bones * 12), bone_cnt(n_bones) {
 		int n = brush.getBlend();
 		q_type = (n == gxScene::BLEND_REPLACE) ? QUEUE_OPAQUE : QUEUE_TRANSPARENT;
 	}
@@ -36,6 +46,11 @@ public:
 
 	void render() {
 		gx_scene->setRenderState(brush.getRenderState());
+		if (bone_cnt > 0) {
+			gx_scene->setEffect(nullptr);
+			gx_scene->renderSkinned(mesh, fv, vc, ft, tc, bone_data.data(), bone_cnt);
+			return;
+		}
 		gx_scene->setEffect(gx_graphics->verifyEffect(effect) ? effect : nullptr);
 		gx_scene->render(mesh, fv, vc, ft, tc);
 	}
@@ -148,6 +163,12 @@ void Model::enqueue(gxMesh* mesh, int fv, int vc, int ft, int tc) {
 void Model::enqueue(gxMesh* mesh, int fv, int vc, int ft, int tc, const Brush& brush) {
 	uint64_t key = computeStateKey(brush, renderEffect);
 	enqueue(new MeshQueue(mesh, fv, vc, ft, tc, brush, renderEffect, key));
+}
+
+void Model::enqueueSkinned(gxMesh* mesh, int fv, int vc, int ft, int tc, const Brush& brush,
+	const float* bone_data, int bone_cnt) {
+	uint64_t key = computeStateKey(brush, renderEffect);
+	enqueue(new MeshQueue(mesh, fv, vc, ft, tc, brush, renderEffect, key, bone_data, bone_cnt));
 }
 
 void Model::renderQueue(int type) {

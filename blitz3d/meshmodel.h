@@ -45,6 +45,10 @@ public:
 	MeshCollider* getCollider()const;
 	const Box& getBox()const;
 
+	//GPU SKINNING
+	static void setGpuSkinningEnabled(bool enable) { gpu_skinning_enabled = enable; }
+	static bool getGpuSkinningEnabled() { return gpu_skinning_enabled; }
+
 private:
 	struct Rep;
 
@@ -54,6 +58,11 @@ private:
 	std::vector<Brush> brushes;
 
 	std::vector<Surface::Bone> surf_bones;
+
+	void packBones(std::vector<float>& out)const;
+	bool wantGpuSkinning();
+	static bool gpu_skinning_enabled;
+	bool warned_bone_overflow = false;
 };
 
 #endif

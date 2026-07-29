@@ -54,25 +54,30 @@ public:
 	void setVertex(int n, const Vertex& v) {
 		vertices[n] = v;
 		if(n < valid_vs) valid_vs = n;
+		if(n < skin_valid_vs) skin_valid_vs = n;
 		++mon->geom_changes;
 	}
 	void setCoords(int n, const Vector& v) {
 		vertices[n].coords = v;
 		if(n < valid_vs) valid_vs = n;
+		if(n < skin_valid_vs) skin_valid_vs = n;
 		++mon->geom_changes;
 	}
 	void setNormal(int n, const Vector& v) {
 		vertices[n].normal = v;
 		if(n < valid_vs) valid_vs = n;
+		if(n < skin_valid_vs) skin_valid_vs = n;
 	}
 	void setColor(int n, unsigned argb) {
 		vertices[n].color = argb;
 		if(n < valid_vs) valid_vs = n;
+		if(n < skin_valid_vs) skin_valid_vs = n;
 	}
 	void setTexCoords(int n, const Vector& v, int i) {
 		vertices[n].tex_coords[i][0] = v.x;
 		vertices[n].tex_coords[i][1] = v.y;
 		if(n < valid_vs) valid_vs = n;
+		if(n < skin_valid_vs) skin_valid_vs = n;
 	}
 	void addTriangle(const Triangle& t) {
 		triangles.push_back(t);
@@ -81,6 +86,7 @@ public:
 	void setTriangle(int n, const Triangle& t) {
 		triangles[n] = t;
 		if(n < valid_ts) valid_ts = n;
+		if(n < skin_valid_ts) skin_valid_ts = n;
 		++mon->geom_changes;
 	}
 
@@ -93,6 +99,7 @@ public:
 
 	gxMesh* getMesh();
 	gxMesh* getMesh(const std::vector<Bone>& bones);
+	gxMesh* getSkinMesh();
 
 	std::string getName()const { return name; }
 	const Brush& getBrush()const { return brush; }
@@ -105,10 +112,13 @@ private:
 	Brush brush;
 	std::string name;
 	gxMesh* mesh;
+	gxMesh* skin_mesh;
 	std::vector<Vertex> vertices;
 	std::vector<Triangle> triangles;
 	int mesh_vs, mesh_ts;
+	int skin_mesh_vs, skin_mesh_ts;
 	int valid_vs, valid_ts;
+	int skin_valid_vs, skin_valid_ts;
 	Monitor* mon;
 	std::vector<Bone> last_bones;
 	bool skin_valid = false;

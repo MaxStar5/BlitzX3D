@@ -82,6 +82,7 @@ gxScene::gxScene(gxGraphics* g, gxCanvas* t) :
 	D3DXMatrixIdentity(&currentWorld);
 	D3DXMatrixIdentity(&currentView);
 	D3DXMatrixIdentity(&currentProj);
+	eyePos[0] = eyePos[1] = eyePos[2] = 0;
 
 	memset(d3d_rs, 0x55, sizeof(d3d_rs));
 	memset(d3d_tss, 0x55, sizeof(d3d_tss));
@@ -547,6 +548,10 @@ void gxScene::setViewMatrix(const Matrix* m) {
 	dir3dDev->SetTransform(D3DTS_VIEW, &viewmatrix);
 }
 
+void gxScene::setEyePosition(const float pos[3]) {
+	eyePos[0] = pos[0]; eyePos[1] = pos[1]; eyePos[2] = pos[2];
+}
+
 void gxScene::setWorldMatrix(const Matrix* m) {
 	D3DMATRIX prev = worldmatrix;
 
@@ -813,6 +818,82 @@ void gxScene::render(gxMesh* mesh, int first_vert, int vert_cnt, int first_tri, 
 	setRS(D3DRS_LIGHTING, true);
 	if(tex_stages > 1) setTexState(1, texstate[1], true);
 	setTexState(0, texstate[0], true);
+}
+
+void gxScene::setSkinShaderConstants() {
+	IDirect3DDevice9* dev = dir3dDev;
+
+	D3DXMATRIX viewProj;
+	D3DXMatrixMultiply(&viewProj, &currentView, &currentProj);
+	D3DXMatrixTranspose(&viewProj, &viewProj); 
+	dev->SetVertexShaderConstantF(192, (const float*)&viewProj, 4);
+
+	static const int SKIN_MAX_LIGHTS = 8;
+	float lpos[8][4], ldiff[8][4], latten[8][4], ldir[8][4];
+	int n = (int)_curLights.size();
+	if (n > SKIN_MAX_LIGHTS) n = SKIN_MAX_LIGHTS;
+
+	int active = 0;
+	for (int i = 0; i < n; ++i) {
+		gxLight* light = _curLights[i];
+		bool enabled;
+		if (fx & FX_FULLBRIGHT) enabled = false;
+		else if (fx & FX_CONDLIGHT) enabled = (light->d3d_light.Type != D3DLIGHT_DIRECTIONAL);
+		else enabled = true;
+		if (!enabled) continue;
+
+		const D3DLIGHT9& L = light->d3d_light;
+		float* p = lpos[active];
+		float* d = ldiff[active];
+		float* a = latten[active];
+		float* dir = ldir[active];
+
+		if (L.Type == D3DLIGHT_DIRECTIONAL) {
+			p[0] = -L.Direction.x; p[1] = -L.Direction.y; p[2] = -L.Direction.z; p[3] = 0;
+		}
+		else {
+			p[0] = L.Position.x; p[1] = L.Position.y; p[2] = L.Position.z;
+			p[3] = (L.Type == D3DLIGHT_SPOT) ? 2.0f : 1.0f;
+		}
+		d[0] = L.Diffuse.r; d[1] = L.Diffuse.g; d[2] = L.Diffuse.b; d[3] = 0;
+		a[0] = L.Attenuation1; a[1] = cosf(L.Theta * 0.5f); a[2] = cosf(L.Phi * 0.5f); a[3] = L.Falloff;
+		dir[0] = L.Direction.x; dir[1] = L.Direction.y; dir[2] = L.Direction.z; dir[3] = 0;
+
+		++active;
+	}
+	if (active > 0) {
+		dev->SetVertexShaderConstantF(196, (const float*)lpos, active);
+		dev->SetVertexShaderConstantF(204, (const float*)ldiff, active);
+		dev->SetVertexShaderConstantF(212, (const float*)latten, active);
+		dev->SetVertexShaderConstantF(220, (const float*)ldir, active);
+	}
+
+	unsigned amb = (fx & FX_FULLBRIGHT) ? 0xffffff : ((fx & FX_CONDLIGHT) ? ambient2 : ambient);
+	float ambf[4] = {
+		((amb >> 16) & 0xff) / 255.0f,
+		((amb >> 8) & 0xff) / 255.0f,
+		(amb & 0xff) / 255.0f,
+		(float)active
+	};
+	dev->SetVertexShaderConstantF(228, ambf, 1);
+
+	float matDiffuse[4] = { material.Diffuse.r, material.Diffuse.g, material.Diffuse.b, material.Diffuse.a };
+	dev->SetVertexShaderConstantF(229, matDiffuse, 1);
+
+	float matSpecular[4] = { material.Specular.r, material.Specular.g, material.Specular.b, material.Power };
+	dev->SetVertexShaderConstantF(230, matSpecular, 1);
+
+	float flags = 0;
+	if (fx & FX_VERTEXCOLOR) flags += 1.0f;
+	if (shininess > 0) flags += 2.0f;
+	float eye[4] = { eyePos[0], eyePos[1], eyePos[2], flags };
+	dev->SetVertexShaderConstantF(231, eye, 1);
+}
+
+void gxScene::renderSkinned(gxMesh* mesh, int first_vert, int vert_cnt, int first_tri, int tri_cnt, const float* bone_data, int bone_cnt) {
+	setSkinShaderConstants();
+	mesh->renderSkinned(first_vert, vert_cnt, first_tri, tri_cnt, bone_data, bone_cnt);
+	tris_drawn += tri_cnt;
 }
 
 void gxScene::end() {

@@ -6,15 +6,18 @@ extern gxGraphics* gx_graphics;
 static Surface::Monitor nop_mon;
 
 Surface::Surface() :
-	mesh(0), mesh_vs(0), mesh_ts(0), valid_vs(0), valid_ts(0), mon(&nop_mon) {
+	mesh(0), skin_mesh(0), mesh_vs(0), mesh_ts(0), skin_mesh_vs(0), skin_mesh_ts(0),
+	valid_vs(0), valid_ts(0), skin_valid_vs(0), skin_valid_ts(0), mon(&nop_mon) {
 }
 
 Surface::Surface(Monitor* m) :
-	mesh(0), mesh_vs(0), mesh_ts(0), valid_vs(0), valid_ts(0), mon(m) {
+	mesh(0), skin_mesh(0), mesh_vs(0), mesh_ts(0), skin_mesh_vs(0), skin_mesh_ts(0),
+	valid_vs(0), valid_ts(0), skin_valid_vs(0), skin_valid_ts(0), mon(m) {
 }
 
 Surface::~Surface() {
 	if(mesh) gx_graphics->freeMesh(mesh);
+	if(skin_mesh) gx_graphics->freeMesh(skin_mesh);
 }
 
 void Surface::setBrush(const Brush& b) {
@@ -27,8 +30,8 @@ void Surface::setName(const std::string& n) {
 }
 
 void Surface::clear(bool verts, bool tris) {
-	if(verts) { vertices.clear(); valid_vs = 0; }
-	if(tris) { triangles.clear(); valid_ts = 0; }
+	if(verts) { vertices.clear(); valid_vs = 0; skin_valid_vs = 0; }
+	if(tris) { triangles.clear(); valid_ts = 0; skin_valid_ts = 0; }
 	++mon->geom_changes;
 }
 
@@ -46,6 +49,7 @@ void Surface::setColor(int n, const Vector& v) {
 
 	vertices[n].color = argb;
 	if(n < valid_vs) valid_vs = n;
+	if(n < skin_valid_vs) skin_valid_vs = n;
 }
 
 Vector Surface::getColor(int n)const {
@@ -115,6 +119,56 @@ gxMesh* Surface::getMesh() {
 	}
 	mesh->unlock();
 	return mesh;
+}
+
+gxMesh* Surface::getSkinMesh() {
+	if (skin_mesh && skin_mesh->dirty()) skin_valid_vs = 0;
+
+	if (skin_valid_vs == vertices.size() && skin_valid_ts == triangles.size()) return skin_mesh;
+
+	int start_vs = skin_valid_vs, start_ts = skin_valid_ts;
+	skin_valid_vs = skin_valid_ts = 0;
+
+	if (skin_mesh_vs < vertices.size() || skin_mesh_ts < triangles.size()) {
+		if (skin_mesh) {
+			gx_graphics->freeMesh(skin_mesh);
+			skin_mesh_vs = vertices.size() + skin_mesh_vs / 2;
+			skin_mesh_ts = triangles.size() + skin_mesh_ts / 2;
+		}
+		else {
+			skin_mesh_vs = vertices.size();
+			skin_mesh_ts = triangles.size();
+		}
+		skin_mesh = gx_graphics->createMesh(skin_mesh_vs, skin_mesh_ts, gxMesh::MESH_SKINNED);
+	}
+
+	if (!skin_mesh || !skin_mesh->lock(true)) {
+		skin_valid_vs = start_vs;
+		skin_valid_ts = start_ts;
+		return skin_mesh;
+	}
+	for (; skin_valid_vs < vertices.size(); ++skin_valid_vs) {
+		const Vertex& v = vertices[skin_valid_vs];
+		unsigned char bones[4] = { 0,0,0,0 };
+		float weights[4] = { 0,0,0,0 };
+		if (v.bone_bones[0] == 255) {
+		}
+		else {
+			for (int n = 0; n < MAX_SURFACE_BONES; ++n) {
+				if (v.bone_bones[n] == 255) break;
+				bones[n] = v.bone_bones[n];
+				weights[n] = v.bone_weights[n];
+			}
+		}
+		Vector coords = v.coords, normal = v.normal;
+		skin_mesh->setSkinVertex(skin_valid_vs, coords, normal, v.color, v.tex_coords, bones, weights);
+	}
+	for (; skin_valid_ts < triangles.size(); ++skin_valid_ts) {
+		const Triangle& t = triangles[skin_valid_ts];
+		skin_mesh->setTriangle(skin_valid_ts, t.verts[0], t.verts[1], t.verts[2]);
+	}
+	skin_mesh->unlock();
+	return skin_mesh;
 }
 
 gxMesh* Surface::getMesh(const std::vector<Bone>& bones) {

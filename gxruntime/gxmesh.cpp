@@ -8,9 +8,16 @@ extern gxRuntime* gx_runtime;
 
 gxMesh::gxMesh(gxGraphics* g, IDirect3DVertexBuffer9* vs, IDirect3DIndexBuffer9* is,
     int max_vs, int max_ts) :
-    graphics(g), vertex_buff(vs), index_buff(is),
-    locked_verts(nullptr), locked_indices(nullptr),
-    max_verts(max_vs), max_tris(max_ts), mesh_dirty(false) {
+    graphics(g), vertex_buff(vs), index_buff(is), vertex_decl(nullptr),
+    locked_verts(nullptr), locked_skin_verts(nullptr), locked_indices(nullptr),
+    max_verts(max_vs), max_tris(max_ts), mesh_dirty(false), skinned(false) {
+}
+
+gxMesh::gxMesh(gxGraphics* g, IDirect3DVertexBuffer9* vs, IDirect3DIndexBuffer9* is,
+    IDirect3DVertexDeclaration9* decl, int max_vs, int max_ts) :
+    graphics(g), vertex_buff(vs), index_buff(is), vertex_decl(decl),
+    locked_verts(nullptr), locked_skin_verts(nullptr), locked_indices(nullptr),
+    max_verts(max_vs), max_tris(max_ts), mesh_dirty(false), skinned(true) {
 }
 
 gxMesh::~gxMesh() {
@@ -20,10 +27,20 @@ gxMesh::~gxMesh() {
 }
 
 bool gxMesh::lock(bool all) {
-    if (locked_verts && locked_indices) return true;
+    if ((locked_verts || locked_skin_verts) && locked_indices) return true;
 
     // lock vert buffer
-    if (!locked_verts) {
+    if (skinned) {
+        if (!locked_skin_verts) {
+            DWORD vflags = D3DLOCK_NOSYSLOCK | (all ? D3DLOCK_DISCARD : D3DLOCK_NOOVERWRITE);
+            void* ptr = nullptr;
+            if (FAILED(vertex_buff->Lock(0, 0, &ptr, vflags))) {
+                return false;
+            }
+            locked_skin_verts = reinterpret_cast<dxSkinVertex*>(ptr);
+        }
+    }
+    else if (!locked_verts) {
         DWORD vflags = D3DLOCK_NOSYSLOCK | (all ? D3DLOCK_DISCARD : D3DLOCK_NOOVERWRITE);
         void* ptr = nullptr;
         if (FAILED(vertex_buff->Lock(0, 0, &ptr, vflags))) {
@@ -38,6 +55,7 @@ bool gxMesh::lock(bool all) {
         void* ptr = nullptr;
         if (FAILED(index_buff->Lock(0, 0, &ptr, iflags))) {
             if (locked_verts) { vertex_buff->Unlock(); locked_verts = nullptr; }
+            if (locked_skin_verts) { vertex_buff->Unlock(); locked_skin_verts = nullptr; }
             return false;
         }
         locked_indices = reinterpret_cast<WORD*>(ptr);
@@ -51,6 +69,10 @@ void gxMesh::unlock() {
     if (locked_verts) {
         vertex_buff->Unlock();
         locked_verts = nullptr;
+    }
+    if (locked_skin_verts) {
+        vertex_buff->Unlock();
+        locked_skin_verts = nullptr;
     }
     if (locked_indices) {
         index_buff->Unlock();
@@ -71,8 +93,38 @@ void gxMesh::render(int first_vert, int vert_cnt, int first_tri, int tri_cnt) {
 
     IDirect3DDevice9* dev = graphics->dir3dDev;
 
+    if (skinned) {
+        dev->SetVertexDeclaration(vertex_decl);
+        dev->SetStreamSource(0, vertex_buff, 0, sizeof(dxSkinVertex));
+        dev->SetIndices(index_buff);
+        dev->DrawIndexedPrimitive(D3DPT_TRIANGLELIST, first_vert, 0, vert_cnt, first_tri * 3, tri_cnt);
+        return;
+    }
+
     dev->SetStreamSource(0, vertex_buff, 0, sizeof(dxVertex));
     dev->SetFVF(VTXFMT);
     dev->SetIndices(index_buff);
     dev->DrawIndexedPrimitive(D3DPT_TRIANGLELIST, first_vert, 0, vert_cnt, first_tri * 3, tri_cnt);
+}
+
+void gxMesh::renderSkinned(int first_vert, int vert_cnt, int first_tri, int tri_cnt,
+    const float* bone_data, int bone_cnt) {
+    unlock();
+
+    IDirect3DDevice9* dev = graphics->dir3dDev;
+    IDirect3DVertexShader9* shader = graphics->getSkinningShader();
+    if (!shader || !vertex_decl) return;
+
+    if (bone_cnt > MAX_SKIN_BONES) bone_cnt = MAX_SKIN_BONES;
+
+    dev->SetVertexShaderConstantF(0, bone_data, bone_cnt * 3);
+
+    dev->SetVertexDeclaration(vertex_decl);
+    dev->SetVertexShader(shader);
+    dev->SetStreamSource(0, vertex_buff, 0, sizeof(dxSkinVertex));
+    dev->SetIndices(index_buff);
+    dev->DrawIndexedPrimitive(D3DPT_TRIANGLELIST, first_vert, 0, vert_cnt, first_tri * 3, tri_cnt);
+
+    dev->SetVertexShader(nullptr);
+    dev->SetVertexDeclaration(nullptr);
 }

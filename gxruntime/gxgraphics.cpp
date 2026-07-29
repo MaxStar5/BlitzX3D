@@ -3,11 +3,12 @@
 #include "gxeffect.h"
 #include "gxruntime.h"
 #include "../gxruntime/gxutf8.h"
+#include <cstring>
 
 extern gxRuntime* gx_runtime;
 static Debugger* debugger;
 
-gxGraphics::gxGraphics(gxRuntime* rt, IDirect3DDevice9Ex* dev, IDirect3DSurface9* front, IDirect3DSurface9* back, bool d3d) : runtime(rt), dir3dDev(dev), frontBuffer(front), backBuffer(back), gfx_lost(false), dummy_mesh(0) {
+gxGraphics::gxGraphics(gxRuntime* rt, IDirect3DDevice9Ex* dev, IDirect3DSurface9* front, IDirect3DSurface9* back, bool d3d) : runtime(rt), dir3dDev(dev), frontBuffer(front), backBuffer(back), gfx_lost(false), dummy_mesh(0), skin_vshader(nullptr), skin_decl(nullptr), skin_shader_load_failed(false), skin_caps_checked(-1) {
 
 	if (dir3dDev) dir3dDev->AddRef();
 	if (frontBuffer) frontBuffer->AddRef();
@@ -65,6 +66,9 @@ gxGraphics::~gxGraphics() {
 	while (movie_set.size()) closeMovie(*movie_set.begin());
 	while (font_set.size()) freeFont(*font_set.begin());
 	while (canvas_set.size()) freeCanvas(*canvas_set.begin());
+	while (mesh_set.size()) freeMesh(*mesh_set.begin());
+	if (skin_vshader) { skin_vshader->Release(); skin_vshader = nullptr; }
+	if (skin_decl) { skin_decl->Release(); skin_decl = nullptr; }
 	/*
 	std::set<std::set<std::any>*>::iterator custom_set_it;
 	for (custom_set_it = custom_set.begin(); custom_set_it != custom_set.end(); ++custom_set_it) {
@@ -477,8 +481,6 @@ void gxGraphics::adoptCanvas(gxCanvas* c) {
 }
 
 gxMesh* gxGraphics::createMesh(int max_verts, int max_tris, int flags) {
-	static const DWORD VTXFMT = D3DFVF_XYZ | D3DFVF_NORMAL | D3DFVF_DIFFUSE | D3DFVF_TEX2 |
-		D3DFVF_TEXCOORDSIZE2(0) | D3DFVF_TEXCOORDSIZE2(1);
 
 	bool dynamic = (flags & gxMesh::MESH_DYNAMIC) != 0;
 	DWORD usage = D3DUSAGE_WRITEONLY | (dynamic ? D3DUSAGE_DYNAMIC : 0);
@@ -486,6 +488,27 @@ gxMesh* gxGraphics::createMesh(int max_verts, int max_tris, int flags) {
 
 	int safe_verts = max_verts > 0 ? max_verts : 1;
 	int safe_tris = max_tris > 0 ? max_tris : 1;
+
+	if (flags & gxMesh::MESH_SKINNED) {
+		if (!ensureSkinningShader()) return nullptr;
+		IDirect3DVertexBuffer9* vb = nullptr;
+		DWORD skin_usage = D3DUSAGE_WRITEONLY | D3DUSAGE_DYNAMIC;
+		if (FAILED(dir3dDev->CreateVertexBuffer(safe_verts * sizeof(gxMesh::dxSkinVertex), skin_usage, 0, pool, &vb, nullptr)))
+		{
+			return nullptr;
+		}
+		IDirect3DIndexBuffer9* ib = nullptr;
+		if (FAILED(dir3dDev->CreateIndexBuffer(safe_tris * 3 * sizeof(WORD), skin_usage, D3DFMT_INDEX16, pool, &ib, nullptr))) {
+			vb->Release();
+			return nullptr;
+		}
+		gxMesh* mesh = new gxMesh(this, vb, ib, skin_decl, max_verts, max_tris);
+		mesh_set.insert(mesh);
+		return mesh;
+	}
+
+	static const DWORD VTXFMT = D3DFVF_XYZ | D3DFVF_NORMAL | D3DFVF_DIFFUSE | D3DFVF_TEX2 |
+		D3DFVF_TEXCOORDSIZE2(0) | D3DFVF_TEXCOORDSIZE2(1);
 
 	IDirect3DVertexBuffer9* vb = nullptr;
 	if (FAILED(dir3dDev->CreateVertexBuffer(safe_verts * sizeof(gxMesh::dxVertex), usage, VTXFMT, pool, &vb, nullptr)))
@@ -506,4 +529,177 @@ gxMesh* gxGraphics::verifyMesh(gxMesh* m) {
 
 void gxGraphics::freeMesh(gxMesh* mesh) {
 	if (mesh_set.erase(mesh)) delete mesh;
+}
+
+// GPU SKINNING
+static const char* SKIN_VSHADER_SRC =
+"#define MAX_BONES 64\n"
+"#define MAX_LIGHTS 8\n"
+"\n"
+"float4x3 boneTforms[MAX_BONES] : register(c0); \n"
+"\n"
+"float4x4 viewProj : register(c192);\n"
+"\n"
+"float4 lightPos[MAX_LIGHTS]     : register(c196); \n"
+"float4 lightDiffuse[MAX_LIGHTS] : register(c204); \n"
+"float4 lightAtten[MAX_LIGHTS]   : register(c212); \n"
+"float4 lightDir[MAX_LIGHTS]     : register(c220); \n"
+"\n"
+"float4 ambientColor     : register(c228); \n"
+"float4 materialDiffuse  : register(c229); \n"
+"float4 materialSpecular : register(c230); \n"
+"float4 eyePos            : register(c231); \n"
+"\n"
+"struct VS_INPUT {\n"
+"    float3 pos      : POSITION;\n"
+"    float3 normal   : NORMAL;\n"
+"    float4 color    : COLOR0;\n"
+"    float2 tex0     : TEXCOORD0;\n"
+"    float2 tex1     : TEXCOORD1;\n"
+"    float4 blendIdx : TEXCOORD2;\n"
+"    float4 blendWgt : TEXCOORD3;\n"
+"};\n"
+"\n"
+"struct VS_OUTPUT {\n"
+"    float4 pos    : POSITION;\n"
+"    float4 color  : COLOR0;\n"
+"    float2 tex0   : TEXCOORD0;\n"
+"    float2 tex1   : TEXCOORD1;\n"
+"    float  fog    : FOG;\n"
+"};\n"
+"\n"
+"VS_OUTPUT main(VS_INPUT IN) {\n"
+"    VS_OUTPUT OUT;\n"
+"\n"
+"    float packedFlags = eyePos.w;\n"
+"    bool useVertexColor = (fmod(packedFlags, 2.0) >= 1.0);\n"
+"    bool useSpecular = (fmod(floor(packedFlags / 2.0), 2.0) >= 1.0);\n"
+"\n"
+"    float3 wPos = float3(0,0,0);\n"
+"    float3 wNrm = float3(0,0,0);\n"
+"    float totalWeight = 0;\n"
+"\n"
+"    [unroll]\n"
+"    for (int i = 0; i < 4; ++i) {\n"
+"        float w = IN.blendWgt[i];\n"
+"        int   b = (int)IN.blendIdx[i];\n"
+"        wPos += mul(float4(IN.pos, 1), boneTforms[b]) * w;\n"
+"        wNrm += mul(IN.normal, (float3x3)boneTforms[b]) * w;\n"
+"        totalWeight += w;\n"
+"    }\n"
+"    if (totalWeight <= 0.00001) {\n"
+"        wPos = mul(float4(IN.pos, 1), boneTforms[0]);\n"
+"        wNrm = mul(IN.normal, (float3x3)boneTforms[0]);\n"
+"    }\n"
+"    wNrm = normalize(wNrm);\n"
+"\n"
+"    OUT.pos = mul(float4(wPos, 1), viewProj);\n"
+"    OUT.fog = OUT.pos.z;\n"
+"    OUT.tex0 = IN.tex0;\n"
+"    OUT.tex1 = IN.tex1;\n"
+"\n"
+"    float3 diffuseBase = useVertexColor ? IN.color.rgb : materialDiffuse.rgb;\n"
+"    float3 lit = ambientColor.rgb * diffuseBase;\n"
+"    float3 spec = float3(0,0,0);\n"
+"    float3 toEye = normalize(eyePos.xyz - wPos);\n"
+"\n"
+"    [loop]\n"
+"    for (int n = 0; n < MAX_LIGHTS; ++n) {\n"
+"        if (n >= (int)ambientColor.w) break;\n"
+"        float3 toLight;\n"
+"        float atten = 1;\n"
+"        if (lightPos[n].w < 0.5) {\n"
+"            toLight = lightPos[n].xyz;\n"
+"        } else {\n"
+"            float3 delta = lightPos[n].xyz - wPos;\n"
+"            float dist = length(delta);\n"
+"            toLight = delta / max(dist, 0.0001);\n"
+"            atten = 1.0 / max(1.0, 1.0 + lightAtten[n].x * dist);\n"
+"            if (lightPos[n].w > 1.5) {\n"
+"                float cosAng = dot(-toLight, lightDir[n].xyz);\n"
+"                float spotT = saturate((cosAng - lightAtten[n].z) / max(lightAtten[n].y - lightAtten[n].z, 0.0001));\n"
+"                atten *= pow(spotT, max(lightAtten[n].w, 0.0001));\n"
+"            }\n"
+"        }\n"
+"        float ndotl = max(0, dot(wNrm, toLight));\n"
+"        lit += lightDiffuse[n].rgb * diffuseBase * ndotl * atten;\n"
+"        if (useSpecular && ndotl > 0) {\n"
+"            float3 halfVec = normalize(toLight + toEye);\n"
+"            float specPow = pow(max(0, dot(wNrm, halfVec)), max(materialSpecular.w, 1.0));\n"
+"            spec += lightDiffuse[n].rgb * materialSpecular.rgb * specPow * atten;\n"
+"        }\n"
+"    }\n"
+"\n"
+"    OUT.color = float4(saturate(lit + spec), (useVertexColor ? IN.color.a : 1) * materialDiffuse.a);\n"
+"    return OUT;\n"
+"}\n";
+
+bool gxGraphics::skinningSupported() {
+	if (skin_caps_checked == -1) {
+		D3DCAPS9 caps;
+		skin_caps_checked = 0;
+		if (dir3dDev && SUCCEEDED(dir3dDev->GetDeviceCaps(&caps))) {
+			if (caps.VertexShaderVersion >= D3DVS_VERSION(3, 0)) {
+				skin_caps_checked = 1;
+			}
+		}
+	}
+	return skin_caps_checked == 1;
+}
+
+bool gxGraphics::ensureSkinningShader() {
+	if (skin_vshader && skin_decl) return true;
+	if (skin_shader_load_failed) return false;
+
+	if (!skinningSupported()) {
+		runtime->debugLog("GPU skinning: vs_3_0 not supported, falling back to CPU");
+		skin_shader_load_failed = true;
+		return false;
+	}
+
+	if (!skin_decl) {
+		static const D3DVERTEXELEMENT9 decl[] = {
+			{0, 0,  D3DDECLTYPE_FLOAT3, D3DDECLMETHOD_DEFAULT, D3DDECLUSAGE_POSITION, 0},
+			{0, 12, D3DDECLTYPE_FLOAT3, D3DDECLMETHOD_DEFAULT, D3DDECLUSAGE_NORMAL,   0},
+			{0, 24, D3DDECLTYPE_D3DCOLOR, D3DDECLMETHOD_DEFAULT, D3DDECLUSAGE_COLOR, 0},
+			{0, 28, D3DDECLTYPE_FLOAT2, D3DDECLMETHOD_DEFAULT, D3DDECLUSAGE_TEXCOORD, 0},
+			{0, 36, D3DDECLTYPE_FLOAT2, D3DDECLMETHOD_DEFAULT, D3DDECLUSAGE_TEXCOORD, 1},
+			{0, 44, D3DDECLTYPE_FLOAT4, D3DDECLMETHOD_DEFAULT, D3DDECLUSAGE_TEXCOORD, 2},
+			{0, 60, D3DDECLTYPE_FLOAT4, D3DDECLMETHOD_DEFAULT, D3DDECLUSAGE_TEXCOORD, 3},
+			D3DDECL_END()
+		};
+		if (FAILED(dir3dDev->CreateVertexDeclaration(decl, &skin_decl))) {
+			runtime->debugLog("GPU skinning: CreateVertexDeclaration failed");
+			skin_shader_load_failed = true;
+			return false;
+		}
+	}
+
+	ID3DXBuffer* code = nullptr;
+	ID3DXBuffer* errors = nullptr;
+	HRESULT hr = D3DXCompileShader(SKIN_VSHADER_SRC, (UINT)strlen(SKIN_VSHADER_SRC), nullptr, nullptr, "main", "vs_3_0", 0, &code, &errors, nullptr);
+	if (FAILED(hr)) {
+		if (errors) {
+			runtime->debugLog("GPU skinning shader compilation failed:");
+			runtime->debugLog((const char*)errors->GetBufferPointer());
+			errors->Release();
+		}
+		else {
+			runtime->debugLog("GPU skinning: D3DXCompileShader failed with no error buffer");
+		}
+		skin_shader_load_failed = true;
+		return false;
+	}
+	if (errors) errors->Release();
+
+	hr = dir3dDev->CreateVertexShader((const DWORD*)code->GetBufferPointer(), &skin_vshader);
+	code->Release();
+	if (FAILED(hr)) {
+		runtime->debugLog("GPU skinning: CreateVertexShader failed");
+		skin_shader_load_failed = true;
+		return false;
+	}
+
+	runtime->debugLog("GPU skinning shader compiled successfully");
+	return true;
 }

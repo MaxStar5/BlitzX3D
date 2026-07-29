@@ -238,6 +238,11 @@ void bbHWMultiTex(int enable) {
 	gx_scene->setHWMultiTex(!!enable);
 }
 
+void bbGpuSkinning(int enable) {
+	debug3d("GpuSkinning");
+	MeshModel::setGpuSkinningEnabled(!!enable);
+}
+
 void bbWBuffer(int enable) {
 	debug3d("WBuffer");
 	gx_scene->setWBuffer(!!enable);
@@ -2150,6 +2155,7 @@ void blitz3d_close() {
 	delete world;
 	gx_scene = 0;
 	if (gx_graphics) gx_graphics->freeScene(scene);
+	MeshModel::setGpuSkinningEnabled(false);
 }
 
 bool blitz3d_create() {
@@ -2166,6 +2172,7 @@ bool blitz3d_destroy() {
 void blitz3d_link(void (*rtSym)(const char* sym, void* pc)) {
 	rtSym("LoaderMatrix$file_ext#xx#xy#xz#yx#yy#yz#zx#zy#zz", bbLoaderMatrix);
 	rtSym("HWMultiTex%enable", bbHWMultiTex);
+	rtSym("GpuSkinning%enable", bbGpuSkinning);
 	rtSym("%HWTexUnits", bbHWTexUnits);
 	rtSym("%GfxDriverCaps3D", bbGfxDriverCaps3D);
 	rtSym("WBuffer%enable", bbWBuffer);

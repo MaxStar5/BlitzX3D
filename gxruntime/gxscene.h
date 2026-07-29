@@ -106,6 +106,7 @@ public:
 	void setPerspProj(float nr, float fr, float nr_w, float nr_h);
 	void setViewMatrix(const Matrix* matrix);
 	void setWorldMatrix(const Matrix* matrix);
+	void setEyePosition(const float pos[3]);
 	void setRenderState(const RenderState& state);
 	void setEffect(gxEffect* effect);
 
@@ -113,6 +114,7 @@ public:
 	bool begin(const std::vector<gxLight*>& lights);
 	void clear(const float rgb[3], float alpha, float z, bool clear_argb, bool clear_z);
 	void render(gxMesh* mesh, int first_vert, int vert_cnt, int first_tri, int tri_cnt);
+	void renderSkinned(gxMesh* mesh, int first_vert, int vert_cnt, int first_tri, int tri_cnt, const float* bone_data, int bone_cnt);
 	void end();
 
 	//lighting
@@ -154,6 +156,7 @@ private:
 
 	gxEffect* currentEffect;
 	D3DXMATRIX currentWorld, currentView, currentProj;
+	float eyePos[3];
 
 	std::set<gxLight*> _allLights;
 	std::vector<gxLight*> _curLights;
@@ -180,6 +183,7 @@ private:
 	void setTriCull();
 	void setTexState(int index, const TexState& state, bool set_blend);
 	void setEffectInternal(gxEffect* e);
+	void setSkinShaderConstants();
 };
 
 #endif

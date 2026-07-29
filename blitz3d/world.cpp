@@ -391,6 +391,7 @@ void World::render(Camera* cam, Mirror* mirror) {
 
 	//set camera matrix
 	gx_scene->setViewMatrix((gxScene::Matrix*)&(-cam_tform));
+	gx_scene->setEyePosition(&cam_tform.v.x);
 
 	//initialize render context
 	RenderContext rc(cam_tform, cam->getFrustum(), mirror != 0);

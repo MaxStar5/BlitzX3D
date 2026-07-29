@@ -71,6 +71,7 @@ public:
 
 	void enqueue(gxMesh* mesh, int first_vert, int vert_cnt, int first_tri, int tri_cnt);
 	void enqueue(gxMesh* mesh, int first_vert, int vert_cnt, int first_tri, int tri_cnt, const Brush& b);
+	void enqueueSkinned(gxMesh* mesh, int first_vert, int vert_cnt, int first_tri, int tri_cnt, const Brush& b, const float* bone_data, int bone_cnt);
 
 	int queueSize(int type)const { return queues[type].size(); }
 

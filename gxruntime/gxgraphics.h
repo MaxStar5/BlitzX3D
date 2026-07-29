@@ -130,6 +130,17 @@ public:
 	gxMesh* createMesh(int max_verts, int max_tris, int flags);
 	gxMesh* verifyMesh(gxMesh* mesh);
 	void freeMesh(gxMesh* mesh);
+
+	//GPU SKINNING
+	bool skinningSupported();
+	bool ensureSkinningShader();
+	IDirect3DVertexShader9* getSkinningShader()const { return skin_vshader; }
+
+private:
+	IDirect3DVertexShader9* skin_vshader;
+	IDirect3DVertexDeclaration9* skin_decl;
+	bool skin_shader_load_failed;
+	int skin_caps_checked;   //-1 unknown, 0 unsupported, 1 supported
 };
 
 #endif

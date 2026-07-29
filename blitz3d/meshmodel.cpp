@@ -3,6 +3,9 @@
 #include "meshcollider.h"
 
 extern gxGraphics* gx_graphics;
+extern gxRuntime* gx_runtime;
+
+bool MeshModel::gpu_skinning_enabled = false;
 
 struct MeshModel::Rep : public Surface::Monitor {
 
@@ -199,6 +202,33 @@ void MeshModel::createBones() {
 	}
 }
 
+bool MeshModel::wantGpuSkinning() {
+	if (!gpu_skinning_enabled) return false;
+	if (!gx_graphics) return false;
+	if (!gx_graphics->skinningSupported()) return false;
+	if (!gx_graphics->getSkinningShader()) return false;
+	if ((int)surf_bones.size() > gxMesh::MAX_SKIN_BONES) {
+		if (!warned_bone_overflow) {
+			std::string msg = "GPU skinning: mesh has " + std::to_string((int)surf_bones.size()) + " bones (max " + std::to_string((int)gxMesh::MAX_SKIN_BONES) + "), falling back to CPU skinning";
+			gx_runtime->debugLog(msg.c_str());
+			warned_bone_overflow = true;
+		}
+		return false;
+	}
+	return true;
+}
+
+void MeshModel::packBones(std::vector<float>& out)const {
+	out.resize(surf_bones.size() * 12);
+	for (int k = 0; k < surf_bones.size(); ++k) {
+		const Transform& t = surf_bones[k].coord_tform;
+		float* col = &out[k * 12];
+		col[0] = t.m.i.x; col[1] = t.m.j.x; col[2] = t.m.k.x; col[3] = t.v.x;
+		col[4] = t.m.i.y; col[5] = t.m.j.y; col[6] = t.m.k.y; col[7] = t.v.y;
+		col[8] = t.m.i.z; col[9] = t.m.j.z; col[10] = t.m.k.z; col[11] = t.v.z;
+	}
+}
+
 bool MeshModel::render(const RenderContext& rc) {
 
 	const Box& b = rep->getCullBox();
@@ -238,10 +268,20 @@ bool MeshModel::render(const RenderContext& rc) {
 		surf_bones[k].normal_tform = t.m.cofactor();
 	}
 
+	bool use_gpu = wantGpuSkinning();
+	std::vector<float> packed_bones;
+	if (use_gpu) packBones(packed_bones);
+
 	bool trans = false;
 	for(k = 0; k < rep->surfaces.size(); ++k) {
 		Surface* s = rep->surfaces[k];
 		if(brushes[k].getBlend() == gxScene::BLEND_REPLACE) {
+			if (use_gpu) {
+				if (gxMesh* mesh = s->getSkinMesh()) {
+					enqueueSkinned(mesh, 0, s->numVertices(), 0, s->numTriangles(), brushes[k], packed_bones.data(), (int)surf_bones.size());
+					continue;
+				}
+			}
 			if(gxMesh* mesh = s->getMesh(surf_bones)) {
 				enqueue(mesh, 0, s->numVertices(), 0, s->numTriangles(), brushes[k]);
 			}
@@ -255,9 +295,19 @@ bool MeshModel::render(const RenderContext& rc) {
 
 void MeshModel::renderQueue(int type) {
 	if(type == QUEUE_TRANSPARENT && surf_bones.size()) {
+		bool use_gpu = wantGpuSkinning();
+		std::vector<float> packed_bones;
+		if (use_gpu) packBones(packed_bones);
+
 		for(int k = 0; k < rep->surfaces.size(); ++k) {
 			Surface* s = rep->surfaces[k];
 			if(brushes[k].getBlend() != gxScene::BLEND_REPLACE) {
+				if (use_gpu) {
+					if (gxMesh* mesh = s->getSkinMesh()) {
+						enqueueSkinned(mesh, 0, s->numVertices(), 0, s->numTriangles(), brushes[k], packed_bones.data(), (int)surf_bones.size());
+						continue;
+					}
+				}
 				if(gxMesh* mesh = s->getMesh(surf_bones)) {
 					enqueue(mesh, 0, s->numVertices(), 0, s->numTriangles(), brushes[k]);
 				}
