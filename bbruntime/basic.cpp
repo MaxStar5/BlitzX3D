@@ -15,10 +15,10 @@ static int objCnt;
 static int unrelObjCnt;
 
 //how many objects to alloc per block
-static const int OBJ_NEW_INC = 512;
+static const int OBJ_NEW_INC = 4096;   // was 512
 
 //how many strings to alloc per block
-static const int STR_NEW_INC = 512;
+static const int STR_NEW_INC = 2048;   // was 512
 
 //current data ptr
 static BBData* dataPtr;

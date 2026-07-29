@@ -407,10 +407,15 @@ void World::render(Camera* cam, Mirror* mirror) {
 	}
 
 	gx_scene->setZMode(gxScene::ZMODE_NORMAL);
-	std::sort(unord_mods.begin(), unord_mods.end(), [](const Model* a, const Model* b) { return a->getBrush() < b->getBrush(); });
+	std::map<Brush, std::vector<Model*>> buckets;
 	for (Model* mod : unord_mods) {
-		if(!mod->doAutoFade(cam_tform.v)) continue;
-		render(mod, rc);
+		buckets[mod->getBrush()].push_back(mod);
+	}
+	for (auto& bucket : buckets) {
+		for (Model* mod : bucket.second) {
+			if (!mod->doAutoFade(cam_tform.v)) continue;
+			render(mod, rc);
+		}
 	}
 	gx_scene->setZMode(gxScene::ZMODE_CMPONLY);
 	flushTransparent();

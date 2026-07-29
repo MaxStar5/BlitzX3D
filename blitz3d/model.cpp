@@ -55,7 +55,7 @@ public:
 		gx_scene->render(mesh, fv, vc, ft, tc);
 	}
 	void* operator new(size_t sz) {
-		static const int GROW = 256;
+		static const int GROW = 2048;
 		if(!pool) {
 			pool = new MeshQueue[GROW];
 			for(int k = 0; k < GROW - 1; ++k) pool[k].next = &pool[k + 1];
