@@ -316,23 +316,29 @@ void Assem_x86::assemLine(const std::string& line) {
 }
 
 void Assem_x86::assemble() {
+	std::string buffer((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+	if (buffer.empty()) return;
 
-	std::string line;
+	const char* p = buffer.data();
+	const char* end = p + buffer.size();
+	int lineNum = 0;
 
-	while(!in.eof()) {
+	while (p < end) {
+		const char* lineStart = p;
+		while (p < end && *p != '\n' && *p != '\r') ++p;
+		const char* lineEnd = p;
+
+		if (p < end && *p == '\r') ++p;
+		if (p < end && *p == '\n') ++p;
+
+		std::string line(lineStart, lineEnd - lineStart);
+		line += '\n';
+		lineNum++;
 		try {
-			getline(in, line);
-			line += '\n';
-#ifdef LOG
-			std::clog << line;
-#endif
 			assemLine(line);
-#ifdef LOG
-			std::clog << "";
-#endif
 		}
 		catch(Ex& x) {
-			throw Ex(line + x.ex);
+			throw Ex(line + x.ex, x.pos, x.file);
 		}
 	}
 }
