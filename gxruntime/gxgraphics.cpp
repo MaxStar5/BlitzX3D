@@ -99,11 +99,15 @@ gxEffect* gxGraphics::createEffect(const std::string& filename) {
 	HRESULT hr = D3DXCreateEffectFromFile(dir3dDev, filename.c_str(), nullptr, nullptr, 0, nullptr, &effect, &errors);
 	if (FAILED(hr)) {
 		if (errors) {
-			runtime->debugLog((const char*)errors->GetBufferPointer());
+			lastEffectError = (const char*)errors->GetBufferPointer();
 			errors->Release();
+		}
+		else {
+			lastEffectError = "Unknown error creating effect";
 		}
 		return nullptr;
 	}
+	lastEffectError.clear();
 	gxEffect* e = new gxEffect(this, effect);
 	effect_set.insert(e);
 	return e;

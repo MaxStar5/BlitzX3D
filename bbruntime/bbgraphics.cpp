@@ -930,6 +930,10 @@ BBStr* bbConvertToUTF8(BBStr* str)
     return ret;
 }
 
+BBStr* bbGetTextureLoadError() {
+    return new BBStr(ddUtil::getLastImageError());
+}
+
 void bbCopyRect(int sx, int sy, int w, int h, int dx, int dy, gxCanvas* src, gxCanvas* dest)
 {
     if (src) debugCanvas(src, "CopyRect");
@@ -1648,6 +1652,13 @@ void bbTFormFilter(int enable)
     filter = enable ? true : false;
 }
 
+BBStr* bbGetEffectError() {
+    if (gx_graphics) {
+        return new BBStr(gx_graphics->getLastEffectError());
+    }
+    return new BBStr("");
+}
+
 static int p_ox, p_oy, p_hx, p_hy, p_vpx, p_vpy, p_vpw, p_vph;
 
 static gxCanvas* startPrinting()
@@ -2044,6 +2055,8 @@ void graphics_link(void (*rtSym)(const char* sym, void* pc))
     rtSym("SetTFormMethod%method", bbSetTFormMethod);
     rtSym("TFormFilter%enable", bbTFormFilter);
     rtSym("SetTextureLoadPathMutator%mutator", bbSetTextureLoadPathMutator);
+
+    rtSym("$GetEffectError", bbGetEffectError);
 
     rtSym("%ImagesOverlap%image1%x1%y1%image2%x2%y2", bbImagesOverlap);
     rtSym("%ImagesCollide%image1%x1%y1%frame1%image2%x2%y2%frame2", bbImagesCollide);

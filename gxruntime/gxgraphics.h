@@ -47,6 +47,7 @@ private:
 	gxFont* def_font;
 	bool gfx_lost;
 	gxMesh* dummy_mesh;
+	std::string lastEffectError;
 
 	std::set<gxFont*> font_set;
 	std::set<gxCanvas*> canvas_set;
@@ -81,6 +82,7 @@ public:
 	gxEffect* createEffect(const std::string& filename);
 	gxEffect* verifyEffect(gxEffect* e);
 	void freeEffect(gxEffect* e);
+	const std::string& getLastEffectError() const { return lastEffectError; }
 
 	//MANIPULATORS
 	void vwait();
