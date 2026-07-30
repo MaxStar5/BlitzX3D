@@ -33,6 +33,7 @@ public:
 	void update(float elapsed);
 	void capture();
 	void render(float tween);
+	void renderEntity(Camera* cam, float tween);
 
 	bool checkLOS(Object* src, Object* dest);
 	bool hitTest(const Line& line, float radius, Object* obj, const Transform& tf, int method, Collision* curr_coll);
