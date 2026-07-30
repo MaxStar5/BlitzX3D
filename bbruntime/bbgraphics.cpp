@@ -4,6 +4,8 @@
 #include "../gxruntime/gxutf8.h"
 #include "../MultiLang/MultiLang.h"
 #include <algorithm>
+#include "../blitz3d/texture.h"
+#include "../blitz3d/cachedtexture.h"
 
 gxGraphics* gx_graphics;
 gxCanvas* gx_canvas;
@@ -126,6 +128,7 @@ static unsigned curr_clsColor;
 static std::vector<GfxMode> gfx_modes;
 
 TexturePathMutator g_texturePathMutator = nullptr;
+extern std::unordered_set<Texture*> texture_set;
 
 static inline void debugImage(bbImage* i, const char* function, int frame = 0)
 {
@@ -1141,13 +1144,22 @@ bbImage* bbLoadAnimImage(BBStr* s, int w, int h, int first, int cnt) {
     return image;
 }
 
-bbImage* bbLoadAnimTextureGrid(BBStr* file, int flags, int columns, int rows, int first, int cnt) {
-    std::string f = *file;
+Texture* bbLoadAnimTextureGrid(BBStr* file, int flags, int columns, int rows, int first, int cnt) {
+    std::string path = *file;
+    if (g_texturePathMutator) {
+        BBStr* newPath = g_texturePathMutator(file);
+        if (newPath) {
+            path = *newPath;
+            delete newPath;
+        }
+    }
     delete file;
 
-    IDirect3DTexture9* picTex = ddUtil::loadTextureSurface(f, flags, gx_graphics, false);
-    if (!picTex) return 0;
-
+    IDirect3DTexture9* picTex = ddUtil::loadTextureSurface(path, flags, gx_graphics, false);
+    if (!picTex) {
+        ErrorLog("LoadAnimTextureGrid", "Failed to load image");
+        return nullptr;
+    }
     gxCanvas* pic = new gxCanvas(gx_graphics, picTex, gxCanvas::CANVAS_TEXTURE);
     gx_graphics->adoptCanvas(pic);
 
@@ -1156,59 +1168,67 @@ bbImage* bbLoadAnimTextureGrid(BBStr* file, int flags, int columns, int rows, in
 
     if (columns <= 0 || rows <= 0) {
         gx_graphics->freeCanvas(pic);
-        ErrorLog("LoadAnimTextureGrid", "Columns and rows must be positive.");
-        return 0;
+        ErrorLog("LoadAnimTextureGrid", "Columns and rows must be positive");
+        return nullptr;
     }
     int frameW = texW / columns;
     int frameH = texH / rows;
     if (frameW <= 0 || frameH <= 0) {
         gx_graphics->freeCanvas(pic);
-        ErrorLog("LoadAnimTextureGrid", "Invalid grid dimensions.");
-        return 0;
+        ErrorLog("LoadAnimTextureGrid", "Invalid grid dimensions");
+        return nullptr;
     }
     int totalFrames = columns * rows;
     if (first < 0 || cnt <= 0 || first + cnt > totalFrames) {
         gx_graphics->freeCanvas(pic);
-        ErrorLog("LoadAnimTextureGrid", "Frame range out of bounds.");
-        return 0;
+        ErrorLog("LoadAnimTextureGrid", "Frame range out of bounds");
+        return nullptr;
     }
 
-    int fpr = columns;
-    int src_x = (first % fpr) * frameW;
-    int src_y = (first / fpr) * frameH;
+    int rowWidth = frameW * cnt;
+    int rowHeight = frameH;
+    gxCanvas* rowCanvas = gx_graphics->createCanvas(rowWidth, rowHeight, gxCanvas::CANVAS_TEXTURE);
+    if (!rowCanvas) {
+        gx_graphics->freeCanvas(pic);
+        ErrorLog("LoadAnimTextureGrid", "Failed to create temporary canvas");
+        return nullptr;
+    }
 
-    std::vector<gxCanvas*> frames;
     for (int k = 0; k < cnt; ++k) {
-        IDirect3DTexture9* tex = ddUtil::createTextureSurface(frameW, frameH, flags, gx_graphics, false);
-        if (!tex) {
-            for (int i = 0; i < k; ++i) gx_graphics->freeCanvas(frames[i]);
-            gx_graphics->freeCanvas(pic);
-            return 0;
-        }
-        gxCanvas* c = new gxCanvas(gx_graphics, tex, gxCanvas::CANVAS_TEXTURE);
-        gx_graphics->adoptCanvas(c);
+        int idx = first + k;
+        int srcX = (idx % columns) * frameW;
+        int srcY = (idx / columns) * frameH;
+        int dstX = k * frameW;
+        rowCanvas->blit(dstX, 0, pic, srcX, srcY, frameW, frameH, true);
+    }
+    rowCanvas->backup();
 
-        c->setLogicalSize(frameW, frameH);
-        c->blit(0, 0, pic, src_x, src_y, frameW, frameH, true);
-        c->backup();
-
-        extern bool auto_midhandle;
-        if (auto_midhandle) c->setHandle(frameW / 2, frameH / 2);
-
-        frames.push_back(c);
-
-        src_x += frameW;
-        if (src_x + frameW > texW) {
-            src_x = 0;
-            src_y += frameH;
-        }
+    char tempPath[MAX_PATH];
+    GetTempPathA(MAX_PATH, tempPath);
+    std::string tempFile = std::string(tempPath) + "temp_anim_texture.bmp";
+    if (!saveCanvas(rowCanvas, tempFile)) {
+        gx_graphics->freeCanvas(pic);
+        gx_graphics->freeCanvas(rowCanvas);
+        ErrorLog("LoadAnimTextureGrid", "Failed to save temporary canvas");
+        return nullptr;
     }
 
-    gx_graphics->freeCanvas(pic);
+    Texture* tex = new Texture(tempFile, flags, frameW, frameH, 0, cnt);
+    if (!tex->getCanvas(0)) {
+        delete tex;
+        tex = nullptr;
+        ErrorLog("LoadAnimTextureGrid", "Failed to create Texture from temporary file");
+    }
 
-    bbImage* image = new bbImage(frames);
-    image_set.insert(image);
-    return image;
+    DeleteFileA(tempFile.c_str());
+    gx_graphics->freeCanvas(pic);
+    gx_graphics->freeCanvas(rowCanvas);
+
+    if (tex) {
+        texture_set.insert(tex);
+    }
+
+    return tex;
 }
 
 bbImage* bbCopyImage(bbImage* i)
