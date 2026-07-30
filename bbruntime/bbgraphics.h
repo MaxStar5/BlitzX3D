@@ -96,6 +96,7 @@ bbImage* bbLoadImage(BBStr* s);
 bbImage* bbLoadImageFlag(BBStr* s, int flags);
 bbImage* bbCopyImage(bbImage* i);
 bbImage* bbCreateImage(int w, int h, int n);
+bbImage* bbCreateImageFlag(int w, int h, int n, int flags);
 bbImage* bbLoadAnimImage(BBStr* s, int w, int h, int first, int cnt);
 Texture* bbLoadAnimTextureGrid(BBStr* file, int flags, int columns, int rows, int first, int count);
 void	 bbFreeImage(bbImage* i);

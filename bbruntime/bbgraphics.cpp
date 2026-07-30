@@ -1298,6 +1298,26 @@ bbImage* bbCreateImage(int w, int h, int n)
     return i;
 }
 
+bbImage* bbCreateImageFlag(int w, int h, int n, int flags)
+{
+    std::vector<gxCanvas*> frames;
+    for (int k = 0; k < n; ++k)
+    {
+        gxCanvas* c = gx_graphics->createCanvas(w, h, flags);
+        if (!c)
+        {
+            for (--k; k >= 0; --k) gx_graphics->freeCanvas(frames[k]);
+            return 0;
+        }
+        if (auto_dirty) c->backup();
+        if (auto_midhandle) c->setHandle(c->getWidth() / 2, c->getHeight() / 2);
+        frames.push_back(c);
+    }
+    bbImage* i = new bbImage(frames);
+    image_set.insert(i);
+    return i;
+}
+
 void bbFreeImage(bbImage* i)
 {
     if (!image_set.erase(i)) return;
@@ -2041,6 +2061,7 @@ void graphics_link(void (*rtSym)(const char* sym, void* pc))
     rtSym("%LoadAnimTextureGrid$file%flags%columns%rows%first%count", bbLoadAnimTextureGrid);
     rtSym("%CopyImage%image", bbCopyImage);
     rtSym("%CreateImage%width%height%frames=1", bbCreateImage);
+    rtSym("%CreateImageFlag%width%height%frames=1", bbCreateImageFlag);
     rtSym("FreeImage%image", bbFreeImage);
     rtSym("%SaveImage%image$bmpfile%frame=0", bbSaveImage);
     rtSym("%ImageWidthUnscaled%image", bbImageWidthUnscaled);
