@@ -2236,6 +2236,7 @@ void blitz3d_link(void (*rtSym)(const char* sym, void* pc)) {
 	rtSym("CaptureWorld", bbCaptureWorld);
 	rtSym("RenderWorld#tween=1", bbRenderWorld);
 	rtSym("ClearWorld%entities=1%brushes=1%textures=1", bbClearWorld);
+	rtSym("RenderEntity%entity%camera#tween=1", bbRenderEntity);
 	rtSym("%ActiveTextures", bbActiveTextures);
 	rtSym("%TrisRendered", bbTrisRendered);
 	rtSym("#Stats3D%type", bbStats3D);
