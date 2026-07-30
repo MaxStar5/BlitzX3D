@@ -309,22 +309,42 @@ int  bbDirectInputEnabled() {
 }
 
 BBStr* bbGetKeyName(int key) {
-	UINT scanCode = MapVirtualKeyA(key, MAPVK_VK_TO_VSC);
-	if (scanCode == 0) { return new BBStr(""); }
+	UINT vk = 0;
 
-	bool extended = (key == VK_INSERT || key == VK_DELETE || key == VK_HOME || key == VK_END || key == VK_PRIOR || key == VK_NEXT || key == VK_LEFT || key == VK_RIGHT || key == VK_UP || key == VK_DOWN || key == VK_NUMLOCK || key == VK_DIVIDE || key == VK_SNAPSHOT);
+	UINT vkFromScan = MapVirtualKeyW((UINT)key, MAPVK_VSC_TO_VK);
+	if (vkFromScan != 0) {
+		vk = vkFromScan;
+	}
+	else {
+		DWORD scan = MapVirtualKeyW((UINT)key, MAPVK_VK_TO_VSC);
+		if (scan != 0) {
+			vk = (UINT)key;
+		}
+		else {
+			return new BBStr("");
+		}
+	}
 
-	LONG lParam = (scanCode << 16) | (extended ? 0x01000000 : 0);
+	DWORD dwScan = MapVirtualKeyW(vk, MAPVK_VK_TO_VSC);
+	if (dwScan == 0) {
+		return new BBStr("");
+	}
 
-	wchar_t wname[128];
-	int result = GetKeyNameTextW(lParam, wname, 128);
-	if (result == 0) { return new BBStr(""); }
+	WORD scanCode = LOBYTE(dwScan);
+	BOOL extended = (HIWORD(dwScan) & 0x01) != 0;
+	LPARAM lParam = (scanCode << 16) | (extended ? 0x01000000 : 0);
 
-	int len = WideCharToMultiByte(CP_UTF8, 0, wname, -1, nullptr, 0, nullptr, nullptr);
-	if (len <= 0) { return new BBStr(""); }
+	wchar_t buffer[128];
+	if (GetKeyNameTextW(lParam, buffer, 128) == 0) {
+		return new BBStr("");
+	}
 
-	std::string utf8(len, 0);
-	WideCharToMultiByte(CP_UTF8, 0, wname, -1, &utf8[0], len, nullptr, nullptr);
+	int utf8Len = WideCharToMultiByte(CP_UTF8, 0, buffer, -1, nullptr, 0, nullptr, nullptr);
+	if (utf8Len <= 0) {
+		return new BBStr("");
+	}
+	std::string utf8(utf8Len, 0);
+	WideCharToMultiByte(CP_UTF8, 0, buffer, -1, &utf8[0], utf8Len, nullptr, nullptr);
 	utf8.pop_back();
 
 	return new BBStr(utf8);
