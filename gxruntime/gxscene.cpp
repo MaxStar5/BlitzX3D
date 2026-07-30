@@ -739,9 +739,10 @@ bool gxScene::begin(const std::vector<gxLight*>& lights) {
 	}
 	setLights();
 
-	if (target->z_surf) {
+	IDirect3DSurface9* depthSurf = depthTarget ? depthTarget->z_surf : target->z_surf;
+	if (depthSurf) {
 		dir3dDev->SetRenderTarget(0, target->surf);
-		dir3dDev->SetDepthStencilSurface(target->z_surf);
+		dir3dDev->SetDepthStencilSurface(depthSurf);
 	}
 
 	dir3dDev->SetViewport(&viewport);

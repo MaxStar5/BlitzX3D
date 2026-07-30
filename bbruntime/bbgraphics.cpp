@@ -9,6 +9,7 @@
 
 gxGraphics* gx_graphics;
 gxCanvas* gx_canvas;
+gxCanvas* gx_depth_canvas;
 
 struct GfxMode
 {
@@ -526,9 +527,8 @@ int  bbAvailVidMem()
     return gx_graphics->getAvailVidmem();
 }
 
-void bbSetBuffer(gxCanvas* buff)
+static void applyCanvasBuffer(gxCanvas* buff)
 {
-    debugCanvas(buff, "SetBuffer");
     gx_canvas = buff;
     curs_x = curs_y = 0;
     gx_canvas->setOrigin(0, 0);
@@ -536,6 +536,20 @@ void bbSetBuffer(gxCanvas* buff)
     gx_canvas->setColor(curr_color);
     gx_canvas->setClsColor(curr_clsColor);
     gx_canvas->setFont(curr_font);
+    if (gx_scene) gx_scene->setDepthTarget(nullptr);
+}
+
+void bbSetBuffer(gxCanvas* buff)
+{
+    debugCanvas(buff, "SetBuffer");
+    applyCanvasBuffer(buff);
+}
+
+void bbSetBufferDepth(gxCanvas* buff, gxCanvas* depthBuff)
+{
+    debugCanvas(buff, "SetBufferDepth");
+    applyCanvasBuffer(buff);
+    if (gx_scene) gx_scene->setDepthTarget(depthBuff);
 }
 
 gxCanvas* bbGraphicsBuffer()
@@ -1962,6 +1976,7 @@ void graphics_link(void (*rtSym)(const char* sym, void* pc))
 
     //buffer management
     rtSym("SetBuffer%buffer", bbSetBuffer);
+    rtSym("SetBufferDepth%buffer%depthbuffer", bbSetBufferDepth);
     rtSym("%GraphicsBuffer", bbGraphicsBuffer);
     rtSym("%LoadBuffer%buffer$bmpfile", bbLoadBuffer);
     rtSym("%SaveBuffer%buffer$bmpfile", bbSaveBuffer);

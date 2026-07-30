@@ -109,6 +109,7 @@ public:
 	void setEyePosition(const float pos[3]);
 	void setRenderState(const RenderState& state);
 	void setEffect(gxEffect* effect);
+	void setDepthTarget(gxCanvas* c) { depthTarget = c; }
 
 	//rendering
 	bool begin(const std::vector<gxLight*>& lights);
@@ -130,6 +131,7 @@ public:
 
 private:
 	gxCanvas* target;
+	gxCanvas* depthTarget = nullptr;
 	bool wbuffer, dither, antialias, wireframe, flipped;
 	unsigned ambient, ambient2, fogcolor;
 	int caps_level, fogmode, zmode, max_lights;
