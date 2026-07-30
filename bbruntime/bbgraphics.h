@@ -54,6 +54,8 @@ int		 bbSaveBuffer(gxCanvas* surf, BBStr* str);
 //fast read/write operations...
 void	 bbLockBuffer(gxCanvas* buff);
 void	 bbUnlockBuffer(gxCanvas* buff);
+int  bbBufferWidth(gxCanvas* buff);
+int  bbBufferHeight(gxCanvas* buff);
 int		 bbReadPixel(int x, int y, gxCanvas* buff);
 void	 bbWritePixel(int x, int y, int argb, gxCanvas* buff);
 int		 bbReadPixelFast(int x, int y, gxCanvas* buff);

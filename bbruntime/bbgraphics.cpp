@@ -761,6 +761,18 @@ void bbUnlockBuffer(gxCanvas* buff)
     (buff ? buff : gx_canvas)->unlock();
 }
 
+int bbBufferWidth(gxCanvas* buff)
+{
+    if (buff) debugCanvas(buff, "BufferWidth");
+    return (buff ? buff : gx_canvas)->getWidth();
+}
+
+int bbBufferHeight(gxCanvas* buff)
+{
+    if (buff) debugCanvas(buff, "BufferHeight");
+    return (buff ? buff : gx_canvas)->getHeight();
+}
+
 int bbReadPixel(int x, int y, gxCanvas* buff)
 {
     if (buff) debugCanvas(buff, "ReadPixel");
@@ -2005,6 +2017,8 @@ void graphics_link(void (*rtSym)(const char* sym, void* pc))
     //fast pixel reads/write
     rtSym("LockBuffer%buffer=0", bbLockBuffer);
     rtSym("UnlockBuffer%buffer=0", bbUnlockBuffer);
+    rtSym("%BufferWidth%buffer=0", bbBufferWidth);
+    rtSym("%BufferHeight%buffer=0", bbBufferHeight);
     rtSym("%ReadPixel%x%y%buffer=0", bbReadPixel);
     rtSym("WritePixel%x%y%argb%buffer=0", bbWritePixel);
     rtSym("%ReadPixelFast%x%y%buffer=0", bbReadPixelFast);
@@ -2061,7 +2075,7 @@ void graphics_link(void (*rtSym)(const char* sym, void* pc))
     rtSym("%LoadAnimTextureGrid$file%flags%columns%rows%first%count", bbLoadAnimTextureGrid);
     rtSym("%CopyImage%image", bbCopyImage);
     rtSym("%CreateImage%width%height%frames=1", bbCreateImage);
-    rtSym("%CreateImageFlag%width%height%frames=1", bbCreateImageFlag);
+    rtSym("%CreateImageFlag%width%height%frames=1%flags", bbCreateImageFlag);
     rtSym("FreeImage%image", bbFreeImage);
     rtSym("%SaveImage%image$bmpfile%frame=0", bbSaveImage);
     rtSym("%ImageWidthUnscaled%image", bbImageWidthUnscaled);
