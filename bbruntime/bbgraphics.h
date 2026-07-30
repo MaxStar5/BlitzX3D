@@ -56,6 +56,7 @@ void	 bbLockBuffer(gxCanvas* buff);
 void	 bbUnlockBuffer(gxCanvas* buff);
 int  bbBufferWidth(gxCanvas* buff);
 int  bbBufferHeight(gxCanvas* buff);
+void bbDrawBufferRect(gxCanvas* src, int dx, int dy, int dw, int dh, int sx, int sy, int sw, int sh);
 int		 bbReadPixel(int x, int y, gxCanvas* buff);
 void	 bbWritePixel(int x, int y, int argb, gxCanvas* buff);
 int		 bbReadPixelFast(int x, int y, gxCanvas* buff);

@@ -2158,7 +2158,7 @@ BBStr* bbEntityClass(Entity* e) {
 	return new BBStr("Pivot");
 }
 
-void  bbClearWorld(int e, int b, int t) {
+void  bbClearWorld(int e, int b, int t, int fx) {
 	if (e) {
 		while (Entity::orphans()) bbFreeEntity(Entity::orphans());
 	}
@@ -2167,6 +2167,9 @@ void  bbClearWorld(int e, int b, int t) {
 	}
 	if (t) {
 		while (texture_set.size()) bbFreeTexture(*texture_set.begin());
+	}
+	if (fx) {
+		gx_graphics->clearEffects();
 	}
 }
 
@@ -2199,7 +2202,7 @@ void blitz3d_open() {
 void blitz3d_close() {
 	if (!gx_scene) return;
 	gxScene* scene = gx_scene;
-	bbClearWorld(1, 1, 1);
+	bbClearWorld(1, 1, 1, 1);
 	Texture::clearFilters();
 	loader_mat_map.clear();
 	delete world;
@@ -2235,7 +2238,7 @@ void blitz3d_link(void (*rtSym)(const char* sym, void* pc)) {
 	rtSym("UpdateWorld#elapsed_time=1", bbUpdateWorld);
 	rtSym("CaptureWorld", bbCaptureWorld);
 	rtSym("RenderWorld#tween=1", bbRenderWorld);
-	rtSym("ClearWorld%entities=1%brushes=1%textures=1", bbClearWorld);
+	rtSym("ClearWorld%entities=1%brushes=1%textures=1%effects=1", bbClearWorld);
 	rtSym("RenderEntity%entity%camera#tween=1", bbRenderEntity);
 	rtSym("%ActiveTextures", bbActiveTextures);
 	rtSym("%TrisRendered", bbTrisRendered);

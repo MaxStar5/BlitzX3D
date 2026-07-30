@@ -82,6 +82,7 @@ public:
 	gxEffect* createEffect(const std::string& filename);
 	gxEffect* verifyEffect(gxEffect* e);
 	void freeEffect(gxEffect* e);
+	void clearEffects();
 	const std::string& getLastEffectError() const { return lastEffectError; }
 
 	//MANIPULATORS

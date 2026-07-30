@@ -984,6 +984,11 @@ void bbCopyRectStretch(int sx, int sy, int w, int h, int dx, int dy, int dw, int
     dest->blitstretch(dx, dy, dw, dh, src, sx, sy, w, h, true);
 }
 
+void bbDrawBufferRect(gxCanvas* src, int dx, int dy, int dw, int dh, int sx, int sy, int sw, int sh)
+{
+    debugCanvas(src, "DrawBufferRect");
+    gx_canvas->blitstretch(dx, dy, dw, dh, src, sx, sy, sw, sh, !src->hasMask());
+}
 
 gxFont* bbLoadFont(BBStr* name, int height, bool bold, bool italic, bool underlined) {
     if (!gx_graphics) {
@@ -1429,7 +1434,7 @@ void bbDrawImageRect(bbImage* i, int x, int y, int r_x, int r_y, int r_w, int r_
 {
     debugImage(i, "DrawImageRect", frame);
     gxCanvas* c = i->getFrames()[frame];
-    gx_canvas->blit(x, y, c, r_x, r_y, r_w, r_h, false);
+    gx_canvas->blit(x, y, c, r_x, r_y, r_w, r_h, !c->hasMask());
 }
 
 void bbDrawBlockRect(bbImage* i, int x, int y, int r_x, int r_y, int r_w, int r_h, int frame)
@@ -2046,6 +2051,7 @@ void graphics_link(void (*rtSym)(const char* sym, void* pc))
     rtSym("$ConvertToUTF8$str", bbConvertToUTF8);
     rtSym("CopyRect%source_x%source_y%width%height%dest_x%dest_y%src_buffer=0%dest_buffer=0", bbCopyRect);
     rtSym("CopyRectStretch%source_x%source_y%width%height%dest_x%dest_y%dest_w%dest_h%src_buffer=0%dest_buffer=0", bbCopyRectStretch);
+    rtSym("DrawBufferRect%buffer%dest_x%dest_y%dest_w%dest_h%source_x%source_y%source_w%source_h", bbDrawBufferRect);
     rtSym("Set2DEffect%effect", bbSet2DEffect);
     rtSym("Clear2DEffect", bbClear2DEffect);
     rtSym("%Get2DEffect", bbGet2DEffect);

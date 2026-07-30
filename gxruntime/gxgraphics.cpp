@@ -121,6 +121,10 @@ void gxGraphics::freeEffect(gxEffect* e) {
 	if (effect_set.erase(e)) delete e;
 }
 
+void gxGraphics::clearEffects() {
+	while (effect_set.size()) freeEffect(*effect_set.begin());
+}
+
 void gxGraphics::setGamma(int r, int g, int b, float dr, float dg, float db) {
 	//bruh
 }
