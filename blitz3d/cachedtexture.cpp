@@ -10,6 +10,11 @@ std::set<CachedTexture::Rep*> CachedTexture::rep_set;
 
 static std::string path;
 
+CachedTexture::PathMutator CachedTexture::pathMutator = nullptr;
+void CachedTexture::setPathMutator(PathMutator m) {
+	pathMutator = m;
+}
+
 struct CachedTexture::Rep {
 	int ref_cnt;
 	std::string file;
@@ -122,6 +127,21 @@ CachedTexture::CachedTexture(const std::string& f_, int flags, int w, int h, int
 		}
 		delete rep;
 	}
+
+	if (pathMutator) {
+		std::string mutated = pathMutator(f);
+		if (!mutated.empty()) {
+			std::string t = tolower(fullfilename(mutated));
+			if (rep = findRep(t, flags, w, h, first, cnt)) return;
+			rep = new Rep(t, flags, w, h, first, cnt);
+			if (rep->frames.size()) {
+				rep_set.insert(rep);
+				return;
+			}
+			delete rep;
+		}
+	}
+
 	std::string t = tolower(fullfilename(f));
 	if (rep = findRep(t, flags, w, h, first, cnt)) return;
 	rep = new Rep(t, flags, w, h, first, cnt);

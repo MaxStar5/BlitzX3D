@@ -1581,8 +1581,19 @@ void bbSetTFormMethod(int method) {
     tform_method = method;
 }
 
+static std::string cachedTexturePathAdapter(const std::string& f) {
+    if (!g_texturePathMutator) return "";
+    BBStr in(f);
+    BBStr* out = g_texturePathMutator(&in);
+    if (!out) return "";
+    std::string result = *out;
+    delete out;
+    return result;
+}
+
 void bbSetTextureLoadPathMutator(TexturePathMutator mutator) {
     g_texturePathMutator = mutator;
+    CachedTexture::setPathMutator(mutator ? cachedTexturePathAdapter : nullptr);
 }
 
 void bbScaleImage(bbImage* i, float w, float h)

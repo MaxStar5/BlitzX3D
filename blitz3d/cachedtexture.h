@@ -18,11 +18,14 @@ public:
 
 	bool operator<(const CachedTexture& t)const { return rep < t.rep; }
 
+	typedef std::string(*PathMutator)(const std::string&);
+	static void setPathMutator(PathMutator m);
 	static void setPath(const std::string& t);
 
 private:
 	struct Rep;
 	Rep* rep;
+	static PathMutator pathMutator;
 
 	Rep* findRep(const std::string& f, int flags, int w, int h, int first, int cnt);
 
