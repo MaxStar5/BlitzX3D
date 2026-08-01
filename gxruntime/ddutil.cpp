@@ -17,6 +17,19 @@ const std::string& ddUtil::getLastImageError() {
     return g_lastImageError;
 }
 
+bool ddUtil::hasAlphaChannel(const std::string& file) {
+    FREE_IMAGE_FORMAT fif = FreeImage_GetFileType(file.c_str(), 0);
+    if (fif == FIF_UNKNOWN) fif = FreeImage_GetFIFFromFilename(file.c_str());
+    if (fif == FIF_UNKNOWN) return false;
+
+    FIBITMAP* fib = FreeImage_Load(fif, file.c_str(), 0);
+    if (!fib) return false;
+
+    bool has = (FreeImage_IsTransparent(fib) == TRUE) || (FreeImage_GetColorType(fib) == FIC_RGBALPHA);
+    FreeImage_Unload(fib);
+    return has;
+}
+
 PixelFormat::~PixelFormat() {
     if (plot_code) VirtualFree(plot_code, 0, MEM_RELEASE);
 }

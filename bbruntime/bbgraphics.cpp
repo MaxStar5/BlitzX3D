@@ -1377,11 +1377,20 @@ gxCanvas* bbImageBuffer(bbImage* i, int n)
     return i->getFrames()[n];
 }
 
-void bbDrawImage(bbImage* i, int x, int y, int frame)
+void bbDrawImage(bbImage* i, int x, int y, int frame) 
 {
     debugImage(i, "DrawImage", frame);
     gxCanvas* c = i->getFrames()[frame];
-    gx_canvas->blit(x, y, c, 0, 0, c->getWidth(), c->getHeight(), !c->hasMask());
+    int w = c->getWidth(), h = c->getHeight();
+    if (c->hasMask()) {
+        gx_canvas->blit(x, y, c, 0, 0, w, h, false);
+    }
+    else if (c->getFlags() & gxCanvas::CANVAS_TEX_ALPHA) {
+        gx_canvas->blitAlpha(x, y, c, 0, 0, w, h, 0xffffffff, false);
+    }
+    else {
+        gx_canvas->blit(x, y, c, 0, 0, w, h, true);
+    }
 }
 
 void bbDrawBlock(bbImage* i, int x, int y, int frame)
@@ -1430,11 +1439,19 @@ void bbTileBlock(bbImage* i, int x, int y, int frame)
     tile(i, x, y, frame, true);
 }
 
-void bbDrawImageRect(bbImage* i, int x, int y, int r_x, int r_y, int r_w, int r_h, int frame)
+void bbDrawImageRect(bbImage* i, int x, int y, int r_x, int r_y, int r_w, int r_h, int frame) 
 {
     debugImage(i, "DrawImageRect", frame);
     gxCanvas* c = i->getFrames()[frame];
-    gx_canvas->blit(x, y, c, r_x, r_y, r_w, r_h, !c->hasMask());
+    if (c->hasMask()) {
+        gx_canvas->blit(x, y, c, r_x, r_y, r_w, r_h, false);
+    }
+    else if (c->getFlags() & gxCanvas::CANVAS_TEX_ALPHA) {
+        gx_canvas->blitAlpha(x, y, c, r_x, r_y, r_w, r_h, 0xffffffff, false);
+    }
+    else {
+        gx_canvas->blit(x, y, c, r_x, r_y, r_w, r_h, true);
+    }
 }
 
 void bbDrawBlockRect(bbImage* i, int x, int y, int r_x, int r_y, int r_w, int r_h, int frame)
@@ -1682,7 +1699,8 @@ void bbResizeImage(bbImage* i, float w, float h)
         const std::vector<uint32_t>& src = i->getOrigPixels(k);
         int srcW = i->origWidth, srcH = i->origHeight;
 
-        gxCanvas* t = gx_graphics->createCanvas(iw, ih, 0);
+        int srcFlags = c->getFlags() & (gxCanvas::CANVAS_TEXTURE | gxCanvas::CANVAS_TEX_ALPHA);
+        gxCanvas* t = gx_graphics->createCanvas(iw, ih, srcFlags);
         t->setHandle(hx, hy);
         t->copyMaskFrom(c);
 

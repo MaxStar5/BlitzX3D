@@ -386,6 +386,11 @@ gxCanvas* gxGraphics::createCanvas(int w, int h, int flags) {
 }
 
 gxCanvas* gxGraphics::loadCanvas(const std::string& f, int flags) {
+	if (!(flags & gxCanvas::CANVAS_TEXTURE)) {
+		if (ddUtil::hasAlphaChannel(f)) {
+			flags |= gxCanvas::CANVAS_TEXTURE | gxCanvas::CANVAS_TEX_ALPHA;
+		}
+	}
 	if (flags & gxCanvas::CANVAS_TEXTURE) {
 		int srcW = 0, srcH = 0;
 		IDirect3DTexture9* tex = ddUtil::loadTextureSurface(f, flags, this, true, &srcW, &srcH);

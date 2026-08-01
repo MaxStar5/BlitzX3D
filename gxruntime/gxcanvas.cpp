@@ -662,7 +662,9 @@ static IDirect3DTexture9* getOrBuildBlitTex(IDirect3DDevice9* dev, gxCanvas* src
                 if (doMask && (argb & 0x00ffffffu) == maskRGB)
                     argb = 0x00000000u;   // fully transparent
                 else
-                    argb |= 0xff000000u;  // fully opaque
+                    if (!(src->getFlags() & gxCanvas::CANVAS_TEX_ALPHA)) {
+                        argb |= 0xff000000u;  // fully opaque
+                    }
                 dstRow[x] = argb;
             }
         }
@@ -827,8 +829,9 @@ static void cpuBlit(gxCanvas* dest, const RECT& dest_r, gxCanvas* src, const REC
 
     unsigned maskRGB = solid ? ~0u : (sf.toARGB(src->mask_surf) & 0x00ffffffu);
     bool doMask = (maskRGB != ~0u);
+    bool doAlpha = (src->getFlags() & gxCanvas::CANVAS_TEX_ALPHA) != 0;
 
-    if (!stretch && !doMask && sp == dp && sf.getDepth() == df.getDepth()) {
+    if (!stretch && !doMask && !doAlpha && sp == dp && sf.getDepth() == df.getDepth()) {
         int rowBytes = dw * sp;
         for (int y = 0; y < dh; ++y) {
             const unsigned char* srow = (const unsigned char*)srcLR.pBits
@@ -849,6 +852,7 @@ static void cpuBlit(gxCanvas* dest, const RECT& dest_r, gxCanvas* src, const REC
                 int sx = stretch ? (x * sw / dw) : x;
                 unsigned argb = sf.toARGB(sf.getPixel((void*)(srow + sx * sp)));
                 if (doMask && (argb & 0x00ffffffu) == maskRGB) continue;
+                if (!doAlpha) argb |= 0xff000000u;
                 df.setPixel(drow + x * dp, df.fromARGB(argb));
             }
         }
@@ -986,7 +990,35 @@ void gxCanvas::blitstretch(int x, int y, int w, int h,
     D3DVIEWPORT9 vp = { 0, 0, (DWORD)clip_rect.right, (DWORD)clip_rect.bottom, 0.0f, 1.0f };
     dev->SetViewport(&vp);
 
-    setupBlitRenderState(dev, solid);
+    bool useAlpha = (src->getFlags() & gxCanvas::CANVAS_TEX_ALPHA) != 0;
+    bool useMask = src->hasMask();
+
+    dev->SetRenderState(D3DRS_ZENABLE, FALSE);
+    dev->SetTextureStageState(0, D3DTSS_COLOROP, D3DTOP_SELECTARG1);
+    dev->SetTextureStageState(0, D3DTSS_COLORARG1, D3DTA_TEXTURE);
+
+    if (useAlpha) {
+        dev->SetRenderState(D3DRS_ALPHABLENDENABLE, TRUE);
+        dev->SetRenderState(D3DRS_SRCBLEND, D3DBLEND_SRCALPHA);
+        dev->SetRenderState(D3DRS_DESTBLEND, D3DBLEND_INVSRCALPHA);
+        dev->SetRenderState(D3DRS_ALPHATESTENABLE, FALSE);
+        dev->SetTextureStageState(0, D3DTSS_ALPHAOP, D3DTOP_SELECTARG1);
+        dev->SetTextureStageState(0, D3DTSS_ALPHAARG1, D3DTA_TEXTURE);
+    }
+    else if (useMask) {
+        dev->SetRenderState(D3DRS_ALPHABLENDENABLE, FALSE);
+        dev->SetRenderState(D3DRS_ALPHATESTENABLE, TRUE);
+        dev->SetRenderState(D3DRS_ALPHAFUNC, D3DCMP_GREATER);
+        dev->SetRenderState(D3DRS_ALPHAREF, 0);
+        dev->SetTextureStageState(0, D3DTSS_ALPHAOP, D3DTOP_SELECTARG1);
+        dev->SetTextureStageState(0, D3DTSS_ALPHAARG1, D3DTA_TEXTURE);
+    }
+    else {
+        dev->SetRenderState(D3DRS_ALPHABLENDENABLE, FALSE);
+        dev->SetRenderState(D3DRS_ALPHATESTENABLE, FALSE);
+        dev->SetTextureStageState(0, D3DTSS_ALPHAOP, D3DTOP_DISABLE);
+    }
+
     dev->SetSamplerState(0, D3DSAMP_MAGFILTER, D3DTEXF_LINEAR);
     dev->SetSamplerState(0, D3DSAMP_MINFILTER, D3DTEXF_LINEAR);
 
