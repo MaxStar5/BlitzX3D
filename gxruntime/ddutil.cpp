@@ -30,6 +30,44 @@ bool ddUtil::hasAlphaChannel(const std::string& file) {
     return has;
 }
 
+bool ddUtil::hasActualAlpha(const std::string& file) {
+    FREE_IMAGE_FORMAT fif = FreeImage_GetFileType(file.c_str(), 0);
+    if (fif == FIF_UNKNOWN) fif = FreeImage_GetFIFFromFilename(file.c_str());
+    if (fif == FIF_UNKNOWN) return false;
+
+    FIBITMAP* fib = FreeImage_Load(fif, file.c_str(), 0);
+    if (!fib) return false;
+
+    if (FreeImage_GetColorType(fib) != FIC_RGBALPHA && !FreeImage_IsTransparent(fib)) {
+        FreeImage_Unload(fib);
+        return false;
+    }
+
+    FIBITMAP* fib32 = (FreeImage_GetBPP(fib) == 32) ? fib : FreeImage_ConvertTo32Bits(fib);
+    if (!fib32) {
+        if (fib32 != fib) FreeImage_Unload(fib);
+        return false;
+    }
+
+    bool hasNonOpaque = false;
+    int w = FreeImage_GetWidth(fib32);
+    int h = FreeImage_GetHeight(fib32);
+    for (int y = 0; y < h && !hasNonOpaque; ++y) {
+        BYTE* bits = FreeImage_GetScanLine(fib32, y);
+        for (int x = 0; x < w; ++x) {
+            BYTE alpha = bits[x * 4 + 3];
+            if (alpha != 255) {
+                hasNonOpaque = true;
+                break;
+            }
+        }
+    }
+
+    if (fib32 != fib) FreeImage_Unload(fib32);
+    else FreeImage_Unload(fib);
+    return hasNonOpaque;
+}
+
 PixelFormat::~PixelFormat() {
     if (plot_code) VirtualFree(plot_code, 0, MEM_RELEASE);
 }

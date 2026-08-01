@@ -387,7 +387,7 @@ gxCanvas* gxGraphics::createCanvas(int w, int h, int flags) {
 
 gxCanvas* gxGraphics::loadCanvas(const std::string& f, int flags) {
 	if (!(flags & gxCanvas::CANVAS_TEXTURE)) {
-		if (ddUtil::hasAlphaChannel(f)) {
+		if (ddUtil::hasActualAlpha(f)) {
 			flags |= gxCanvas::CANVAS_TEXTURE | gxCanvas::CANVAS_TEX_ALPHA;
 		}
 	}

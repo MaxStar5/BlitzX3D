@@ -22,6 +22,7 @@ struct ddUtil {
     static IDirect3DTexture9* loadTextureSurface(const std::string& file, int flags, gxGraphics* gfx, bool renderTarget);
     static IDirect3DTexture9* loadTextureSurface(const std::string& file, int flags, gxGraphics* gfx, bool renderTarget, int* outW, int* outH);
 
+    static bool hasActualAlpha(const std::string& file);
     static bool hasAlphaChannel(const std::string& file);
     static const std::string& getLastImageError();
 };
