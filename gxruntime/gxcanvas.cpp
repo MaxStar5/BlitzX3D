@@ -97,30 +97,9 @@ public:
     FillRectGuard& operator=(const FillRectGuard&) = delete;
 };
 
-void gxCanvas::fillRect(const RECT& r, unsigned argb) {
-    if (graphics && graphics->dir3dDev && locked_cnt == 0) {
-        D3DSURFACE_DESC desc;
-        if (SUCCEEDED(surf->GetDesc(&desc)) && (desc.Usage & D3DUSAGE_RENDERTARGET)) {
-            FillRectGuard guard(graphics->dir3dDev);
-            if (SUCCEEDED(graphics->dir3dDev->SetRenderTarget(0, surf))) {
-                D3DRECT rect = { r.left, r.top, r.right, r.bottom };
-                if (SUCCEEDED(graphics->dir3dDev->Clear(1, &rect, D3DCLEAR_TARGET, argb, 0.0f, 0))) {
-                    return;
-                }
-            }
-        }
-    }
-
-    D3DLOCKED_RECT lr;
-    if (FAILED(surf->LockRect(&lr, &r, 0))) return;
-
-    int w = r.right - r.left;
-    int h = r.bottom - r.top;
-    unsigned nat = format.fromARGB(argb);
-    int pitch = format.getPitch();
-
+static inline void fillRectRows(unsigned char* base, int basePitch, int w, int h, unsigned nat, int pitch) {
     for (int y = 0; y < h; ++y) {
-        unsigned char* row = (unsigned char*)lr.pBits + y * lr.Pitch;
+        unsigned char* row = base + y * basePitch;
         if (pitch == 4) {
             unsigned* p = (unsigned*)row;
             for (int x = 0; x < w; ++x) p[x] = nat;
@@ -141,6 +120,43 @@ void gxCanvas::fillRect(const RECT& r, unsigned argb) {
             }
         }
     }
+}
+
+void gxCanvas::fillRect(const RECT& r, unsigned argb) {
+    if (locked_cnt > 0) {
+        int w = r.right - r.left;
+        int h = r.bottom - r.top;
+        if (w <= 0 || h <= 0) return;
+        unsigned nat = format.fromARGB(argb);
+        int pitch = format.getPitch();
+        unsigned char* base = locked_surf + r.top * locked_pitch + r.left * pitch;
+        fillRectRows(base, locked_pitch, w, h, nat, pitch);
+        ++mod_cnt;
+        return;
+    }
+
+    if (graphics && graphics->dir3dDev) {
+        D3DSURFACE_DESC desc;
+        if (SUCCEEDED(surf->GetDesc(&desc)) && (desc.Usage & D3DUSAGE_RENDERTARGET)) {
+            FillRectGuard guard(graphics->dir3dDev);
+            if (SUCCEEDED(graphics->dir3dDev->SetRenderTarget(0, surf))) {
+                D3DRECT rect = { r.left, r.top, r.right, r.bottom };
+                if (SUCCEEDED(graphics->dir3dDev->Clear(1, &rect, D3DCLEAR_TARGET, argb, 0.0f, 0))) {
+                    return;
+                }
+            }
+        }
+    }
+
+    D3DLOCKED_RECT lr;
+    if (FAILED(surf->LockRect(&lr, &r, 0))) return;
+
+    int w = r.right - r.left;
+    int h = r.bottom - r.top;
+    unsigned nat = format.fromARGB(argb);
+    int pitch = format.getPitch();
+
+    fillRectRows((unsigned char*)lr.pBits, lr.Pitch, w, h, nat, pitch);
     surf->UnlockRect();
 }
 
@@ -797,16 +813,21 @@ static bool isRenderTarget(IDirect3DSurface9* s) {
 }
 
 static void cpuBlit(gxCanvas* dest, const RECT& dest_r, gxCanvas* src, const RECT& src_r, bool solid) {
-    IDirect3DDevice9* dev = dest->graphics->dir3dDev;
-    if (dev) {
-        RECT srcRect = { src_r.left, src_r.top, src_r.right, src_r.bottom };
-        RECT destRect = { dest_r.left, dest_r.top, dest_r.right, dest_r.bottom };
-        HRESULT hr = dev->StretchRect(src->getSurface(), &srcRect,
-            dest->getSurface(), &destRect,
-            D3DTEXF_LINEAR);
-        if (SUCCEEDED(hr)) {
-            dest->damage(dest_r);
-            return;
+    D3DSURFACE_DESC destDesc;
+    bool destIsSysMem = SUCCEEDED(dest->surf->GetDesc(&destDesc)) && destDesc.Pool == D3DPOOL_SYSTEMMEM;
+
+    if (!destIsSysMem) {
+        IDirect3DDevice9* dev = dest->graphics->dir3dDev;
+        if (dev) {
+            RECT srcRect = { src_r.left, src_r.top, src_r.right, src_r.bottom };
+            RECT destRect = { dest_r.left, dest_r.top, dest_r.right, dest_r.bottom };
+            HRESULT hr = dev->StretchRect(src->getSurface(), &srcRect,
+                dest->getSurface(), &destRect,
+                D3DTEXF_LINEAR);
+            if (SUCCEEDED(hr)) {
+                dest->damage(dest_r);
+                return;
+            }
         }
     }
 
@@ -815,12 +836,34 @@ static void cpuBlit(gxCanvas* dest, const RECT& dest_r, gxCanvas* src, const REC
     int sw = src_r.right - src_r.left;
     int sh = src_r.bottom - src_r.top;
     bool stretch = (dw != sw || dh != sh);
+    bool srcPreLocked = src->isLocked();
+    bool destPreLocked = dest->isLocked();
 
     D3DLOCKED_RECT srcLR, dstLR;
-    if (FAILED(src->surf->LockRect(&srcLR, nullptr, D3DLOCK_READONLY))) return;
-    if (FAILED(dest->surf->LockRect(&dstLR, nullptr, 0))) {
-        src->surf->UnlockRect();
-        return;
+    unsigned char* srcBits;  int srcPitchBytes;
+    unsigned char* dstBits;  int dstPitchBytes;
+
+    if (srcPreLocked) {
+        srcBits = src->getLockedSurf();
+        srcPitchBytes = src->getLockedPitch();
+    }
+    else {
+        if (FAILED(src->surf->LockRect(&srcLR, nullptr, D3DLOCK_READONLY))) return;
+        srcBits = (unsigned char*)srcLR.pBits;
+        srcPitchBytes = srcLR.Pitch;
+    }
+
+    if (destPreLocked) {
+        dstBits = dest->getLockedSurf();
+        dstPitchBytes = dest->getLockedPitch();
+    }
+    else {
+        if (FAILED(dest->surf->LockRect(&dstLR, nullptr, 0))) {
+            if (!srcPreLocked) src->surf->UnlockRect();
+            return;
+        }
+        dstBits = (unsigned char*)dstLR.pBits;
+        dstPitchBytes = dstLR.Pitch;
     }
 
     const PixelFormat& sf = src->format;
@@ -834,20 +877,16 @@ static void cpuBlit(gxCanvas* dest, const RECT& dest_r, gxCanvas* src, const REC
     if (!stretch && !doMask && !doAlpha && sp == dp && sf.getDepth() == df.getDepth()) {
         int rowBytes = dw * sp;
         for (int y = 0; y < dh; ++y) {
-            const unsigned char* srow = (const unsigned char*)srcLR.pBits
-                + (src_r.top + y) * srcLR.Pitch + src_r.left * sp;
-            unsigned char* drow = (unsigned char*)dstLR.pBits
-                + (dest_r.top + y) * dstLR.Pitch + dest_r.left * dp;
+            const unsigned char* srow = srcBits + (src_r.top + y) * srcPitchBytes + src_r.left * sp;
+            unsigned char* drow = dstBits + (dest_r.top + y) * dstPitchBytes + dest_r.left * dp;
             memcpy(drow, srow, rowBytes);
         }
     }
     else {
         for (int y = 0; y < dh; ++y) {
             int sy = stretch ? (y * sh / dh) : y;
-            const unsigned char* srow = (const unsigned char*)srcLR.pBits
-                + (src_r.top + sy) * srcLR.Pitch + src_r.left * sp;
-            unsigned char* drow = (unsigned char*)dstLR.pBits
-                + (dest_r.top + y) * dstLR.Pitch + dest_r.left * dp;
+            const unsigned char* srow = srcBits + (src_r.top + sy) * srcPitchBytes + src_r.left * sp;
+            unsigned char* drow = dstBits + (dest_r.top + y) * dstPitchBytes + dest_r.left * dp;
             for (int x = 0; x < dw; ++x) {
                 int sx = stretch ? (x * sw / dw) : x;
                 unsigned argb = sf.toARGB(sf.getPixel((void*)(srow + sx * sp)));
@@ -858,8 +897,8 @@ static void cpuBlit(gxCanvas* dest, const RECT& dest_r, gxCanvas* src, const REC
         }
     }
 
-    dest->surf->UnlockRect();
-    src->surf->UnlockRect();
+    if (!destPreLocked) dest->surf->UnlockRect();
+    if (!srcPreLocked) src->surf->UnlockRect();
     dest->damage(dest_r);
 }
 

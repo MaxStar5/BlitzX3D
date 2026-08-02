@@ -137,6 +137,9 @@ public:
 	bool rect_collide(int x, int y, int rect_x, int rect_y, int rect_w, int rect_h, bool solid)const;
 
 	bool lock()const;
+	bool isLocked()const { return locked_cnt > 0; }
+	unsigned char* getLockedSurf()const { return locked_surf; }
+	int getLockedPitch()const { return locked_pitch; }
 	void setPixel(int x, int y, unsigned argb);
 	void setPixelFast(int x, int y, unsigned argb) {
 		format.setPixel(locked_surf + y * locked_pitch + x * format.getPitch(), argb);
