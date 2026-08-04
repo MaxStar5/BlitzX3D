@@ -1405,11 +1405,19 @@ unsigned gxCanvas::getPixel(int x, int y) const {
 }
 
 void gxCanvas::copyPixelFast(int x, int y, gxCanvas* src, int src_x, int src_y) {
-    switch (format.getDepth()) {
-    case 16: *(short*)(locked_surf + y * locked_pitch + x * 2) = *(short*)(src->locked_surf + src_y * src->locked_pitch + src_x * 2); break;
-    case 24: { unsigned char* p = locked_surf + y * locked_pitch + x * 3; unsigned char* t = src->locked_surf + src_y * src->locked_pitch + src_x * 3; *(short*)p = *(short*)t; *(char*)(p + 2) = *(char*)(t + 2); } break;
-    case 32: *(int*)(locked_surf + y * locked_pitch + x * 4) = *(int*)(src->locked_surf + src_y * src->locked_pitch + src_x * 4); break;
+    if (format.getDepth() == src->format.getDepth()) {
+        switch (format.getDepth()) {
+        case 16: *(short*)(locked_surf + y * locked_pitch + x * 2) = *(short*)(src->locked_surf + src_y * src->locked_pitch + src_x * 2); return;
+        case 24: { unsigned char* p = locked_surf + y * locked_pitch + x * 3; unsigned char* t = src->locked_surf + src_y * src->locked_pitch + src_x * 3; *(short*)p = *(short*)t; *(char*)(p + 2) = *(char*)(t + 2); } return;
+        case 32: *(int*)(locked_surf + y * locked_pitch + x * 4) = *(int*)(src->locked_surf + src_y * src->locked_pitch + src_x * 4); return;
+        }
     }
+    int sp = src->format.getPitch();
+    int dp = format.getPitch();
+    unsigned char* sPix = src->locked_surf + src_y * src->locked_pitch + src_x * sp;
+    unsigned char* dPix = locked_surf + y * locked_pitch + x * dp;
+    unsigned argb = src->format.toARGB(src->format.getPixel(sPix));
+    format.setPixel(dPix, format.fromARGB(argb));
 }
 
 void gxCanvas::copyPixel(int x, int y, gxCanvas* src, int src_x, int src_y) {
