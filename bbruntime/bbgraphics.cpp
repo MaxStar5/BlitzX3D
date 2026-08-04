@@ -250,7 +250,7 @@ static gxCanvas* tformCanvas(gxCanvas* c, float m[2][2], int x_handle, int y_han
     float maxy = ceil(vmax(v0.y, v1.y, v2.y, v3.y));
     int iw = maxx - minx, ih = maxy - miny;
 
-    gxCanvas* t = gx_graphics->createCanvas(iw, ih, 0);
+    gxCanvas* t = gx_graphics->createCanvas(iw, ih, c->getFlags());
     t->setHandle(-minx, -miny);
     t->copyMaskFrom(c);
 
@@ -297,16 +297,18 @@ static gxCanvas* tformCanvas(gxCanvas* c, float m[2][2], int x_handle, int y_han
                 unsigned c10 = c->getPixelFast(ix + 1, iy);
                 unsigned c01 = c->getPixelFast(ix, iy + 1);
                 unsigned c11 = c->getPixelFast(ix + 1, iy + 1);
+                int a = ((c00 >> 24) & 0xFF) * w1 + ((c10 >> 24) & 0xFF) * w2 + ((c01 >> 24) & 0xFF) * w3 + ((c11 >> 24) & 0xFF) * w4;
                 int r = ((c00 >> 16) & 0xFF) * w1 + ((c10 >> 16) & 0xFF) * w2 + ((c01 >> 16) & 0xFF) * w3 + ((c11 >> 16) & 0xFF) * w4;
                 int g = ((c00 >> 8) & 0xFF) * w1 + ((c10 >> 8) & 0xFF) * w2 + ((c01 >> 8) & 0xFF) * w3 + ((c11 >> 8) & 0xFF) * w4;
                 int b = (c00 & 0xFF) * w1 + (c10 & 0xFF) * w2 + (c01 & 0xFF) * w3 + (c11 & 0xFF) * w4;
+                a = (a >> SHIFT) & 0xFF;
                 r = (r >> SHIFT) & 0xFF;
                 g = (g >> SHIFT) & 0xFF;
                 b = (b >> SHIFT) & 0xFF;
-                color = (r << 16) | (g << 8) | b;
+                color = ((unsigned)a << 24) | (r << 16) | (g << 8) | b;
             }
             else if (tform_method == 2) {
-                float r = 0.0f, g = 0.0f, b = 0.0f, total_w = 0.0f;
+                float a = 0.0f, r = 0.0f, g = 0.0f, b = 0.0f, total_w = 0.0f;
                 for (int dy = -1; dy <= 2; ++dy) {
                     int yi = iy + dy;
                     if (yi < 0) yi = 0;
@@ -321,6 +323,7 @@ static gxCanvas* tformCanvas(gxCanvas* c, float m[2][2], int x_handle, int y_han
                         float w = wx * wy;
                         if (w == 0.0f) continue;
                         unsigned pix = c->getPixelFast(xi, yi);
+                        a += ((pix >> 24) & 0xFF) * w;
                         r += ((pix >> 16) & 0xFF) * w;
                         g += ((pix >> 8) & 0xFF) * w;
                         b += (pix & 0xFF) * w;
@@ -328,13 +331,15 @@ static gxCanvas* tformCanvas(gxCanvas* c, float m[2][2], int x_handle, int y_han
                     }
                 }
                 if (total_w > 0.0f) {
+                    int aa = (int)(a / total_w + 0.5f);
                     int rr = (int)(r / total_w + 0.5f);
                     int gg = (int)(g / total_w + 0.5f);
                     int bb = (int)(b / total_w + 0.5f);
+                    if (aa < 0) aa = 0; else if (aa > 255) aa = 255;
                     if (rr < 0) rr = 0; else if (rr > 255) rr = 255;
                     if (gg < 0) gg = 0; else if (gg > 255) gg = 255;
                     if (bb < 0) bb = 0; else if (bb > 255) bb = 255;
-                    color = (rr << 16) | (gg << 8) | bb;
+                    color = ((unsigned)aa << 24) | (rr << 16) | (gg << 8) | bb;
                 }
                 else {
                     color = 0; // this should never happen and if it does the world will explode
