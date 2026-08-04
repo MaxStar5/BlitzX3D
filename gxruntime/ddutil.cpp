@@ -309,6 +309,26 @@ IDirect3DTexture9* ddUtil::createTextureSurface(int w, int h, int flags, gxGraph
     return tex;
 }
 
+IDirect3DCubeTexture9* ddUtil::createCubeTextureSurface(int size, int flags, gxGraphics* gfx) {
+    IDirect3DDevice9* dev = gfx->dir3dDev;
+    if (!dev) return nullptr;
+
+    int w = size, h = size;
+    adjustTexSize(&w, &h, dev);
+    int adjSize = w > h ? w : h;
+
+    bool hasAlpha = (flags & gxCanvas::CANVAS_TEX_ALPHA) != 0;
+    bool hasMask = (flags & gxCanvas::CANVAS_TEX_MASK) != 0;
+
+    D3DFORMAT fmt = (hasAlpha || hasMask) ? D3DFMT_A8R8G8B8 : D3DFMT_X8R8G8B8;
+    if (flags & gxCanvas::CANVAS_TEX_HICOLOR) fmt = D3DFMT_A4R4G4B4;
+
+    IDirect3DCubeTexture9* cubeTex = nullptr;
+    HRESULT hr = dev->CreateCubeTexture(adjSize, 1, D3DUSAGE_DYNAMIC, fmt, D3DPOOL_DEFAULT, &cubeTex, nullptr);
+    if (FAILED(hr)) return nullptr;
+    return cubeTex;
+}
+
 static void buildMask(FIBITMAP* fib, BYTE* bits, int pitch, int w, int h) {
     for (int y = 0; y < h; ++y) {
         BYTE* src = FreeImage_GetScanLine(fib, h - 1 - y);
