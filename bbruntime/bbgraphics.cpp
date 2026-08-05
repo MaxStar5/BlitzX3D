@@ -231,6 +231,7 @@ static float cubic_weight(float t, float a = -0.5f) {
 
 static gxCanvas* tformCanvas(gxCanvas* c, float m[2][2], int x_handle, int y_handle)
 {
+    c->backup();
 
     vec2 v, v0, v1, v2, v3;
     float i[2][2];
@@ -258,6 +259,7 @@ static gxCanvas* tformCanvas(gxCanvas* c, float m[2][2], int x_handle, int y_han
         fabs(m[0][1]) < 0.001f && fabs(m[1][0]) < 0.001f &&
         fabs(minx - (int)minx) < 0.001f && fabs(miny - (int)miny) < 0.001f) {
         t->blit(0, 0, c, -(int)minx, -(int)miny, c->getWidth(), c->getHeight(), true);
+        t->backup();
         return t;
     }
 
@@ -342,7 +344,7 @@ static gxCanvas* tformCanvas(gxCanvas* c, float m[2][2], int x_handle, int y_han
                     color = ((unsigned)aa << 24) | (rr << 16) | (gg << 8) | bb;
                 }
                 else {
-                    color = 0; // this should never happen and if it does the world will explode
+                    color = 0; // this still should never happen and if it does the world will explode
                 }
             }
             else {
@@ -356,6 +358,7 @@ static gxCanvas* tformCanvas(gxCanvas* c, float m[2][2], int x_handle, int y_han
 
     t->unlock();
     c->unlock();
+    t->backup();
 
     return t;
 }
