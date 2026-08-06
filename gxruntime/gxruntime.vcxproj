@@ -88,7 +88,7 @@
       <MinimalRebuild>false</MinimalRebuild>
       <CallingConvention>StdCall</CallingConvention>
       <LanguageStandard>stdcpp20</LanguageStandard>
-      <AdditionalIncludeDirectories>..\ffmpeg\include;$(DXSDK_DIR)Include;$(ProjectDir);..\freetype\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(SolutionDir)packages\FreeImageNative.3.17.0\build\native\include\;..\ffmpeg\include;$(DXSDK_DIR)Include;$(ProjectDir);..\freetype\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
     </ClCompile>
     <ResourceCompile>
@@ -102,7 +102,7 @@
     <Lib>
       <SuppressStartupBanner>true</SuppressStartupBanner>
       <OutputFile>.\Release\gxruntime.lib</OutputFile>
-      <AdditionalLibraryDirectories>$(DXSDK_DIR)Lib\x86</AdditionalLibraryDirectories>
+      <AdditionalLibraryDirectories>$(ProjectDir)packages\FreeImageNative.3.17.0\build\native\lib\Win32\;$(DXSDK_DIR)Lib\x86</AdditionalLibraryDirectories>
     </Lib>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
@@ -195,7 +195,19 @@
     <ClInclude Include="gxutf8.h" />
     <ClInclude Include="std.h" />
   </ItemGroup>
+  <ItemGroup>
+    <None Include="packages.config" />
+  </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
+    <Import Project="..\packages\FreeImageNative.redist.3.17.0\build\native\FreeImageNative.redist.targets" Condition="Exists('..\packages\FreeImageNative.redist.3.17.0\build\native\FreeImageNative.redist.targets')" />
+    <Import Project="..\packages\FreeImageNative.3.17.0\build\native\FreeImageNative.targets" Condition="Exists('..\packages\FreeImageNative.3.17.0\build\native\FreeImageNative.targets')" />
   </ImportGroup>
+  <Target Name="EnsureNuGetPackageBuildImports" BeforeTargets="PrepareForBuild">
+    <PropertyGroup>
+      <ErrorText>This project references NuGet package(s) that are missing on this computer. Use NuGet Package Restore to download them.  For more information, see http://go.microsoft.com/fwlink/?LinkID=322105. The missing file is {0}.</ErrorText>
+    </PropertyGroup>
+    <Error Condition="!Exists('..\packages\FreeImageNative.redist.3.17.0\build\native\FreeImageNative.redist.targets')" Text="$([System.String]::Format('$(ErrorText)', '..\packages\FreeImageNative.redist.3.17.0\build\native\FreeImageNative.redist.targets'))" />
+    <Error Condition="!Exists('..\packages\FreeImageNative.3.17.0\build\native\FreeImageNative.targets')" Text="$([System.String]::Format('$(ErrorText)', '..\packages\FreeImageNative.3.17.0\build\native\FreeImageNative.targets'))" />
+  </Target>
 </Project>

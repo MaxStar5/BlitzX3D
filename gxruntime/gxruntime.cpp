@@ -5,7 +5,7 @@
 
 #include "../gxruntime/gxutf8.h"
 
-#include "../freeimage/freeimage.h"
+#include <freeimage.h>
 
 #include <sstream>
 #include <shellapi.h>

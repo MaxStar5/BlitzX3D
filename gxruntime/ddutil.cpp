@@ -7,7 +7,7 @@
 
 extern gxRuntime* gx_runtime;
 
-#include "../freeimage/freeimage.h"
+#include <freeimage.h>
 
 static AsmCoder asm_coder;
 
