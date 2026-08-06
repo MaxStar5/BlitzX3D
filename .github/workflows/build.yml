@@ -1,0 +1,51 @@
+name: Build
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Add MSBuild to PATH
+        uses: microsoft/setup-msbuild@v2
+
+      - name: Install required VS workloads (MFC/ATL v143 + ASP.NET)
+        shell: pwsh
+        run: |
+          $vsInstallPath = & "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" -latest -property installationPath
+          & "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vs_installer.exe" modify `
+            --installPath "$vsInstallPath" `
+            --add Microsoft.VisualStudio.Component.VC.ATLMFC `
+            --add Microsoft.VisualStudio.Component.VC.ATL `
+            --add Microsoft.NetCore.Component.Web `
+            --add Microsoft.Net.Component.4.8.SDK `
+            --quiet --norestart --wait
+
+      - name: Create cryptseed.h
+        shell: pwsh
+        run: |
+          Copy-Item "linker\cryptseed.h.example" "linker\cryptseed.h"
+          $seedHex = "0x{0:X8}u" -f (1000000000 + ${env:GITHUB_RUN_NUMBER})
+          (Get-Content "linker\cryptseed.h") -replace 'RUNTIME_KEY_SEED = 0x[0-9A-Fa-f]+u', "RUNTIME_KEY_SEED = $seedHex" | Set-Content "linker\cryptseed.h"
+
+      - name: Restore NuGet packages
+        run: nuget restore blitz3d.sln
+        continue-on-error: true
+
+      - name: Build solution (Release)
+        run: msbuild blitz3d.sln /p:Configuration=Release /m /v:minimal
+
+      - name: Upload build output
+        uses: actions/upload-artifact@v4
+        with:
+          name: blitz3d-release
+          path: |
+            _release/**
+            !_release/**/*.pdb
+            !_release/**/*.ilk
+          if-no-files-found: warn
