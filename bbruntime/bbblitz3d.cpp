@@ -33,7 +33,11 @@ static World* world;
 
 static std::unordered_set<Brush*> brush_set;
 std::unordered_set<Texture*> texture_set;
-static std::unordered_set<Entity*> entity_set;
+struct EntityInfo {
+	std::string name;
+	bool alive;
+};
+static std::unordered_map<Entity*, EntityInfo> entity_map;
 
 static Listener* listener;
 
@@ -54,6 +58,12 @@ static Loader_B3D loader_b3d;
 
 static std::map<std::string, Transform> loader_mat_map;
 
+#define VALIDATE_ENTITY_VOID(e, func) \
+if (!debugEntity(e, func)) return;
+
+#define VALIDATE_ENTITY_RET(e, func, ret) \
+    if (!debugEntity(e, func)) return ret;
+
 static inline void debug3d(const char* function) {
 	if (!gx_scene) {
 		ErrorLog(function, MultiLang::graphics_not_set);
@@ -72,15 +82,28 @@ static inline void debugBrush(Brush* b, const char* function) {
 	}
 }
 
-static inline void debugEntity(Entity* e, const char* function) {
-	if (!entity_set.count(e)) {
-		ErrorLog(function, MultiLang::entity_not_exist);
+static inline bool debugEntity(Entity* e, const char* function) {
+	auto it = entity_map.find(e);
+	if (it != entity_map.end() && it->second.alive) {
+		return true;
 	}
+	std::string name = "(unknown)";
+	if (it != entity_map.end()) {
+		name = it->second.name.empty() ? "(unnamed)" : it->second.name;
+	}
+	std::string msg = std::format("{}: Entity does not exist! (ptr : {}, name : {})", function, (void*)e, name);
+	throw bbEx(msg.c_str());
+	return false;
 }
 
 static inline void debugParent(Entity* e, const char* function) {
 	debug3d(function);
-	if (e && !entity_set.count(e)) ErrorLog(function, MultiLang::parent_entity_not_exist);
+	if (e) {
+		auto it = entity_map.find(e);
+		if (it == entity_map.end() || !it->second.alive) {
+			ErrorLog(function, MultiLang::parent_entity_not_exist);
+		}
+	}
 }
 
 static inline void debugMesh(MeshModel* m, const char* function) {
@@ -183,7 +206,8 @@ static void collapseMesh(MeshModel* mesh, Entity* e) {
 }
 
 static void insert(Entity* e) {
-	/*if (debug)*/ entity_set.insert(e);
+	//if (debug) entity_set.insert(e);
+	entity_map[e] = { "", true };
 	e->setVisible(true);
 	e->setEnabled(true);
 	e->getObject()->reset();
@@ -195,6 +219,7 @@ static void insert(Entity* e) {
 static Entity* insertEntity(Entity* e, Entity* p) {
 	e->setParent(p);
 	insert(e);
+	entity_map[e] = { "", true };
 	return e;
 }
 
@@ -203,7 +228,11 @@ static void erase(Entity* e) {
 		erase(p);
 	}
 	if (e->getListener()) listener = 0;
-	/*if (debug)*/ entity_set.erase(e);
+	auto it = entity_map.find(e);
+	if (it != entity_map.end()) {
+		it->second.alive = false;
+	}
+	//if (debug) entity_set.erase(e);
 }
 
 static Entity* findChild(Entity* e, const std::string& t) {
@@ -1579,24 +1608,25 @@ void  bbFreeEntity(Entity* e) {
 
 
 int bbEntityExist(Entity* e) {
-	return entity_set.contains(e);
+	auto it = entity_map.find(e);
+	return (it != entity_map.end() && it->second.alive) ? 1 : 0;
 }
 
 void  bbHideEntity(Entity* e) {
-	debugEntity(e, "HideEntity");
+	VALIDATE_ENTITY_VOID(e, "HideEntity");
 	e->setEnabled(false);
 	e->setVisible(false);
 }
 
 void  bbShowEntity(Entity* e) {
-	debugEntity(e, "ShowEntity");
+	VALIDATE_ENTITY_VOID(e, "ShowEntity");
 	e->setVisible(true);
 	e->setEnabled(true);
 	e->getObject()->reset();
 }
 
 int bbEntityHidden(Entity* e) {
-	debugEntity(e, "EntityHidden");
+	VALIDATE_ENTITY_RET(e, "EntityHidden", 0);
 	return !e->visible();
 }
 
@@ -1799,52 +1829,52 @@ void  bbEntityOrder(Object* o, int n) {
 // ENTITY PROPERTY COMMANDS //
 //////////////////////////////
 float  bbEntityX(Entity* e, int global) {
-	debugEntity(e, "EntityX");
+	VALIDATE_ENTITY_RET(e, "EntityX", 0.0f);
 	return global ? e->getWorldPosition().x : e->getLocalPosition().x;
 }
 
 float  bbEntityY(Entity* e, int global) {
-	debugEntity(e, "EntityY");
+	VALIDATE_ENTITY_RET(e, "EntityY", 0.0f);
 	return global ? e->getWorldPosition().y : e->getLocalPosition().y;
 }
 
 float  bbEntityZ(Entity* e, int global) {
-	debugEntity(e, "EntityZ");
+	VALIDATE_ENTITY_RET(e, "EntityZ", 0.0f);
 	return global ? e->getWorldPosition().z : e->getLocalPosition().z;
 }
 
 float  bbEntityPitch(Entity* e, int global) {
-	debugEntity(e, "EntityPitch");
+	VALIDATE_ENTITY_RET(e, "EntityPitch", 0.0f);
 	return quatPitch(global ? e->getWorldRotation() : e->getLocalRotation()) * rtod;
 }
 
 float  bbEntityYaw(Entity* e, int global) {
-	debugEntity(e, "EntityYaw");
+	VALIDATE_ENTITY_RET(e, "EntityYaw", 0.0f);
 	return quatYaw(global ? e->getWorldRotation() : e->getLocalRotation()) * rtod;
 }
 
 float  bbEntityRoll(Entity* e, int global) {
-	debugEntity(e, "EntityRoll");
+	VALIDATE_ENTITY_RET(e, "EntityRoll", 0.0f);
 	return quatRoll(global ? e->getWorldRotation() : e->getLocalRotation()) * rtod;
 }
 
 float  bbEntityScaleX(Entity* e, int global) {
-	debugEntity(e, "EntityScaleX");
+	VALIDATE_ENTITY_RET(e, "EntityScaleX", 0.0f);
 	return global ? e->getWorldScale().x : e->getLocalScale().x;
 }
 
 float  bbEntityScaleY(Entity* e, int global) {
-	debugEntity(e, "EntityScaleY");
+	VALIDATE_ENTITY_RET(e, "EntityScaleY", 0.0f);
 	return global ? e->getWorldScale().y : e->getLocalScale().y;
 }
 
 float  bbEntityScaleZ(Entity* e, int global) {
-	debugEntity(e, "EntityScaleZ");
+	VALIDATE_ENTITY_RET(e, "EntityScaleZ", 0.0f);
 	return global ? e->getWorldScale().z : e->getLocalScale().z;
 }
 
 float  bbGetMatElement(Entity* e, int row, int col) {
-	debugEntity(e, "GetMatElement");
+	VALIDATE_ENTITY_RET(e, "GetMatElement", 0.0f);
 	return row < 3 ? e->getWorldTform().m[row][col] : e->getWorldTform().v[col];
 }
 
@@ -2056,48 +2086,48 @@ float  bbDistanceSquared(float x1, float x2, float y1, float y2, float z1, float
 // ENTITY TRANSFORMATION COMMANDS //
 ////////////////////////////////////
 void  bbMoveEntity(Entity* e, float x, float y, float z) {
-	debugEntity(e, "MoveEntity");
+	VALIDATE_ENTITY_VOID(e, "MoveEntity");
 	e->setLocalPosition(e->getLocalPosition() + e->getLocalRotation() * Vector(x, y, z));
 }
 
 void  bbTurnEntity(Entity* e, float p, float y, float r, int global) {
-	debugEntity(e, "TurnEntity");
+	VALIDATE_ENTITY_VOID(e, "TurnEntity");
 	global ?
 		e->setWorldRotation(rotationQuat(p * dtor, y * dtor, r * dtor) * e->getWorldRotation()) :
 		e->setLocalRotation(e->getLocalRotation() * rotationQuat(p * dtor, y * dtor, r * dtor));
 }
 
 void  bbTranslateEntity(Entity* e, float x, float y, float z, int global) {
-	debugEntity(e, "TranslateEntity");
+	VALIDATE_ENTITY_VOID(e, "TranslateEntity");
 	global ?
 		e->setWorldPosition(e->getWorldPosition() + Vector(x, y, z)) :
 		e->setLocalPosition(e->getLocalPosition() + Vector(x, y, z));
 }
 
 void  bbPositionEntity(Entity* e, float x, float y, float z, int global) {
-	debugEntity(e, "PositionEntity");
+	VALIDATE_ENTITY_VOID(e, "PositionEntity");
 	global ?
 		e->setWorldPosition(Vector(x, y, z)) :
 		e->setLocalPosition(Vector(x, y, z));
 }
 
 void  bbScaleEntity(Entity* e, float x, float y, float z, int global) {
-	debugEntity(e, "ScaleEntity");
+	VALIDATE_ENTITY_VOID(e, "ScaleEntity");
 	global ?
 		e->setWorldScale(Vector(x, y, z)) :
 		e->setLocalScale(Vector(x, y, z));
 }
 
 void  bbRotateEntity(Entity* e, float p, float y, float r, int global) {
-	debugEntity(e, "RotateEntity");
+	VALIDATE_ENTITY_VOID(e, "RotateEntity");
 	global ?
 		e->setWorldRotation(rotationQuat(p * dtor, y * dtor, r * dtor)) :
 		e->setLocalRotation(rotationQuat(p * dtor, y * dtor, r * dtor));
 }
 
 void  bbPointEntity(Entity* e, Entity* t, float roll) {
-	debugEntity(e, "PointEntity");
-	debugEntity(t, "PointEntity");
+	VALIDATE_ENTITY_VOID(e, "PointEntity");
+	VALIDATE_ENTITY_VOID(t, "PointEntity");
 	Vector v = t->getWorldTform().v - e->getWorldTform().v;
 	e->setWorldRotation(rotationQuat(v.pitch(), v.yaw(), roll * dtor));
 }
@@ -2131,9 +2161,14 @@ void  bbAlignToVector(Entity* e, float nx, float ny, float nz, int axis, float r
 // ENTITY MISC COMMANDS //
 //////////////////////////
 void  bbNameEntity(Entity* e, BBStr* t) {
-	debugEntity(e, "NameEntity");
-	e->setName(*t);
+	VALIDATE_ENTITY_VOID(e, "NameEntity");
+	std::string name = *t;
 	delete t;
+	e->setName(name);
+	auto it = entity_map.find(e);
+	if (it != entity_map.end()) {
+		it->second.name = name;
+	}
 }
 
 BBStr* bbEntityName(Entity* e) {
