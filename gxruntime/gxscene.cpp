@@ -43,6 +43,14 @@ static uint64_t computeRenderStateKey(const gxScene::RenderState& rs) {
 	key ^= (uint64_t)(rs.alpha * 255.0f) << 16;
 	key ^= (uint64_t)(rs.shininess * 255.0f) << 24;
 
+	uint32_t r_bits, g_bits, b_bits;
+	memcpy(&r_bits, &rs.color[0], sizeof(float));
+	memcpy(&g_bits, &rs.color[1], sizeof(float));
+	memcpy(&b_bits, &rs.color[2], sizeof(float));
+	key ^= (uint64_t)r_bits << 40;
+	key ^= (uint64_t)g_bits >> 8;
+	key ^= (uint64_t)b_bits << 20;
+
 	if (rs.effect) key ^= (uint64_t)(uintptr_t)rs.effect << 32;
 
 	for (int i = 0; i < gxScene::MAX_TEXTURES; ++i) {
