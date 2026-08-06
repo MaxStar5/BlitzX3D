@@ -123,7 +123,7 @@
       <ProgramDataBaseFileName>.\Debug\</ProgramDataBaseFileName>
       <BasicRuntimeChecks>EnableFastChecks</BasicRuntimeChecks>
       <CallingConvention>StdCall</CallingConvention>
-      <AdditionalIncludeDirectories>..\freetype\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(SolutionDir)packages\FreeImageNative.3.17.0\build\native\include\;..\ffmpeg\include;$(DXSDK_DIR)Include;$(ProjectDir);..\freetype\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <LanguageStandard>stdcpp20</LanguageStandard>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
     </ClCompile>
@@ -138,6 +138,7 @@
     <Lib>
       <SuppressStartupBanner>true</SuppressStartupBanner>
       <OutputFile>.\Debug\gxruntime.lib</OutputFile>
+      <AdditionalLibraryDirectories>$(ProjectDir)packages\FreeImageNative.3.17.0\build\native\lib\Win32\;$(DXSDK_DIR)Lib\x86</AdditionalLibraryDirectories>
     </Lib>
   </ItemDefinitionGroup>
   <ItemGroup>
@@ -154,10 +155,11 @@
     <ClCompile Include="gxinput.cpp" />
     <ClCompile Include="gxlight.cpp" />
     <ClCompile Include="gxmesh.cpp" />
-    <ClCompile Include="gxmovie.cpp">
-      <CallingConvention Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">Cdecl</CallingConvention>
-      <PreprocessorDefinitions Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">GXMOVIE_DEBUG_DUMP_FIRST_FRAME;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-    </ClCompile>
+	<ClCompile Include="gxmovie.cpp">
+	  <PrecompiledHeader>NotUsing</PrecompiledHeader>
+	  <CallingConvention>Cdecl</CallingConvention>
+	  <PreprocessorDefinitions Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">GXMOVIE_DEBUG_DUMP_FIRST_FRAME;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+	</ClCompile>
     <ClCompile Include="gxruntime.cpp">
       <AssemblerOutput Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">AssemblyAndSourceCode</AssemblerOutput>
     </ClCompile>
