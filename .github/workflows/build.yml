@@ -29,43 +29,42 @@ jobs:
       - name: Install DirectX SDK (June 2010)
         shell: pwsh
         run: |
+          Write-Host "Starting DirectX SDK step"
+      
           # Work around S1023
           $vc2010x86 = "{F0C3E5D1-1ADE-321E-8167-68EF0DE699A5}"
           $vc2010x64 = "{1D8E6291-B0D5-35EC-8441-6616F567A0F7}"
       
-          foreach ($guid in @($vc2010x86,$vc2010x64)) {
-            Start-Process msiexec.exe -ArgumentList "/x $guid /quiet /norestart" -Wait -ErrorAction SilentlyContinue
+          Write-Host "Removing VC++ 2010 redistributables"
+          foreach ($guid in @($vc2010x86, $vc2010x64)) {
+            Write-Host "Removing $guid"
+            Start-Process -FilePath "MsiExec.exe" -ArgumentList "/x $guid /quiet /norestart" -Wait
+            Write-Host "Finished $guid"
           }
       
-          $exe = "$env:TEMP\DXSDK_Jun10.exe"
-          $extract = "$env:TEMP\DXSDK"
-      
+          Write-Host "Downloading DirectX SDK"
           Invoke-WebRequest `
             -Uri "https://download.microsoft.com/download/A/E/7/AE743F1F-632B-4809-87A9-AA1BB3458E31/DXSDK_Jun10.exe" `
-            -OutFile $exe
+            -OutFile "$env:TEMP\DXSDK_Jun10.exe"
       
-          Remove-Item $extract -Recurse -Force -ErrorAction Ignore
-          New-Item -ItemType Directory -Path $extract | Out-Null
-      
-          Start-Process $exe `
-            -ArgumentList "/Q /T:$extract" `
-            -Wait
-      
-          if (!(Test-Path "$extract\DXSETUP.exe")) {
-            throw "DXSETUP.exe not extracted."
-          }
-      
-          Start-Process "$extract\DXSETUP.exe" `
+          Write-Host "Installing DirectX SDK"
+          Start-Process `
+            -FilePath "$env:TEMP\DXSDK_Jun10.exe" `
             -ArgumentList "/silent" `
             -Wait
       
+          Write-Host "Checking DirectX SDK"
+      
           $dxsdkPath = "${env:ProgramFiles(x86)}\Microsoft DirectX SDK (June 2010)\"
       
-          if (!(Test-Path "$dxsdkPath\Include\d3dx9.h")) {
-            throw "DirectX SDK installation failed."
+          if (-not (Test-Path "$dxsdkPath\Include\d3dx9.h")) {
+            Write-Error "DirectX SDK install failed"
+            exit 1
           }
       
-          "DXSDK_DIR=$dxsdkPath" >> $env:GITHUB_ENV
+          echo "DXSDK_DIR=$dxsdkPath" >> $env:GITHUB_ENV
+      
+          Write-Host "DirectX SDK complete"
 
       - name: Create cryptseed.h
         shell: pwsh
