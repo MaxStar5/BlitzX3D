@@ -5,7 +5,7 @@ on:
 
 jobs:
   build:
-    runs-on: windows-latest
+    runs-on: windows-2022
 
     steps:
       - name: Checkout code
@@ -14,17 +14,17 @@ jobs:
       - name: Add MSBuild to PATH
         uses: microsoft/setup-msbuild@v2
 
-      - name: Install required VS workloads (MFC/ATL v143 + ASP.NET)
+      - name: Install required VS workloads (MFC/ATL v143)
         shell: pwsh
         run: |
-          $vsInstallPath = & "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" -latest -property installationPath
-          & "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vs_installer.exe" modify `
-            --installPath "$vsInstallPath" `
-            --add Microsoft.VisualStudio.Component.VC.ATLMFC `
-            --add Microsoft.VisualStudio.Component.VC.ATL `
-            --add Microsoft.NetCore.Component.Web `
-            --add Microsoft.Net.Component.4.8.SDK `
-            --quiet --norestart --wait
+          $vsPath = & "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" -latest -property installationPath
+          Write-Host "VS install path: $vsPath"
+          Start-Process -FilePath "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vs_installer.exe" -ArgumentList `
+            "modify", "--installPath", "`"$vsPath`"", `
+            "--add", "Microsoft.VisualStudio.Component.VC.ATLMFC", `
+            "--add", "Microsoft.VisualStudio.Component.VC.ATL", `
+            "--quiet", "--norestart", "--wait" `
+            -Wait -PassThru | Select-Object -ExpandProperty ExitCode
 
       - name: Create cryptseed.h
         shell: pwsh
