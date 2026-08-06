@@ -62,11 +62,13 @@ static void collided(Object* src, Object* dest, const Line& line,
 
 void World::clearCollisions() {
 	Scene* s = g_sceneManager.get(g_sceneManager.currentSceneId);
+	if (!s) s = g_sceneManager.get(0);
 	if (s) s->collisions.clear();
 }
 
 void World::addCollision(int src_type, int dst_type, int method, int response) {
 	Scene* s = g_sceneManager.get(g_sceneManager.currentSceneId);
+	if (!s) s = g_sceneManager.get(0);
 	if (!s) return;
 	auto& info = s->collisions[src_type];
 	for (const auto& t : info) {
@@ -288,7 +290,8 @@ void World::update(float elapsed) {
 	enumEnabled();
 
 	Scene* curr = g_sceneManager.get(g_sceneManager.currentSceneId);
-	if (!curr) return;
+	if (!curr) curr = g_sceneManager.get(0);
+	if (!curr) return; // should never happen
 
 	std::unordered_map<int, std::vector<Object*>> objsByType;
 	for (Object* o : _enabled) {
@@ -354,7 +357,8 @@ void World::render(float tween) {
 	_visible.clear();
 
 	Scene* curr = g_sceneManager.get(g_sceneManager.currentSceneId);
-	if (!curr) return;
+	if (!curr) curr = g_sceneManager.get(0);
+	if (!curr) return; // should never happen
 	curr->lights.clear();
 	curr->mirrors.clear();
 	curr->listeners.clear();

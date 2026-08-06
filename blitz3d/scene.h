@@ -38,7 +38,10 @@ public:
     int nextId = 1;
     int currentSceneId = 0;
 
-    SceneManager() {}
+    SceneManager() {
+        scenes[0] = new Scene(0); // default global scene
+        nextId = 1;
+    }
     ~SceneManager() { clearAll(); }
 
     int createScene() {
@@ -49,7 +52,12 @@ public:
 
     Scene* get(int id) {
         auto it = scenes.find(id);
-        return (it != scenes.end()) ? it->second : nullptr;
+        if (it != scenes.end()) return it->second;
+        if (id == 0) {
+            scenes[0] = new Scene(0);
+            return scenes[0];
+        }
+        return nullptr;
     }
 
     void setCurrent(int id) {
@@ -72,9 +80,11 @@ public:
 
     void clearAll() {
         for (auto& pair : scenes) {
+            if (pair.first == 0) continue; // never delete global scene
             delete pair.second;
         }
         scenes.clear();
+        scenes[0] = new Scene(0);
         currentSceneId = 0;
     }
 };

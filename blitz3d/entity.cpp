@@ -41,14 +41,18 @@ void Entity::insert() {
 		_last_orphan = this;
 	}
 
-	if (g_sceneManager.currentSceneId != 0) {
+	if (_parent) {
+		sceneId = _parent->sceneId;
+	}
+	else {
 		sceneId = g_sceneManager.currentSceneId;
-		if (Scene* s = g_sceneManager.get(sceneId)) {
-			s->add(this);
-		}
+	}
+	if (Scene* s = g_sceneManager.get(sceneId)) {
+		s->add(this);
 	}
 	else {
 		sceneId = 0;
+		g_sceneManager.get(0)->add(this);
 	}
 }
 

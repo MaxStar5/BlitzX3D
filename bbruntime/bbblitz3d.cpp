@@ -2232,7 +2232,16 @@ void bbSetScene(int id) {
 }
 
 void bbClearScene(int id) {
-	g_sceneManager.clearScene(id);
+	if (id == 0) return; // dont clear global scene
+	Scene* s = g_sceneManager.get(id);
+	if (!s) return;
+	while (!s->members.empty()) {
+		Entity* e = *s->members.begin();
+		delete e;
+	}
+	delete s;
+	g_sceneManager.scenes.erase(id);
+	if (g_sceneManager.currentSceneId == id) g_sceneManager.currentSceneId = 0;
 }
 
 int bbGetCurrentScene() {
