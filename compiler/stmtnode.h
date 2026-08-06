@@ -172,7 +172,6 @@ struct DeleteNode : public StmtNode {
 	void semant(Environ* e);
 	void translate(Codegen* g);
 };
-
 struct DeleteEachNode : public StmtNode {
 	std::string typeIdent;
 	DeleteEachNode(const std::string& t) :typeIdent(t) {}

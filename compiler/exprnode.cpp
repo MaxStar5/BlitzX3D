@@ -191,6 +191,20 @@ TNode* CallNode::translate(Codegen* g) {
 	}
 	return t;
 }
+///////////////////////
+// Function Pointer ///
+///////////////////////
+
+ExprNode* CallPtrNode::semant(Environ* env) {
+	Decl* sem_decl = env->findFunc(ident, 0);
+	if (!sem_decl || !(sem_decl->kind & DECL_FUNC)) ex(std::format(MultiLang::function_not_found, ident));
+	sem_type = Type::int_type;
+	return this;
+}
+
+TNode* CallPtrNode::translate(Codegen* g) {
+	return global("_f" + ident);
+}
 
 /////////////////////////
 // Variable expression //

@@ -812,6 +812,15 @@ ExprNode* Parser::parsePrimary(bool opt) {
 			result = new VarExprNode(var);
 		}
 		break;
+	case '%':
+		if (toker->next() == IDENT) {
+			result = new CallPtrNode(toker->text());
+			toker->next();
+			break;
+		}
+		else {
+			exp(MultiLang::identifier);
+		}
 	default:
 		if (!opt) exp(MultiLang::expression);
 	}
