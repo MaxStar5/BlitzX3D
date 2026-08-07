@@ -58,7 +58,7 @@ other software.
 
 This grant does not expire. However, your rights under this Section 3 are
 expressly conditioned upon your compliance with Section 4 and may be terminated
-as set forth in Section 10.
+as set forth in Section 11.
 
 
 4. SOURCE PUBLICATION REQUIREMENT AND PREVIOUSLY DISTRIBUTED SOFTWARE
