@@ -46,6 +46,8 @@ Type* Environ::findType(const std::string& s) {
     if (s == "%") return Type::int_type;		//INTEGER
     if (s == "#") return Type::float_type;	//FLOATING POINT
     if (s == "$") return Type::string_type;	//STRING
+    if (s == "@") return Type::pointer_type;
+
     for (Environ* e = this; e; e = e->globals) {
         if (Decl* d = e->typeDecls->findDecl(s)) return d->type->structType();
     }
