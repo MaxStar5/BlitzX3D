@@ -565,6 +565,10 @@ void bbTextureAnisotropic(int level) {
 	gx_scene->textureAnisotropic = level;
 }
 
+void bbBumpNormalize(int enable) {
+	if (gx_scene) gx_scene->setBumpNormalize(enable != 0);
+}
+
 int bbTextureWidth(Texture* t) {
 	debugTexture(t, "TextureWidth");
 	return t->getCanvas(0)->getWidth();
@@ -2341,6 +2345,7 @@ void blitz3d_link(void (*rtSym)(const char* sym, void* pc)) {
 	rtSym("PositionTexture%texture#u_offset#v_offset", bbPositionTexture);
 	rtSym("TextureLodBias#bias", bbTextureLodBias);
 	rtSym("TextureAnisotropic%level", bbTextureAnisotropic);
+	rtSym("BumpNormalize%enable", bbBumpNormalize);
 
 	rtSym("%TextureWidth%texture", bbTextureWidth);
 	rtSym("%TextureHeight%texture", bbTextureHeight);

@@ -325,10 +325,23 @@ void gxScene::setTexState(int n, const TexState& state, bool tex_blend) {
 			setTSS(n, D3DTSS_COLOROP, D3DTOP_BUMPENVMAP);
 			break;
 	}
-	setTSS(n, D3DTSS_BUMPENVMAT00, state.bumpEnvMat[0][0]);
-	setTSS(n, D3DTSS_BUMPENVMAT01, state.bumpEnvMat[0][1]);
-	setTSS(n, D3DTSS_BUMPENVMAT10, state.bumpEnvMat[1][0]);
-	setTSS(n, D3DTSS_BUMPENVMAT11, state.bumpEnvMat[1][1]);
+
+	float m00 = *(float*)&state.bumpEnvMat[0][0];
+	float m01 = *(float*)&state.bumpEnvMat[0][1];
+	float m10 = *(float*)&state.bumpEnvMat[1][0];
+	float m11 = *(float*)&state.bumpEnvMat[1][1];
+
+	if (bumpNormalize && state.canvas) {
+		float w = (float)state.canvas->getWidth();
+		float h = (float)state.canvas->getHeight();
+		if (w > 0.0f) { m00 *= w; m01 *= w; }
+		if (h > 0.0f) { m10 *= h; m11 *= h; }
+	}
+
+	setTSS(n, D3DTSS_BUMPENVMAT00, *(DWORD*)&m00);
+	setTSS(n, D3DTSS_BUMPENVMAT01, *(DWORD*)&m01);
+	setTSS(n, D3DTSS_BUMPENVMAT10, *(DWORD*)&m10);
+	setTSS(n, D3DTSS_BUMPENVMAT11, *(DWORD*)&m11);
 	setTSS(n, D3DTSS_BUMPENVLSCALE, state.bumpEnvScale);
 	setTSS(n, D3DTSS_BUMPENVLOFFSET, state.bumpEnvOffset);
 	setTSS(n, D3DTSS_ALPHAOP, (flags & gxCanvas::CANVAS_TEX_ALPHA) ? D3DTOP_MODULATE : D3DTOP_SELECTARG2);
