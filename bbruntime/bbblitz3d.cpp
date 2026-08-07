@@ -22,7 +22,7 @@
 #include "../blitz3d/cachedtexture.h"
 #include "../MultiLang/MultiLang.h"
 #include "../gxruntime/gxeffect.h"
-
+#include "../blitz3d/scene.h"
 
 //Why is everything static?
 gxScene* gx_scene;
@@ -2195,7 +2195,14 @@ BBStr* bbEntityClass(Entity* e) {
 
 void  bbClearWorld(int e, int b, int t, int fx) {
 	if (e) {
-		while (Entity::orphans()) bbFreeEntity(Entity::orphans());
+		Entity* next;
+		int current = g_sceneManager.currentSceneId;
+		for (Entity* ent = Entity::orphans(); ent; ent = next) {
+			next = ent->successor();
+			if (current == 0 || ent->getScene() == current) {
+				bbFreeEntity(ent);
+			}
+		}
 	}
 	if (b) {
 		while (brush_set.size()) bbFreeBrush(*brush_set.begin());
@@ -2212,6 +2219,37 @@ extern int active_texs;
 
 int  bbActiveTextures() {
 	return active_texs;
+}
+
+// ----- SCENES -----
+
+int bbCreateScene() {
+	return g_sceneManager.createScene();
+}
+
+void bbSetScene(int id) {
+	g_sceneManager.setCurrent(id);
+}
+
+void bbClearScene(int id) {
+	if (id == 0) return; // dont clear global scene
+	Scene* s = g_sceneManager.get(id);
+	if (!s) return;
+	while (!s->members.empty()) {
+		Entity* e = *s->members.begin();
+		delete e;
+	}
+	delete s;
+	g_sceneManager.scenes.erase(id);
+	if (g_sceneManager.currentSceneId == id) g_sceneManager.currentSceneId = 0;
+}
+
+int bbGetCurrentScene() {
+	return g_sceneManager.currentSceneId;
+}
+
+int bbSceneExists(int id) {
+	return g_sceneManager.get(id) != 0;
 }
 
 void blitz3d_open() {
@@ -2558,4 +2596,10 @@ void blitz3d_link(void (*rtSym)(const char* sym, void* pc)) {
 	rtSym("%AvailVirtual", bbAvailVirtual);
 
 	rtSym("%RunningOnWine", bbRunningUnderWine);
+
+	rtSym("%CreateScene", bbCreateScene);
+	rtSym("SetScene%scene_id", bbSetScene);
+	rtSym("ClearScene%scene_id", bbClearScene);
+	rtSym("%GetCurrentScene", bbGetCurrentScene);
+	rtSym("%SceneExists%scene_id", bbSceneExists);
 }
