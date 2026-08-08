@@ -26,6 +26,8 @@ class ProfilerListCtrl : public CListCtrl {
 	struct Row {
 		std::string func;
 		ProfileStats stats;
+		std::string lastText[9];
+		bool textSet[9] = { false, false, false, false, false, false, false, false, false };
 	};
 	std::vector<Row> rows;
 	int lastRowCount;
