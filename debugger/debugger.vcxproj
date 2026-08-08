@@ -113,7 +113,6 @@
       <OutputFile>..\_release\bin\debugger.dll</OutputFile>
       <ImportLibrary>.\Release\debugger.lib</ImportLibrary>
       <GenerateDebugInformation>false</GenerateDebugInformation>
-      <AdditionalDependencies>..\compiler\$(Configuration)\compiler.lib</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
