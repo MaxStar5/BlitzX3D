@@ -495,9 +495,7 @@ void MainFrame::OnTimer(UINT_PTR id) {
 	if (state == RUNNING || state == STOPPED) {
 		profiler.sampleStack();
 		profiler_panel.refresh(profiler, last_obj_cnt, last_unrel_cnt, last_str_cnt, last_working_set_bytes);
-		if (flame_graph_panel.IsWindowVisible()) {
-			flame_graph_panel.refresh();
-		}
+		flame_graph_panel.refresh();
 	}
 }
 

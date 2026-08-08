@@ -4,7 +4,6 @@
 #include "../MultiLang/MultiLang.h"
 
 #include <algorithm>
-#include <unordered_map>
 
 #define SUMMARY_HEIGHT 22
 
@@ -122,9 +121,6 @@ void ProfilerListCtrl::repaint() {
 	if(needRebuild) {
 		DeleteAllItems();
 		lastRowCount = (int)rows.size();
-		for(Row& r : rows) {
-			for(int c = 0; c < 9; ++c) r.textSet[c] = false;
-		}
 	}
 
 	__int64 totalSelf = curProf->totalSelfTicks();
@@ -132,70 +128,55 @@ void ProfilerListCtrl::repaint() {
 
 	char buf[64];
 	for(size_t i = 0; i < rows.size(); ++i) {
-		Row& r = rows[i];
+		const Row& r = rows[i];
+
 		int idx = (int)i;
 		if(needRebuild) {
 			InsertItem(idx, r.func.c_str());
-			r.lastText[0] = r.func;
-			r.textSet[0] = true;
 		}
-		else if(!r.textSet[0] || r.lastText[0] != r.func) {
+		else {
 			SetItemText(idx, 0, r.func.c_str());
-			r.lastText[0] = r.func;
-			r.textSet[0] = true;
 		}
 
 		double pctCpu = totalSelf ? (100.0 * (double)r.stats.selfTicks / (double)totalSelf) : 0.0;
 		sprintf(buf, "%.1f%%", pctCpu);
-		if(!r.textSet[1] || r.lastText[1] != buf) { SetItemText(idx, 1, buf); r.lastText[1] = buf; r.textSet[1] = true; }
+		SetItemText(idx, 1, buf);
 
 		double pctMem = (totalPosObjDelta && r.stats.netObjDelta > 0) ? (100.0 * (double)r.stats.netObjDelta / (double)totalPosObjDelta) : 0.0;
 		sprintf(buf, "%.1f%%", pctMem);
-		if(!r.textSet[2] || r.lastText[2] != buf) { SetItemText(idx, 2, buf); r.lastText[2] = buf; r.textSet[2] = true; }
+		SetItemText(idx, 2, buf);
 
 		sprintf(buf, "%d", r.stats.callCount);
-		if(!r.textSet[3] || r.lastText[3] != buf) { SetItemText(idx, 3, buf); r.lastText[3] = buf; r.textSet[3] = true; }
+		SetItemText(idx, 3, buf);
 
 		sprintf(buf, "%.3f", curProf->ticksToMs(r.stats.selfTicks));
-		if(!r.textSet[4] || r.lastText[4] != buf) { SetItemText(idx, 4, buf); r.lastText[4] = buf; r.textSet[4] = true; }
+		SetItemText(idx, 4, buf);
 
 		sprintf(buf, "%.3f", curProf->ticksToMs(r.stats.totalTicks));
-		if(!r.textSet[5] || r.lastText[5] != buf) { SetItemText(idx, 5, buf); r.lastText[5] = buf; r.textSet[5] = true; }
+		SetItemText(idx, 5, buf);
 
 		sprintf(buf, "%.3f", curProf->ticksToMs(r.stats.maxTicks));
-		if(!r.textSet[6] || r.lastText[6] != buf) { SetItemText(idx, 6, buf); r.lastText[6] = buf; r.textSet[6] = true; }
+		SetItemText(idx, 6, buf);
 
 		sprintf(buf, "%+d", r.stats.netObjDelta);
-		if(!r.textSet[7] || r.lastText[7] != buf) { SetItemText(idx, 7, buf); r.lastText[7] = buf; r.textSet[7] = true; }
+		SetItemText(idx, 7, buf);
 
 		sprintf(buf, "%+d", r.stats.netStrDelta);
-		if(!r.textSet[8] || r.lastText[8] != buf) { SetItemText(idx, 8, buf); r.lastText[8] = buf; r.textSet[8] = true; }
+		SetItemText(idx, 8, buf);
 	}
 }
 
 void ProfilerListCtrl::refresh(const Profiler& prof) {
 	curProf = &prof;
 
-	std::unordered_map<std::string, Row> previous;
-	previous.reserve(rows.size());
-	for(Row& r : rows) previous.emplace(r.func, std::move(r));
 	rows.clear();
 
 	const std::map<std::string, ProfileStats>& results = prof.results();
-	rows.reserve(results.size());
 	for(std::map<std::string, ProfileStats>::const_iterator it = results.begin(); it != results.end(); ++it) {
-		auto found = previous.find(it->first);
-		if(found != previous.end()) {
-			Row r = std::move(found->second);
-			r.stats = it->second;
-			rows.push_back(std::move(r));
-		}
-		else {
-			Row r;
-			r.func = it->first;
-			r.stats = it->second;
-			rows.push_back(std::move(r));
-		}
+		Row r;
+		r.func = it->first;
+		r.stats = it->second;
+		rows.push_back(r);
 	}
 
 	sortRows();
