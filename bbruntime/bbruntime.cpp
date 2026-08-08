@@ -181,18 +181,6 @@ void bbDebugLog(BBStr* t) {
     delete t;
 }
 
-void bbDebugLogWarning(BBStr* t) {
-    std::string msg = "[WARNING] " + *t;
-    gx_runtime->debugLog(msg.c_str());
-    delete t;
-}
-
-void bbDebugLogError(BBStr* t) {
-    std::string msg = "[ERROR] " + *t;
-    gx_runtime->debugLog(msg.c_str());
-    delete t;
-}
-
 void _bbDebugStmt(int pos, const char* file) {
     static int memPushCounter = 0;
     if (++memPushCounter >= 2000) {
@@ -291,8 +279,6 @@ void bbruntime_link(void (*rtSym)(const char* sym, void* pc)) {
     rtSym("SetClipboardContents$contents", bbSetClipboardContents);
     rtSym("MessageBox$title$text", bbMessageBox);
     rtSym("DebugLog$text", bbDebugLog);
-    rtSym("DebugLogWarning$text", bbDebugLogWarning);
-    rtSym("DebugLogError$text", bbDebugLogError);
 
     rtSym("_bbDebugStmt", _bbDebugStmt);
     rtSym("_bbDebugEnter", _bbDebugEnter);

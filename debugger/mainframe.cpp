@@ -40,7 +40,6 @@ BEGIN_MESSAGE_MAP(MainFrame, CFrameWnd)
 	ON_UPDATE_COMMAND_UI(ID_STEPINTO, updateCmdUI)
 	ON_UPDATE_COMMAND_UI(ID_STEPOUT, updateCmdUI)
 	ON_UPDATE_COMMAND_UI(ID_END, updateCmdUI)
-	ON_CBN_SELCHANGE(1002, OnFilterSelChange)
 
 END_MESSAGE_MAP()
 
@@ -86,15 +85,6 @@ int MainFrame::OnCreate(LPCREATESTRUCT lpCreateStruct) {
 	toolBar.SetBitmap(toolbmp);
 	toolBar.SetSizes(butsz, imgsz);
 	toolBar.SetButtons(toolbuts, toolcnt);
-
-	//Filter
-	m_filterCombo.Create(WS_CHILD | WS_VISIBLE | CBS_DROPDOWNLIST | WS_VSCROLL, CRect(0, 0, 110, 300), this, 1002);
-	m_filterCombo.AddString("All");
-	m_filterCombo.AddString("Info");
-	m_filterCombo.AddString("Warnings");
-	m_filterCombo.AddString("Errors");
-	m_filterCombo.SetCurSel(0);
-	m_currentFilter = 0;
 
 	//Tabber
 	tabber.Create(
@@ -172,29 +162,14 @@ void MainFrame::OnClose() {
 void MainFrame::OnSize(UINT type, int sw, int sh) {
 	CFrameWnd::OnSize(type, sw, sh);
 
-	CRect r, t;
-	GetClientRect(&r);
+	CRect r, t; GetClientRect(&r);
+	int x = r.left, y = r.top, w = r.Width(), h = r.Height();
 
-	int x = r.left;
-	int y = r.top;
-	int w = r.Width();
-	int h = r.Height();
-
-	toolBar.GetWindowRect(&t);
-	y += t.Height();
-	h -= t.Height();
+	toolBar.GetWindowRect(&t); y += t.Height(); h -= t.Height();
 
 	tabber.MoveWindow(x, y, w - 360, h);
+
 	tabber2.MoveWindow(x + w - 360, y, 360, h);
-
-	CRect rc;
-	tabber.GetWindowRect(&rc);
-	ScreenToClient(&rc);
-
-	m_filterCombo.MoveWindow(rc.right - 120, rc.top + 30, 110, 250);
-
-	m_filterCombo.ShowWindow(SW_SHOW);
-	m_filterCombo.BringWindowToTop();
 }
 
 void MainFrame::setRuntime(void* mod, void* env) {
@@ -299,65 +274,10 @@ void MainFrame::debugMsg(const char* msg, bool serious) {
 }
 
 void MainFrame::debugLog(const char* msg) {
-	std::string full = msg;
-	ELogSeverity severity = LOG_INFO;
-	std::string displayText;
-
-	if (full.find("[WARNING] ") == 0) {
-		severity = LOG_WARNING;
-		displayText = full.substr(10);
-	}
-	else if (full.find("[ERROR] ") == 0) {
-		severity = LOG_ERROR;
-		displayText = full.substr(8);
-	}
-	else {
-		displayText = full;
-	}
-
-	AddLogEntry(severity, displayText);
-}
-
-void MainFrame::AddLogEntry(ELogSeverity severity, const std::string& text) {
-	m_logEntries.push_back({ severity, text });
-	RefreshLogDisplay();
-}
-
-void MainFrame::RefreshLogDisplay() {
-	debug_log.SetSel(0, -1);
-	debug_log.ReplaceSel("");
-
-	CHARFORMAT cf = {};
-	cf.cbSize = sizeof(cf);
-	cf.dwMask = CFM_COLOR;
-
-	for (const auto& entry : m_logEntries) {
-
-		if (m_currentFilter == 1 && entry.severity != LOG_INFO) continue;
-		if (m_currentFilter == 2 && entry.severity != LOG_WARNING) continue;
-		if (m_currentFilter == 3 && entry.severity != LOG_ERROR) continue;
-
-		switch (entry.severity) {
-		case LOG_WARNING: cf.crTextColor = RGB(255, 200, 0); break;
-		case LOG_ERROR:   cf.crTextColor = RGB(255, 0, 0); break;
-		default:          cf.crTextColor = prefs.rgb_default; break;
-		}
-
-		debug_log.SetSel(-1, -1);
-		debug_log.SetSelectionCharFormat(cf);
-		debug_log.ReplaceSel(entry.text.c_str());
-		debug_log.ReplaceSel("\r\n");
-	}
-
-	debug_log.SetSel(-1, -1);
-	debug_log.SendMessage(EM_SCROLLCARET);
-
-	m_filterCombo.BringWindowToTop();
-}
-
-void MainFrame::OnFilterSelChange() {
-	m_currentFilter = m_filterCombo.GetCurSel();
-	RefreshLogDisplay();
+	debug_log.ReplaceSel(msg);
+	debug_log.ReplaceSel("\n");
+	tabber.setCurrent(0);
+	setState(state);
 }
 
 void MainFrame::debugSys(void* m) {
