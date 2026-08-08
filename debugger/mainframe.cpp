@@ -23,6 +23,7 @@ BEGIN_MESSAGE_MAP(MainFrame, CFrameWnd)
 	ON_WM_SIZE()
 	ON_WM_CLOSE()
 	ON_WM_WINDOWPOSCHANGING()
+	ON_WM_TIMER()
 
 	ON_COMMAND(ID_STOP, cmdStop)
 	ON_COMMAND(ID_RUN, cmdRun)
@@ -30,6 +31,8 @@ BEGIN_MESSAGE_MAP(MainFrame, CFrameWnd)
 	ON_COMMAND(ID_STEPINTO, cmdStepInto)
 	ON_COMMAND(ID_STEPOUT, cmdStepOut)
 	ON_COMMAND(ID_END, cmdEnd)
+	ON_COMMAND(ID_PROFILE_TOGGLE, cmdProfileToggle)
+	ON_COMMAND(ID_PROFILE_RESET, cmdProfileReset)
 
 	ON_UPDATE_COMMAND_UI(ID_STOP, updateCmdUI)
 	ON_UPDATE_COMMAND_UI(ID_RUN, updateCmdUI)
@@ -40,7 +43,11 @@ BEGIN_MESSAGE_MAP(MainFrame, CFrameWnd)
 
 END_MESSAGE_MAP()
 
-MainFrame::MainFrame() :state(STARTING), step_level(-1), cur_pos(0), cur_file(0) {
+#define PROFILER_TIMER_ID 1
+#define PROFILER_TIMER_MS 250
+
+MainFrame::MainFrame() :state(STARTING), step_level(-1), cur_pos(0), cur_file(0),
+	last_obj_cnt(0), last_unrel_cnt(0), last_str_cnt(0), last_working_set_bytes(0) {
 }
 
 MainFrame::~MainFrame() {
@@ -100,6 +107,13 @@ int MainFrame::OnCreate(LPCREATESTRUCT lpCreateStruct) {
 		CRect(0, 0, 0, 0), &tabber, 1);
 	tabber.insert(0, &debug_log, "Debug log");
 
+	//Profiler
+	profiler_panel.Create(
+		0, 0, WS_CHILD,
+		CRect(0, 0, 0, 0), &tabber, 4, 0);
+	tabber.insert(1, &profiler_panel, MultiLang::debugger_profiler);
+	tabber.setCurrent(0);
+
 	//Debug trees
 	locals_tree.Create(
 		WS_VISIBLE | WS_CHILD |
@@ -120,6 +134,8 @@ int MainFrame::OnCreate(LPCREATESTRUCT lpCreateStruct) {
 	tabber2.insert(1, &globals_tree, MultiLang::debugger_globals);
 	tabber2.insert(2, &consts_tree, MultiLang::debugger_consts);
 	tabber2.setCurrent(0);
+
+	SetTimer(PROFILER_TIMER_ID, PROFILER_TIMER_MS, 0);
 
 	setState(STARTING);
 
@@ -160,6 +176,8 @@ void MainFrame::setRuntime(void* mod, void* env) {
 	consts_tree.reset((Environ*)env);
 	globals_tree.reset((Module*)mod, (Environ*)env);
 	locals_tree.reset((Environ*)env);
+	profiler.reset();
+	profiler_panel.clear();
 }
 
 void MainFrame::showCurStmt() {
@@ -195,6 +213,9 @@ bool MainFrame::debugStmt(int pos, const char* file) {
 }
 
 void MainFrame::debugEnter(void* frame, void* env, const char* func) {
+	profiler.enter(func);
+	call_stack.push_back(func);
+
 	locals_tree.pushFrame(frame, env, func);
 
 	if(locals_tree.size() > 1) return;
@@ -206,12 +227,46 @@ void MainFrame::debugEnter(void* frame, void* env, const char* func) {
 }
 
 void MainFrame::debugLeave() {
+	profiler.leave();
+	if(!call_stack.empty()) call_stack.pop_back();
+
 	locals_tree.popFrame();
+}
+
+std::string MainFrame::buildCrashReport(const char* msg)const {
+	std::string s = msg ? msg : "";
+	s += "\r\n";
+
+	if(cur_file) {
+		int row = (cur_pos >> 16) & 0xffff, col = cur_pos & 0xffff;
+		s += "\r\nLocation: ";
+		s += cur_file;
+		s += " (line ";
+		s += std::to_string(row + 1);
+		s += ", col ";
+		s += std::to_string(col + 1);
+		s += ")\r\n";
+	}
+
+	if(!call_stack.empty()) {
+		s += "\r\nCall stack (innermost first):\r\n";
+		for(int i = (int)call_stack.size() - 1; i >= 0; --i) {
+			s += "  ";
+			s += call_stack[i];
+			s += "\r\n";
+		}
+	}
+
+	return s;
 }
 
 void MainFrame::debugMsg(const char* msg, bool serious) {
 	if(serious) {
-		::MessageBoxW(0, UTF8::convertToUtf16(msg).c_str(), MultiLang::runtime_error, MB_OK | MB_ICONWARNING | MB_TOPMOST | MB_SETFOREGROUND);
+		std::string report = buildCrashReport(msg);
+		::MessageBoxW(0, UTF8::convertToUtf16(report).c_str(), MultiLang::runtime_error, MB_OK | MB_ICONWARNING | MB_TOPMOST | MB_SETFOREGROUND);
+		showCurStmt();
+		profiler.resyncStack();
+		call_stack.clear();
 	}
 	else {
 		::MessageBoxW(0, UTF8::convertToUtf16(msg).c_str(), MultiLang::runtime_message, MB_OK | MB_ICONINFORMATION | MB_TOPMOST | MB_SETFOREGROUND);
@@ -226,6 +281,16 @@ void MainFrame::debugLog(const char* msg) {
 }
 
 void MainFrame::debugSys(void* m) {
+	if(!m) return;
+
+	int tag = *(int*)m;
+	if(tag == DBGSYS_MEMSTATS) {
+		DbgSysMemStats* s = (DbgSysMemStats*)m;
+		last_obj_cnt = s->objCnt;
+		last_unrel_cnt = s->unrelObjCnt;
+		last_str_cnt = s->stringCnt;
+		last_working_set_bytes = s->workingSetBytes;
+	}
 }
 
 void MainFrame::cmdStop() {
@@ -271,7 +336,7 @@ SourceFile* MainFrame::sourceFile(const char* file) {
 
 	it = files.insert(std::make_pair(file, t)).first;
 
-	int tab = files.size();
+	int tab = files.size() + 1;
 
 	t->Create(
 		WS_CHILD | WS_HSCROLL | WS_VSCROLL |
@@ -330,3 +395,21 @@ void MainFrame::OnWindowPosChanging(WINDOWPOS* pos) {
 	pos->cx = rect.right - pos->x;
 	pos->cy = rect.bottom - pos->y;
 }
+
+void MainFrame::OnTimer(UINT_PTR id) {
+	if(id != PROFILER_TIMER_ID) return;
+	if(state == RUNNING || state == STOPPED) {
+		profiler_panel.refresh(profiler, last_obj_cnt, last_unrel_cnt, last_str_cnt, last_working_set_bytes);
+	}
+}
+
+void MainFrame::cmdProfileToggle() {
+	profiler.enabled = !profiler.enabled;
+	if(profiler.enabled) profiler.reset();
+}
+
+void MainFrame::cmdProfileReset() {
+	profiler.reset();
+	profiler_panel.clear();
+}
+
