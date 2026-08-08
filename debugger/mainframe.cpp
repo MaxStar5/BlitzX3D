@@ -3,7 +3,6 @@
 #include "resource.h"
 #include "debuggerapp.h"
 #include "prefs.h"
-#include "flamegraph.h"
 #include "../MultiLang/MultiLang.h"
 
 #include "../gxruntime/gxutf8.h"
@@ -25,7 +24,6 @@ BEGIN_MESSAGE_MAP(MainFrame, CFrameWnd)
 	ON_WM_CLOSE()
 	ON_WM_WINDOWPOSCHANGING()
 	ON_WM_TIMER()
-	ON_WM_DESTROY()
 
 	ON_COMMAND(ID_STOP, cmdStop)
 	ON_COMMAND(ID_RUN, cmdRun)
@@ -126,10 +124,6 @@ int MainFrame::OnCreate(LPCREATESTRUCT lpCreateStruct) {
 	tabber.insert(1, &profiler_panel, MultiLang::debugger_profiler);
 	tabber.setCurrent(0);
 
-	//Flame Graph
-	flame_graph_panel.Create(NULL, NULL, WS_CHILD | WS_VISIBLE, CRect(0, 0, 0, 0), &tabber, 5);
-	tabber.insert(2, &flame_graph_panel, "Flame Graph");
-
 	//Debug trees
 	locals_tree.Create(
 		WS_VISIBLE | WS_CHILD |
@@ -156,11 +150,6 @@ int MainFrame::OnCreate(LPCREATESTRUCT lpCreateStruct) {
 	setState(STARTING);
 
 	return 0;
-}
-
-void MainFrame::OnDestroy() {
-	KillTimer(PROFILER_TIMER_ID);
-	CFrameWnd::OnDestroy();
 }
 
 void MainFrame::setState(int n) {
@@ -213,10 +202,7 @@ void MainFrame::setRuntime(void* mod, void* env) {
 	globals_tree.reset((Module*)mod, (Environ*)env);
 	locals_tree.reset((Environ*)env);
 	profiler.reset();
-	profiler.clearSamples();
 	profiler_panel.clear();
-	flame_graph_panel.setProfiler(&profiler);
-	flame_graph_panel.refresh();
 }
 
 void MainFrame::showCurStmt() {
@@ -491,27 +477,19 @@ void MainFrame::OnWindowPosChanging(WINDOWPOS* pos) {
 }
 
 void MainFrame::OnTimer(UINT_PTR id) {
-	if (id != PROFILER_TIMER_ID) return;
-	if (state == RUNNING || state == STOPPED) {
-		profiler.sampleStack();
+	if(id != PROFILER_TIMER_ID) return;
+	if(state == RUNNING || state == STOPPED) {
 		profiler_panel.refresh(profiler, last_obj_cnt, last_unrel_cnt, last_str_cnt, last_working_set_bytes);
-		flame_graph_panel.refresh();
 	}
 }
 
 void MainFrame::cmdProfileToggle() {
 	profiler.enabled = !profiler.enabled;
-	if (profiler.enabled) {
-		profiler.reset();
-		profiler.clearSamples();
-		flame_graph_panel.refresh();
-	}
+	if(profiler.enabled) profiler.reset();
 }
 
 void MainFrame::cmdProfileReset() {
 	profiler.reset();
-	profiler.clearSamples();
 	profiler_panel.clear();
-	flame_graph_panel.refresh();
 }
 
