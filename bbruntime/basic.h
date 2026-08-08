@@ -120,6 +120,4 @@ float	 _bbFPow(float x, float y);
 
 void	 bbRuntimeStats();
 
-struct BBMemStats { int objCnt, unrelObjCnt, stringCnt; __int64 workingSetBytes; };
-BBMemStats bbGetMemStats();
 #endif

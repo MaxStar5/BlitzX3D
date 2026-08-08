@@ -5,8 +5,6 @@
 #include "debugger.h"
 #include "sourcefile.h"
 #include "debugtree.h"
-#include "profiler.h"
-#include "profilerview.h"
 
 class MainFrame : public CFrameWnd, public Debugger {
 
@@ -17,19 +15,13 @@ class MainFrame : public CFrameWnd, public Debugger {
 	ConstsTree consts_tree;
 	GlobalsTree globals_tree;
 	LocalsTree locals_tree;
-	ProfilerPanel profiler_panel;
-	Profiler profiler;
 	std::map<const char*, int> file_tabs;
 	std::map<const char*, SourceFile*> files;
 
 	int state, step_level, cur_pos;
 	const char* cur_file;
-	std::vector<std::string> call_stack;   // func names for crash reports
-	int last_obj_cnt, last_unrel_cnt, last_str_cnt;
-	__int64 last_working_set_bytes;
 
 	bool shouldRun()const { return step_level < locals_tree.size(); }
-	std::string buildCrashReport(const char* msg)const;
 
 public:
 	MainFrame();
@@ -55,7 +47,6 @@ public:
 	afx_msg int  OnCreate(LPCREATESTRUCT lpCreateStruct);
 	afx_msg void OnSize(UINT type, int w, int h);
 	afx_msg void OnClose();
-	afx_msg void OnTimer(UINT_PTR id);
 
 	afx_msg void cmdStop();
 	afx_msg void cmdRun();
@@ -63,8 +54,6 @@ public:
 	afx_msg void cmdStepInto();
 	afx_msg void cmdStepOut();
 	afx_msg void cmdEnd();
-	afx_msg void cmdProfileToggle();
-	afx_msg void cmdProfileReset();
 
 	afx_msg void updateCmdUI(CCmdUI* ui);
 

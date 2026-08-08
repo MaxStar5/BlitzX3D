@@ -692,11 +692,6 @@ void gxRuntime::debugLog(const char* t) {
 	if(debugger) debugger->debugLog(t);
 }
 
-//debugsys
-void gxRuntime::debugSys(void* msg) {
-	if (debugger) debugger->debugSys(msg);
-}
-
 /////////////////////////
 // RETURN COMMAND LINE //
 /////////////////////////

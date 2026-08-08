@@ -11,8 +11,6 @@
 #define ID_STEPOUT                      1005
 #define ID_END                          1006
 #define ID_TRACE                        1007
-#define ID_PROFILE_TOGGLE               1008
-#define ID_PROFILE_RESET                1009
 
 // Next default values for new objects
 // 
