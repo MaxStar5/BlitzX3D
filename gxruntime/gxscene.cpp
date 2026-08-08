@@ -595,11 +595,9 @@ void gxScene::setWorldMatrix(const Matrix* m) {
 void gxScene::setRenderState(const RenderState& rs) {
 	setEffect(rs.effect);
 
-	uint64_t key = computeRenderStateKey(rs);
-	if (key == lastStateKey) {
+	if (lastRenderStateValid && memcmp(&rs, &lastRenderState, sizeof(rs)) == 0) {
 		return;
 	}
-	lastStateKey = key;
 
 	bool setmat = false;
 	if (memcmp(rs.color, &material.Diffuse.r, 12)) {
