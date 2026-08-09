@@ -202,4 +202,12 @@ struct AddrOfNode : public ExprNode {
 	TNode* translate(Codegen* g);
 };
 
+struct OffsetOfNode : public ExprNode {
+	std::string typeIdent, fieldIdent;
+	int sem_offset;
+	OffsetOfNode(const std::string& t, const std::string& f) :typeIdent(t), fieldIdent(f), sem_offset(0) {}
+	ExprNode* semant(Environ* e);
+	TNode* translate(Codegen* g);
+};
+
 #endif

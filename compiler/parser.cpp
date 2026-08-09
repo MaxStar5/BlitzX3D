@@ -707,6 +707,19 @@ ExprNode* Parser::parseUniExpr(bool opt) {
 		result = new AddrOfNode(v);
 		break;
 	}
+	case OFFSETOF: {
+		toker->next();
+		if (toker->curr() != '(') exp("'('");
+		toker->next();
+		std::string typeIdent = parseIdent();
+		if (toker->curr() != '\\') exp("'\\'");
+		toker->next();
+		std::string fieldIdent = parseIdent();
+		if (toker->curr() != ')') exp("')'");
+		toker->next();
+		result = new OffsetOfNode(typeIdent, fieldIdent);
+		break;
+	}
 	case BEFORE:
 		toker->next();
 		result = parseUniExpr(false);

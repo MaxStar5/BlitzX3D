@@ -754,3 +754,23 @@ ExprNode* AddrOfNode::semant(Environ* e) {
 TNode* AddrOfNode::translate(Codegen* g) {
 	return var->translate(g);
 }
+
+/////////////////
+// Offset of //
+///////////////
+ExprNode* OffsetOfNode::semant(Environ* e) {
+	Type* t = e->findType(typeIdent);
+	StructType* st = t ? t->structType() : 0;
+	if (!st) ex(MultiLang::custom_type_not_found);
+
+	Decl* field = st->fields->findDecl(fieldIdent);
+	if (!field) ex(MultiLang::type_field_not_found);
+
+	sem_offset = field->offset;
+	sem_type = Type::int_type;
+	return this;
+}
+
+TNode* OffsetOfNode::translate(Codegen* g) {
+	return iconst(sem_offset);
+}
