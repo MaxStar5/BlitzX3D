@@ -137,6 +137,22 @@ int bbBankStringSize(BBStr* str) {
 	return length;
 }
 
+int bbPtrPeekInt(int addr) {
+	return *(int*)addr;
+}
+
+float bbPtrPeekFloat(int addr) {
+	return *(float*)addr;
+}
+
+void bbPtrPokeInt(int addr, int value) {
+	*(int*)addr = value;
+}
+
+void bbPtrPokeFloat(int addr, float value) {
+	*(float*)addr = value;
+}
+
 int   bbReadBytes(bbBank* b, bbStream* s, int offset, int count) {
 	debugBank(b, "ReadBytes", offset + count - 1);
 	debugStream(s, "ReadBytes");
@@ -189,4 +205,8 @@ void bank_link(void(*rtSym)(const char*, void*)) {
 	rtSym("%ReadBytes%bank%file%offset%count", bbReadBytes);
 	rtSym("%WriteBytes%bank%file%offset%count", bbWriteBytes);
 	rtSym("%CallDLL$dll_name$func_name%in_bank=0%out_bank=0", bbCallDLL);
+	rtSym("%PtrPeekInt%addr", bbPtrPeekInt);
+	rtSym("%PtrPeekFloat%addr", bbPtrPeekFloat);
+	rtSym("PtrPokeInt%addr%value", bbPtrPokeInt);
+	rtSym("PtrPokeFloat%addr#value", bbPtrPokeFloat);
 }

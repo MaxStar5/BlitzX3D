@@ -251,3 +251,4 @@ static constexpr const char* invalid_macro_string = "Invalid macro string";
 // krim blitz3d garbo 
 static constexpr const char* enum_member_must_be_integer = "Enum number must be integer";
 static constexpr const char* enum_can_only_appear_in_main = "\"Enum\" can only appear in main program";
+static constexpr const char* addressof_not_supported_for_type = "\"AddressOf\" cannot be used directly on a custom type object, use \"Handle\" instead";

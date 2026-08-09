@@ -81,6 +81,7 @@ static void makeKeywords()
     alphaTokes["After"] = AFTER;
     alphaTokes["Object"] = OBJECT;
     alphaTokes["Handle"] = BBHANDLE;
+    alphaTokes["AddressOf"] = ADDROF;
 
     alphaTokes["And"] = AND;
     alphaTokes["Or"] = OR;

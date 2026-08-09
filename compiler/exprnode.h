@@ -194,4 +194,12 @@ struct ObjectHandleNode : public ExprNode {
 	TNode* translate(Codegen* g);
 };
 
+struct AddrOfNode : public ExprNode {
+	VarNode* var;
+	AddrOfNode(VarNode* v) :var(v) {}
+	~AddrOfNode() { delete var; }
+	ExprNode* semant(Environ* e);
+	TNode* translate(Codegen* g);
+};
+
 #endif

@@ -701,6 +701,12 @@ ExprNode* Parser::parseUniExpr(bool opt) {
 		result = parseUniExpr(false);
 		result = new ObjectHandleNode(result);
 		break;
+	case ADDROF: {
+		toker->next();
+		VarNode* v = parseVar();
+		result = new AddrOfNode(v);
+		break;
+	}
 	case BEFORE:
 		toker->next();
 		result = parseUniExpr(false);

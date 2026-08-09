@@ -738,3 +738,19 @@ TNode* ObjectHandleNode::translate(Codegen* g) {
 	TNode* t = expr->translate(g);
 	return call("__bbObjToHandle", t);
 }
+
+/////////////////
+// Address of  //
+/////////////////
+ExprNode* AddrOfNode::semant(Environ* e) {
+	var->semant(e);
+	if(var->sem_type->structType()) {
+		ex(MultiLang::addressof_not_supported_for_type);
+	}
+	sem_type = Type::int_type;
+	return this;
+}
+
+TNode* AddrOfNode::translate(Codegen* g) {
+	return var->translate(g);
+}
