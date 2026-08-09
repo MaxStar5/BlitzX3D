@@ -29,6 +29,7 @@ public:
 
 	Decl* findDecl(const std::string& s);
 	Decl* findFunc(const std::string& s, const int params);
+	Decl* findFunc(const std::string& s);
 	Type* findType(const std::string& s);
 	Label* findLabel(const std::string& s);
 	Label* insertLabel(const std::string& s, int def, int src, int sz);

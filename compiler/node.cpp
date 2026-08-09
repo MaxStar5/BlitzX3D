@@ -4,7 +4,7 @@
 #include <format>
 
 std::set<std::string> Node::usedfuncs;
-
+std::unordered_map<std::string, std::vector<OverrideFunction>> OverrideFunctionMap;
 ///////////////////////////////
 // generic exception thrower //
 ///////////////////////////////

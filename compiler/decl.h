@@ -14,7 +14,7 @@ struct OverrideFunction {
 	int optionalParameters;
 };
 
-static std::unordered_map<std::string, std::vector<OverrideFunction>> OverrideFunctionMap;
+extern std::unordered_map<std::string, std::vector<OverrideFunction>> OverrideFunctionMap;
 
 struct Type;
 struct ConstType;

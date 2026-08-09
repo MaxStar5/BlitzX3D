@@ -35,6 +35,13 @@ Decl* Environ::findDecl(const std::string& s) {
     return 0;
 }
 
+Decl* Environ::findFunc(const std::string& s) {
+    for (Environ* e = this; e; e = e->globals) {
+        if (Decl* d = e->funcDecls->findDecl(s)) return d;
+    }
+    return 0;
+}
+
 Decl* Environ::findFunc(const std::string& s, const int params) {
     for (Environ* e = this; e; e = e->globals) {
         if (Decl* d = e->funcDecls->findDecl(s, params)) return d;
