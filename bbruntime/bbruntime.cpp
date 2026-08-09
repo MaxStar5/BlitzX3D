@@ -194,9 +194,10 @@ void bbDebugLogError(BBStr* t) {
 }
 
 void _bbDebugStmt(int pos, const char* file) {
-    static int memPushCounter = 0;
-    if (++memPushCounter >= 2000) {
-        memPushCounter = 0;
+    static ULONGLONG lastMemStatTick = 0;
+    ULONGLONG now = GetTickCount64();
+    if (now - lastMemStatTick >= 50) {
+        lastMemStatTick = now;
         extern BBMemStats bbGetMemStats();
         BBMemStats ms = bbGetMemStats();
         DbgSysMemStats sys;

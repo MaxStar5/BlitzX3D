@@ -27,6 +27,7 @@ void Profiler::reset() {
 void Profiler::enter(const std::string& func) {
 	if(!enabled) return;
 	stack.push_back(ProfileFrame(func, nowTicks()));
+	sampleStack();
 }
 
 void Profiler::leave() {
@@ -47,6 +48,8 @@ void Profiler::leave() {
 	s.selfTicks += self;
 	++s.callCount;
 	if(total > s.maxTicks) s.maxTicks = total;
+
+	sampleStack();
 }
 
 void Profiler::resyncStack() {
@@ -74,12 +77,19 @@ void Profiler::sampleMemory(int objCnt, int unrelObjCnt, int stringCnt, __int64 
 
 void Profiler::sampleStack() {
 	if (!enabled) return;
+	if (stack.empty()) return;
+
 	std::vector<std::string> sample;
 	sample.reserve(stack.size());
 	for (const auto& f : stack) {
 		sample.push_back(f.func);
 	}
-	stackSamples.push_back(sample);
+	stackSamples.push_back(std::move(sample));
+
+	const size_t maxStackSamples = 20000;
+	if (stackSamples.size() > maxStackSamples) {
+		stackSamples.pop_front();
+	}
 }
 
 void Profiler::clearSamples() {
