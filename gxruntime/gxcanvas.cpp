@@ -659,21 +659,28 @@ static IDirect3DTexture9* getOrBuildBlitTex(IDirect3DDevice9* dev, gxCanvas* src
     IDirect3DSurface9* texSurf = nullptr;
     if (FAILED(newTex->GetSurfaceLevel(0, &texSurf))) { newTex->Release(); return nullptr; }
 
-    D3DLOCKED_RECT srcLR, dstLR;
-    RECT srcRect = { 0, 0, texW, texH };
-    if (FAILED(src->surf->LockRect(&srcLR, &srcRect, D3DLOCK_READONLY))) {
-        texSurf->Release(); newTex->Release(); return nullptr;
-    }
-    if (FAILED(texSurf->LockRect(&dstLR, nullptr, 0))) {
-        src->surf->UnlockRect(); texSurf->Release(); newTex->Release(); return nullptr;
+    if (!src->lock()) {
+        texSurf->Release();
+        newTex->Release();
+        return nullptr;
     }
 
+    D3DLOCKED_RECT dstLR;
+    if (FAILED(texSurf->LockRect(&dstLR, nullptr, 0))) {
+        src->unlock();
+        texSurf->Release();
+        newTex->Release();
+        return nullptr;
+    }
+
+    const unsigned char* srcBits = src->locked_surf;
+    int srcPitch = src->locked_pitch;
     bool doMask = (maskRGB != ~0u);
     const PixelFormat& fmt = src->format;
     int pitch = fmt.getPitch();
 
     for (int y = 0; y < texH; ++y) {
-        const unsigned char* srcRow = (const unsigned char*)srcLR.pBits + y * srcLR.Pitch;
+        const unsigned char* srcRow = srcBits + y * srcPitch;
         unsigned* dstRow = (unsigned*)((unsigned char*)dstLR.pBits + y * dstLR.Pitch);
         if (y < logH) {
             for (int x = 0; x < logW; ++x) {
@@ -694,7 +701,7 @@ static IDirect3DTexture9* getOrBuildBlitTex(IDirect3DDevice9* dev, gxCanvas* src
     }
 
     texSurf->UnlockRect();
-    src->surf->UnlockRect();
+    src->unlock();
     texSurf->Release();
 
     src->blit_tex = newTex;

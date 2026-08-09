@@ -30,6 +30,10 @@ public:
 	mutable int blit_tex_mod_cnt;
 	mutable unsigned blit_tex_mask;
 
+	mutable int locked_pitch, locked_cnt, lock_mod_cnt, remip_cnt;
+	mutable unsigned char* locked_surf;
+	mutable bool lock_is_rt;
+
 	PixelFormat format;
 
 	RECT clip_rect;
@@ -63,10 +67,6 @@ private:
 	IDirect3DSurface9* cube_surfs[6];
 
 	mutable IDirect3DSurface9* t_surf;
-
-	mutable int locked_pitch, locked_cnt, lock_mod_cnt, remip_cnt;
-	mutable unsigned char* locked_surf;
-	mutable bool lock_is_rt;
 
 	mutable int cm_pitch;
 	mutable unsigned* cm_mask;
