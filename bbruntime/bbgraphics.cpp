@@ -1462,6 +1462,13 @@ void bbDrawImageRect(bbImage* i, int x, int y, int r_x, int r_y, int r_w, int r_
     }
 }
 
+void bbDrawImageRectStretch(bbImage* i, int dx, int dy, int dw, int dh, int sx, int sy, int sw, int sh)
+{
+    debugImage(i, "DrawImageRectStretch", 0);
+    gxCanvas* c = i->getFrames()[0];
+    gx_canvas->blitstretch(dx, dy, dw, dh, c, sx, sy, sw, sh, true);
+}
+
 void bbDrawBlockRect(bbImage* i, int x, int y, int r_x, int r_y, int r_w, int r_h, int frame)
 {
     debugImage(i, "DrawBlockRect", frame);
@@ -2131,6 +2138,7 @@ void graphics_link(void (*rtSym)(const char* sym, void* pc))
     rtSym("TileImage%image%x=0%y=0%frame=0", bbTileImage);
     rtSym("TileBlock%image%x=0%y=0%frame=0", bbTileBlock);
     rtSym("DrawImageRect%image%x%y%rect_x%rect_y%rect_width%rect_height%frame=0", bbDrawImageRect);
+    rtSym("DrawImageRectStretch%image%dest_x%dest_y%dest_w%dest_h%src_x%src_y%src_w%src_h", bbDrawImageRectStretch);
     rtSym("DrawBlockRect%image%x%y%rect_x%rect_y%rect_width%rect_height%frame=0", bbDrawBlockRect);
     rtSym("MaskImage%image%red%green%blue", bbMaskImage);
     rtSym("HandleImage%image%x%y", bbHandleImage);

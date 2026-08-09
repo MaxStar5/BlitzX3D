@@ -111,6 +111,7 @@ void	 bbDrawBlock(bbImage* i, int x, int y, int frame);
 void	 bbTileImage(bbImage* i, int x, int y, int frame);
 void	 bbTileBlock(bbImage* i, int x, int y, int frame);
 void	 bbDrawImageRect(bbImage* i, int x, int y, int r_x, int r_y, int r_w, int r_h, int frame);
+void bbDrawImageRectStretch(bbImage* i, int dx, int dy, int dw, int dh, int sx, int sy, int sw, int sh);
 void	 bbDrawBlockRect(bbImage* i, int x, int y, int r_x, int r_y, int r_w, int r_h, int frame);
 void	 bbMaskImage(bbImage* i, int r, int g, int b);
 void	 bbHandleImage(bbImage* i, int x, int y);
