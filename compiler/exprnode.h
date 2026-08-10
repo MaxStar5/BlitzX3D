@@ -53,6 +53,13 @@ struct CallNode : public ExprNode {
 	TNode* translate(Codegen* g);
 };
 
+struct CallPtrNode : public ExprNode {
+	std::string ident;
+	CallPtrNode(const std::string& i) :ident(i) {}
+	ExprNode* semant(Environ* e);
+	TNode* translate(Codegen* g);
+};
+
 struct VarExprNode : public ExprNode {
 	VarNode* var;
 	VarExprNode(VarNode* v) :var(v) {}

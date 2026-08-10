@@ -36,7 +36,14 @@ static struct s_type : public Type {
 	}
 	std::string name() { return "String"; }
 }s;
+static struct ptr_type : public Type {
+	bool pointerType() { return true; }
 
+	bool canCastTo(Type* t) {
+		return t == Type::int_type || t == Type::float_type || t == Type::string_type || t == Type::pointer_type;
+	}
+	std::string name() { return "Pointer"; }
+}p;
 bool StructType::canCastTo(Type* t) {
 	return t == this || t == Type::null_type || (this == Type::null_type && t->structType());
 }
@@ -61,3 +68,4 @@ Type* Type::int_type = &i;
 Type* Type::float_type = &f;
 Type* Type::string_type = &s;
 Type* Type::null_type = &n;
+Type* Type::pointer_type = &p;

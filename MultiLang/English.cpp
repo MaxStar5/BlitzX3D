@@ -121,6 +121,7 @@ static constexpr const char* illegal_type_conversion = "Illegal type conversion 
 static constexpr const char* too_many_parameters = "Too many parameters";
 static constexpr const char* not_enough_parameters = "Not enough parameters";
 static constexpr const char* function_not_found = "Function \"{0}\" not found";
+static constexpr const char* ambiguous_function_reference = "Ambiguous function reference";
 static constexpr const char* incorrect_function_return_type = "incorrect function return type";
 static constexpr const char* cant_convert_null_to_int = "Can't convert null to int";
 static constexpr const char* cant_convert_null_to_float = "Can't convert null to float";
