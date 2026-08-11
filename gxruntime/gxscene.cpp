@@ -733,6 +733,14 @@ bool gxScene::begin(const std::vector<gxLight*>& lights) {
 
 	if(dir3dDev->BeginScene() != D3D_OK) return false;
 
+	lastRenderStateValid = false;
+	memset(d3d_rs, 0x55, sizeof(d3d_rs));
+	memset(d3d_tss, 0x55, sizeof(d3d_tss));
+	memset(d3d_samp, 0x55, sizeof(d3d_samp));
+	memset(d3d_tex, 0x55, sizeof(d3d_tex));
+	blend = fx = ~0;
+	shininess = -1;
+
 	dir3dDev->SetRenderState(D3DRS_LIGHTING, TRUE);
 
 	//clear textures!

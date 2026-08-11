@@ -62,6 +62,11 @@ public:
     int getDepth() const { return depth; }
     int getPitch() const { return pitch; }
 
+    bool is8888() const {
+        return pitch == 4 && rmask == 0x00ff0000 && gmask == 0x0000ff00 && bmask == 0x000000ff && (amask == 0 || amask == 0xff000000);
+    }
+    bool hasAlphaMask() const { return amask != 0; }
+
     unsigned fromARGB(unsigned n) const {
         return ((n >> ashr << ashl) & amask) |
             ((n >> rshr << rshl) & rmask) |

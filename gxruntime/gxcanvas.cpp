@@ -678,18 +678,33 @@ static IDirect3DTexture9* getOrBuildBlitTex(IDirect3DDevice9* dev, gxCanvas* src
     bool doMask = (maskRGB != ~0u);
     const PixelFormat& fmt = src->format;
     int pitch = fmt.getPitch();
+    bool srcHasAlphaFlag = (src->getFlags() & gxCanvas::CANVAS_TEX_ALPHA) != 0;
+
+    bool fastCopy = fmt.is8888();
 
     for (int y = 0; y < texH; ++y) {
-        const unsigned char* srcRow = srcBits + y * srcPitch;
         unsigned* dstRow = (unsigned*)((unsigned char*)dstLR.pBits + y * dstLR.Pitch);
-        if (y < logH) {
+        if (y >= logH) { memset(dstRow, 0, texW * sizeof(unsigned)); continue; }
+        const unsigned char* srcRow = srcBits + y * srcPitch;
+
+        if (fastCopy) {
+            memcpy(dstRow, srcRow, logW * 4);
+            if (!srcHasAlphaFlag || !fmt.hasAlphaMask()) {
+                for (int x = 0; x < logW; ++x) dstRow[x] |= 0xff000000u;
+            }
+            if (doMask) {
+                for (int x = 0; x < logW; ++x)
+                    if ((dstRow[x] & 0x00ffffffu) == maskRGB) dstRow[x] = 0x00000000u;
+            }
+        }
+        else {
             for (int x = 0; x < logW; ++x) {
                 unsigned argb = fmt.toARGB(fmt.getPixel((void*)(srcRow + x * pitch)));
                 if (doMask && (argb & 0x00ffffffu) == maskRGB)
-                    argb = 0x00000000u;   // fully transparent
+                    argb = 0x00000000u;
                 else
-                    if (!(src->getFlags() & gxCanvas::CANVAS_TEX_ALPHA)) {
-                        argb |= 0xff000000u;  // fully opaque
+                    if (!srcHasAlphaFlag) {
+                        argb |= 0xff000000u;
                     }
                 dstRow[x] = argb;
             }
@@ -697,7 +712,6 @@ static IDirect3DTexture9* getOrBuildBlitTex(IDirect3DDevice9* dev, gxCanvas* src
 
         // zero out padding it never bleeds into samples!!
         if (logW < texW) memset(dstRow + logW, 0, (texW - logW) * sizeof(unsigned));
-        if (y >= logH) memset(dstRow, 0, texW * sizeof(unsigned));
     }
 
     texSurf->UnlockRect();
@@ -1061,6 +1075,25 @@ void gxCanvas::blitstretch(int x, int y, int w, int h,
 
     IDirect3DDevice9* dev = graphics->dir3dDev;
     if (!dev) return;
+
+    bool useAlpha = (src->getFlags() & gxCanvas::CANVAS_TEX_ALPHA) != 0;
+    bool useMask = src->hasMask();
+    if (solid && !useAlpha && !useMask) {
+        D3DSURFACE_DESC srcDesc, dstDesc;
+        if (SUCCEEDED(src->surf->GetDesc(&srcDesc)) && SUCCEEDED(surf->GetDesc(&dstDesc))) {
+            bool a32 = (srcDesc.Format == D3DFMT_A8R8G8B8 || srcDesc.Format == D3DFMT_X8R8G8B8);
+            bool b32 = (dstDesc.Format == D3DFMT_A8R8G8B8 || dstDesc.Format == D3DFMT_X8R8G8B8);
+            if (srcDesc.Format == dstDesc.Format || (a32 && b32)) {
+                RECT srcRect = { src_r.left, src_r.top, src_r.right, src_r.bottom };
+                RECT dstRect = { dest_r.left, dest_r.top, dest_r.right, dest_r.bottom };
+                if (SUCCEEDED(dev->StretchRect(src->surf, &srcRect, surf, &dstRect, D3DTEXF_LINEAR))) {
+                    damage(dest_r);
+                    return;
+                }
+            }
+        }
+    }
+
     FillModeGuard guard(dev);
 
     unsigned maskRGB = solid ? ~0u : (src->format.toARGB(src->mask_surf) & 0x00ffffffu);
@@ -1075,9 +1108,6 @@ void gxCanvas::blitstretch(int x, int y, int w, int h,
 
     D3DVIEWPORT9 vp = { 0, 0, (DWORD)clip_rect.right, (DWORD)clip_rect.bottom, 0.0f, 1.0f };
     dev->SetViewport(&vp);
-
-    bool useAlpha = (src->getFlags() & gxCanvas::CANVAS_TEX_ALPHA) != 0;
-    bool useMask = src->hasMask();
 
     dev->SetRenderState(D3DRS_ZENABLE, FALSE);
     dev->SetTextureStageState(0, D3DTSS_COLOROP, D3DTOP_SELECTARG1);
