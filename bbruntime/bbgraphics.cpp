@@ -229,6 +229,80 @@ static float cubic_weight(float t, float a = -0.5f) {
     return 0.0f;
 }
 
+static unsigned box4(unsigned c00, unsigned c10, unsigned c01, unsigned c11) {
+    int a = ((c00 >> 24) & 0xFF) + ((c10 >> 24) & 0xFF) + ((c01 >> 24) & 0xFF) + ((c11 >> 24) & 0xFF);
+    int r = ((c00 >> 16) & 0xFF) + ((c10 >> 16) & 0xFF) + ((c01 >> 16) & 0xFF) + ((c11 >> 16) & 0xFF);
+    int g = ((c00 >> 8) & 0xFF) + ((c10 >> 8) & 0xFF) + ((c01 >> 8) & 0xFF) + ((c11 >> 8) & 0xFF);
+    int b = (c00 & 0xFF) + (c10 & 0xFF) + (c01 & 0xFF) + (c11 & 0xFF);
+    return ((((a + 2) >> 2) & 0xFF) << 24) | ((((r + 2) >> 2) & 0xFF) << 16) | ((((g + 2) >> 2) & 0xFF) << 8) | (((b + 2) >> 2) & 0xFF);
+}
+
+static std::vector<uint32_t> progressiveMinifyPixels(const std::vector<uint32_t>& src, int srcW, int srcH, int targetW, int targetH, int* outW, int* outH) {
+    int w = srcW, h = srcH;
+    std::vector<uint32_t> cur = src;
+    while ((w > targetW * 2 + 1 || h > targetH * 2 + 1) && w >= 2 && h >= 2) {
+        int nw = w / 2, nh = h / 2;
+        if (nw < 1) nw = 1;
+        if (nh < 1) nh = 1;
+        if (nw == w && nh == h) break;
+        std::vector<uint32_t> nxt((size_t)nw * nh);
+        for (int y = 0; y < nh; ++y) {
+            int sy0 = y * 2, sy1 = y * 2 + 1;
+            if (sy1 >= h) sy1 = h - 1;
+            for (int x = 0; x < nw; ++x) {
+                int sx0 = x * 2, sx1 = x * 2 + 1;
+                if (sx1 >= w) sx1 = w - 1;
+                nxt[(size_t)y * nw + x] = box4(
+                    cur[(size_t)sy0 * w + sx0], cur[(size_t)sy0 * w + sx1],
+                    cur[(size_t)sy1 * w + sx0], cur[(size_t)sy1 * w + sx1]);
+            }
+        }
+        cur = std::move(nxt);
+        w = nw; h = nh;
+    }
+    *outW = w;
+    *outH = h;
+    return cur;
+}
+
+static gxCanvas* progressiveMinifyCanvas(gxCanvas* c, int targetW, int targetH, float* outDiv) {
+    int w = c->getWidth(), h = c->getHeight();
+    if (targetW <= 0 || targetH <= 0 || (w <= targetW * 2 && h <= targetH * 2)) {
+        *outDiv = 1.0f;
+        return c;
+    }
+    gxCanvas* cur = c;
+    float div = 1.0f;
+    while ((w > targetW * 2 + 1 || h > targetH * 2 + 1) && w >= 2 && h >= 2) {
+        int nw = w / 2, nh = h / 2;
+        if (nw < 1) nw = 1;
+        if (nh < 1) nh = 1;
+        if (nw == w && nh == h) break;
+        gxCanvas* nxt = gx_graphics->createCanvas(nw, nh, cur->getFlags());
+        cur->lock();
+        nxt->lock();
+        for (int y = 0; y < nh; ++y) {
+            int sy0 = y * 2, sy1 = y * 2 + 1;
+            if (sy1 >= h) sy1 = h - 1;
+            for (int x = 0; x < nw; ++x) {
+                int sx0 = x * 2, sx1 = x * 2 + 1;
+                if (sx1 >= w) sx1 = w - 1;
+                nxt->setPixelFast(x, y, box4(
+                    cur->getPixelFast(sx0, sy0), cur->getPixelFast(sx1, sy0),
+                    cur->getPixelFast(sx0, sy1), cur->getPixelFast(sx1, sy1)));
+            }
+        }
+        cur->unlock();
+        nxt->unlock();
+        if (cur != c) gx_graphics->freeCanvas(cur);
+        cur = nxt;
+        w = nw; h = nh;
+        div *= 2.0f;
+    }
+    *outDiv = div;
+    return cur;
+}
+
 static gxCanvas* tformCanvas(gxCanvas* c, float m[2][2], int x_handle, int y_handle)
 {
     c->backup();
@@ -263,10 +337,20 @@ static gxCanvas* tformCanvas(gxCanvas* c, float m[2][2], int x_handle, int y_han
         return t;
     }
 
-    c->lock();
+    gxCanvas* mid = nullptr;
+    float srcDiv = 1.0f;
+    bool pureScale = fabs(m[0][1]) < 0.0001f && fabs(m[1][0]) < 0.0001f && m[0][0] > 0.0f && m[1][1] > 0.0f;
+    if (pureScale && (m[0][0] < 0.5f || m[1][1] < 0.5f)) {
+        int tw = (int)ceilf(c->getWidth() * m[0][0]);
+        int th = (int)ceilf(c->getHeight() * m[1][1]);
+        mid = progressiveMinifyCanvas(c, tw, th, &srcDiv);
+    }
+    gxCanvas* src = mid ? mid : c;
+
+    src->lock();
     t->lock();
 
-    int srcW = c->getWidth(), srcH = c->getHeight();
+    int srcW = src->getWidth(), srcH = src->getHeight();
     int dstW = t->getWidth(), dstH = t->getHeight();
 
     const int SHIFT = 16;
@@ -276,8 +360,8 @@ static gxCanvas* tformCanvas(gxCanvas* c, float m[2][2], int x_handle, int y_han
         float fy = miny + y + 0.5f;
         for (int x = 0; x < dstW; ++x) {
             float fx = minx + x + 0.5f;
-            float sx = i[0][0] * (fx - ox) + i[0][1] * (fy - oy);
-            float sy = i[1][0] * (fx - ox) + i[1][1] * (fy - oy);
+            float sx = (i[0][0] * (fx - ox) + i[0][1] * (fy - oy)) / srcDiv;
+            float sy = (i[1][0] * (fx - ox) + i[1][1] * (fy - oy)) / srcDiv;
 
             int ix = (int)floor(sx);
             int iy = (int)floor(sy);
@@ -288,17 +372,17 @@ static gxCanvas* tformCanvas(gxCanvas* c, float m[2][2], int x_handle, int y_han
             if (!filter) {
                 if (ix < 0) ix = 0; else if (ix >= srcW) ix = srcW - 1;
                 if (iy < 0) iy = 0; else if (iy >= srcH) iy = srcH - 1;
-                color = c->getPixelFast(ix, iy);
+                color = src->getPixelFast(ix, iy);
             }
             else if (tform_method == 1) {
                 int w1 = (int)((1.0f - fxfrac) * (1.0f - fyfrac) * ONE);
                 int w2 = (int)(fxfrac * (1.0f - fyfrac) * ONE);
                 int w3 = (int)((1.0f - fxfrac) * fyfrac * ONE);
                 int w4 = (int)(fxfrac * fyfrac * ONE);
-                unsigned c00 = c->getPixelFast(ix, iy);
-                unsigned c10 = c->getPixelFast(ix + 1, iy);
-                unsigned c01 = c->getPixelFast(ix, iy + 1);
-                unsigned c11 = c->getPixelFast(ix + 1, iy + 1);
+                unsigned c00 = src->getPixelFast(ix, iy);
+                unsigned c10 = src->getPixelFast(ix + 1, iy);
+                unsigned c01 = src->getPixelFast(ix, iy + 1);
+                unsigned c11 = src->getPixelFast(ix + 1, iy + 1);
                 int a = ((c00 >> 24) & 0xFF) * w1 + ((c10 >> 24) & 0xFF) * w2 + ((c01 >> 24) & 0xFF) * w3 + ((c11 >> 24) & 0xFF) * w4;
                 int r = ((c00 >> 16) & 0xFF) * w1 + ((c10 >> 16) & 0xFF) * w2 + ((c01 >> 16) & 0xFF) * w3 + ((c11 >> 16) & 0xFF) * w4;
                 int g = ((c00 >> 8) & 0xFF) * w1 + ((c10 >> 8) & 0xFF) * w2 + ((c01 >> 8) & 0xFF) * w3 + ((c11 >> 8) & 0xFF) * w4;
@@ -324,7 +408,7 @@ static gxCanvas* tformCanvas(gxCanvas* c, float m[2][2], int x_handle, int y_han
                         float wx = cubic_weight(fxfrac - dx);
                         float w = wx * wy;
                         if (w == 0.0f) continue;
-                        unsigned pix = c->getPixelFast(xi, yi);
+                        unsigned pix = src->getPixelFast(xi, yi);
                         a += ((pix >> 24) & 0xFF) * w;
                         r += ((pix >> 16) & 0xFF) * w;
                         g += ((pix >> 8) & 0xFF) * w;
@@ -350,14 +434,15 @@ static gxCanvas* tformCanvas(gxCanvas* c, float m[2][2], int x_handle, int y_han
             else {
                 if (ix < 0) ix = 0; else if (ix >= srcW) ix = srcW - 1;
                 if (iy < 0) iy = 0; else if (iy >= srcH) iy = srcH - 1;
-                color = c->getPixelFast(ix, iy);
+                color = src->getPixelFast(ix, iy);
             }
             t->setPixelFast(x, y, color);
         }
     }
 
     t->unlock();
-    c->unlock();
+    src->unlock();
+    if (mid) gx_graphics->freeCanvas(mid);
     t->backup();
 
     return t;
@@ -1198,79 +1283,41 @@ Texture* bbLoadAnimTextureGrid(BBStr* file, int flags, int columns, int rows, in
     }
     delete file;
 
-    IDirect3DTexture9* picTex = ddUtil::loadTextureSurface(path, flags, gx_graphics, false);
-    if (!picTex) {
-        ErrorLog("LoadAnimTextureGrid", "Failed to load image");
-        return nullptr;
-    }
-    gxCanvas* pic = new gxCanvas(gx_graphics, picTex, gxCanvas::CANVAS_TEXTURE);
-    gx_graphics->adoptCanvas(pic);
-
-    int texW = pic->getWidth();
-    int texH = pic->getHeight();
-
     if (columns <= 0 || rows <= 0) {
-        gx_graphics->freeCanvas(pic);
         ErrorLog("LoadAnimTextureGrid", "Columns and rows must be positive");
         return nullptr;
     }
-    int frameW = texW / columns;
-    int frameH = texH / rows;
-    if (frameW <= 0 || frameH <= 0) {
-        gx_graphics->freeCanvas(pic);
-        ErrorLog("LoadAnimTextureGrid", "Invalid grid dimensions");
-        return nullptr;
-    }
-    int totalFrames = columns * rows;
-    if (first < 0 || cnt <= 0 || first + cnt > totalFrames) {
-        gx_graphics->freeCanvas(pic);
+    if (first < 0 || cnt <= 0) {
         ErrorLog("LoadAnimTextureGrid", "Frame range out of bounds");
         return nullptr;
     }
 
-    int rowWidth = frameW * cnt;
-    int rowHeight = frameH;
-    gxCanvas* rowCanvas = gx_graphics->createCanvas(rowWidth, rowHeight, gxCanvas::CANVAS_TEXTURE);
-    if (!rowCanvas) {
-        gx_graphics->freeCanvas(pic);
-        ErrorLog("LoadAnimTextureGrid", "Failed to create temporary canvas");
+    int imgW = 0, imgH = 0;
+    IDirect3DTexture9* picTex = ddUtil::loadTextureSurface(path, flags, gx_graphics, false, &imgW, &imgH);
+    if (!picTex) {
+        ErrorLog("LoadAnimTextureGrid", "Failed to load image");
+        return nullptr;
+    }
+    picTex->Release();
+
+    int frameW = imgW / columns;
+    int frameH = imgH / rows;
+    if (frameW <= 0 || frameH <= 0) {
+        ErrorLog("LoadAnimTextureGrid", "Invalid grid dimensions");
+        return nullptr;
+    }
+    if (first + cnt > columns * rows) {
+        ErrorLog("LoadAnimTextureGrid", "Frame range out of bounds");
         return nullptr;
     }
 
-    for (int k = 0; k < cnt; ++k) {
-        int idx = first + k;
-        int srcX = (idx % columns) * frameW;
-        int srcY = (idx / columns) * frameH;
-        int dstX = k * frameW;
-        rowCanvas->blit(dstX, 0, pic, srcX, srcY, frameW, frameH, true);
-    }
-    rowCanvas->backup();
-
-    char tempPath[MAX_PATH];
-    GetTempPathA(MAX_PATH, tempPath);
-    std::string tempFile = std::string(tempPath) + "temp_anim_texture.bmp";
-    if (!saveCanvas(rowCanvas, tempFile)) {
-        gx_graphics->freeCanvas(pic);
-        gx_graphics->freeCanvas(rowCanvas);
-        ErrorLog("LoadAnimTextureGrid", "Failed to save temporary canvas");
-        return nullptr;
-    }
-
-    Texture* tex = new Texture(tempFile, flags, frameW, frameH, 0, cnt);
+    Texture* tex = new Texture(path, flags, frameW, frameH, first, cnt);
     if (!tex->getCanvas(0)) {
         delete tex;
-        tex = nullptr;
-        ErrorLog("LoadAnimTextureGrid", "Failed to create Texture from temporary file");
+        ErrorLog("LoadAnimTextureGrid", "Failed to create Texture from image");
+        return nullptr;
     }
-
-    DeleteFileA(tempFile.c_str());
-    gx_graphics->freeCanvas(pic);
-    gx_graphics->freeCanvas(rowCanvas);
-
-    if (tex) {
-        texture_set.insert(tex);
-    }
-
+    texture_set.insert(tex);
     return tex;
 }
 
@@ -1661,16 +1708,18 @@ static unsigned sampleOrigPixel(const std::vector<uint32_t>& src, int srcW, int 
         unsigned c10 = clampedPixel(ix + 1, iy);
         unsigned c01 = clampedPixel(ix, iy + 1);
         unsigned c11 = clampedPixel(ix + 1, iy + 1);
+        int a = ((c00 >> 24) & 0xFF) * w1 + ((c10 >> 24) & 0xFF) * w2 + ((c01 >> 24) & 0xFF) * w3 + ((c11 >> 24) & 0xFF) * w4;
         int r = ((c00 >> 16) & 0xFF) * w1 + ((c10 >> 16) & 0xFF) * w2 + ((c01 >> 16) & 0xFF) * w3 + ((c11 >> 16) & 0xFF) * w4;
         int g = ((c00 >> 8) & 0xFF) * w1 + ((c10 >> 8) & 0xFF) * w2 + ((c01 >> 8) & 0xFF) * w3 + ((c11 >> 8) & 0xFF) * w4;
         int b = (c00 & 0xFF) * w1 + (c10 & 0xFF) * w2 + (c01 & 0xFF) * w3 + (c11 & 0xFF) * w4;
+        a = (a >> SHIFT) & 0xFF;
         r = (r >> SHIFT) & 0xFF;
         g = (g >> SHIFT) & 0xFF;
         b = (b >> SHIFT) & 0xFF;
-        return (r << 16) | (g << 8) | b;
+        return ((unsigned)a << 24) | (r << 16) | (g << 8) | b;
     }
     else {
-        float r = 0.0f, g = 0.0f, b = 0.0f, total_w = 0.0f;
+        float a = 0.0f, r = 0.0f, g = 0.0f, b = 0.0f, total_w = 0.0f;
         for (int dy = -1; dy <= 2; ++dy) {
             float wy = cubic_weight(fyfrac - dy);
             if (wy == 0.0f) continue;
@@ -1679,6 +1728,7 @@ static unsigned sampleOrigPixel(const std::vector<uint32_t>& src, int srcW, int 
                 float w = wx * wy;
                 if (w == 0.0f) continue;
                 unsigned pix = clampedPixel(ix + dx, iy + dy);
+                a += ((pix >> 24) & 0xFF) * w;
                 r += ((pix >> 16) & 0xFF) * w;
                 g += ((pix >> 8) & 0xFF) * w;
                 b += (pix & 0xFF) * w;
@@ -1686,13 +1736,15 @@ static unsigned sampleOrigPixel(const std::vector<uint32_t>& src, int srcW, int 
             }
         }
         if (total_w > 0.0f) {
+            int aa = (int)(a / total_w + 0.5f);
             int rr = (int)(r / total_w + 0.5f);
             int gg = (int)(g / total_w + 0.5f);
             int bb = (int)(b / total_w + 0.5f);
+            if (aa < 0) aa = 0; else if (aa > 255) aa = 255;
             if (rr < 0) rr = 0; else if (rr > 255) rr = 255;
             if (gg < 0) gg = 0; else if (gg > 255) gg = 255;
             if (bb < 0) bb = 0; else if (bb > 255) bb = 255;
-            return (rr << 16) | (gg << 8) | bb;
+            return ((unsigned)aa << 24) | (rr << 16) | (gg << 8) | bb;
         }
         return 0;
     }
@@ -1714,6 +1766,13 @@ void bbResizeImage(bbImage* i, float w, float h)
         const std::vector<uint32_t>& src = i->getOrigPixels(k);
         int srcW = i->origWidth, srcH = i->origHeight;
 
+        std::vector<uint32_t> mipData;
+        int sampleW = srcW, sampleH = srcH;
+        if (iw * 2 < srcW || ih * 2 < srcH) {
+            mipData = progressiveMinifyPixels(src, srcW, srcH, iw, ih, &sampleW, &sampleH);
+        }
+        const std::vector<uint32_t>& sampleSrc = mipData.empty() ? src : mipData;
+
         int srcFlags = c->getFlags() & (gxCanvas::CANVAS_TEXTURE | gxCanvas::CANVAS_TEX_ALPHA);
         gxCanvas* t = gx_graphics->createCanvas(iw, ih, srcFlags);
         t->setHandle(hx, hy);
@@ -1721,10 +1780,10 @@ void bbResizeImage(bbImage* i, float w, float h)
 
         t->lock();
         for (int y = 0; y < ih; ++y) {
-            float sy = (y + 0.5f) * srcH / (float)ih;
+            float sy = (y + 0.5f) * sampleH / (float)ih;
             for (int x = 0; x < iw; ++x) {
-                float sx = (x + 0.5f) * srcW / (float)iw;
-                unsigned color = sampleOrigPixel(src, srcW, srcH, sx, sy);
+                float sx = (x + 0.5f) * sampleW / (float)iw;
+                unsigned color = sampleOrigPixel(sampleSrc, sampleW, sampleH, sx, sy);
                 t->setPixelFast(x, y, color);
             }
         }
