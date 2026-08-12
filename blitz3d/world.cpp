@@ -293,10 +293,10 @@ void World::update(float elapsed) {
 	if (!curr) curr = g_sceneManager.get(0);
 	if (!curr) return; // should never happen
 
-	std::unordered_map<int, std::vector<Object*>> objsByType;
+	_objsByType.clear();
 	for (Object* o : _enabled) {
 		if (int n = o->getCollisionType())
-			objsByType[n].push_back(o);
+			_objsByType[n].push_back(o);
 	}
 
 	for (Object* o : _enabled) {
@@ -304,7 +304,7 @@ void World::update(float elapsed) {
 		if (o->getCollisionType()) {
 			auto it = curr->collisions.find(o->getCollisionType());
 			if (it != curr->collisions.end()) {
-				collide(o, it->second, objsByType);
+				collide(o, it->second, _objsByType);
 			}
 		}
 		o->endUpdate();
@@ -340,6 +340,13 @@ static std::priority_queue<Model*, std::vector<Model*>, OrderComp> ord_que;
 static std::priority_queue<Camera*, std::vector<Camera*>, OrderComp> cam_que;
 
 static std::priority_queue<Model*, std::vector<Model*>, TransComp> transparents;
+
+struct StateModel {
+	uint64_t key;
+	Model* mod;
+};
+
+static std::vector<StateModel> state_mods;
 
 void World::capture() {
 
@@ -425,15 +432,18 @@ void World::render(Camera* cam, Mirror* mirror) {
 	}
 
 	gx_scene->setZMode(gxScene::ZMODE_NORMAL);
-	std::map<Brush, std::vector<Model*>> buckets;
+	state_mods.clear();
+	state_mods.reserve(unord_mods.size());
 	for (Model* mod : unord_mods) {
-		buckets[mod->getBrush()].push_back(mod);
+		state_mods.push_back({ mod->getStateKey(), mod });
 	}
-	for (auto& bucket : buckets) {
-		for (Model* mod : bucket.second) {
-			if (!mod->doAutoFade(cam_tform.v)) continue;
-			render(mod, rc);
-		}
+	std::sort(state_mods.begin(), state_mods.end(), [](const StateModel& a, const StateModel& b) {
+		return a.key < b.key;
+	});
+	for (const StateModel& sm : state_mods) {
+		Model* mod = sm.mod;
+		if (!mod->doAutoFade(cam_tform.v)) continue;
+		render(mod, rc);
 	}
 	gx_scene->setZMode(gxScene::ZMODE_CMPONLY);
 	flushTransparent();

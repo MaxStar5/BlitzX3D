@@ -29,6 +29,7 @@ public:
 	Texture getTexture(int index)const;
 
 	const gxScene::RenderState& getRenderState()const;
+	uint64_t getStateKey()const;
 	gxEffect* getEffect() const;
 
 	bool operator<(const Brush& b)const;

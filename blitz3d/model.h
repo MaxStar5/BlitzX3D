@@ -60,6 +60,7 @@ public:
 	void setEffect(gxEffect* effect);
 
 	const Brush& getBrush()const { return brush; }
+	uint64_t getStateKey()const;
 	gxEffect* getEffect() const;
 
 	void setRenderSpace(int n) { space = n; }

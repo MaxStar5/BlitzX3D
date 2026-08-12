@@ -7,6 +7,8 @@ struct Brush::Rep {
 	union { int ref_cnt; Rep* next; };
 	int blend, max_tex;
 	bool blend_valid;
+	uint64_t state_key;
+	bool state_key_valid;
 	gxScene::RenderState rs;
 	Texture texs[gxScene::MAX_TEXTURES];
 	gxEffect* effect;
@@ -14,14 +16,16 @@ struct Brush::Rep {
 	static Rep* pool;
 
 	Rep() :
-		ref_cnt(1), blend(0), max_tex(0), blend_valid(true), effect(nullptr) {
+		ref_cnt(1), blend(0), max_tex(0), blend_valid(true),
+		state_key(0), state_key_valid(false), effect(nullptr) {
 		memset(&rs, 0, sizeof(rs));
 		rs.blend = gxScene::BLEND_REPLACE;
 		rs.color[0] = rs.color[1] = rs.color[2] = rs.alpha = 1;
 	}
 
 	Rep(const Rep& t) :
-		ref_cnt(1), blend(t.blend), max_tex(t.max_tex), rs(t.rs), blend_valid(t.blend_valid), effect(t.effect) {
+		ref_cnt(1), blend(t.blend), max_tex(t.max_tex), rs(t.rs), blend_valid(t.blend_valid),
+		state_key(0), state_key_valid(false), effect(t.effect) {
 		for (int k = 0; k < max_tex; ++k) texs[k] = t.texs[k];
 	}
 
@@ -99,26 +103,31 @@ Brush::Rep* Brush::write()const {
 
 void Brush::setColor(const Vector& color) {
 	*(Vector*)write()->rs.color = color;
+	rep->state_key_valid = false;
 }
 
 void Brush::setAlpha(float alpha) {
 	float a = rep->rs.alpha;
 	write()->rs.alpha = alpha;
 	if ((a < 1) != (alpha < 1)) rep->blend_valid = false;
+	rep->state_key_valid = false;
 }
 
 void Brush::setShininess(float n) {
 	write()->rs.shininess = n;
+	rep->state_key_valid = false;
 }
 
 void Brush::setBlend(int blend) {
 	write()->blend = blend;
 	rep->blend_valid = false;
+	rep->state_key_valid = false;
 }
 
 void Brush::setFX(int fx) {
 	write()->rs.fx = fx;
 	rep->blend_valid = false;
+	rep->state_key_valid = false;
 }
 
 void Brush::setTexture(int index, const Texture& t, int n) {
@@ -133,6 +142,7 @@ void Brush::setTexture(int index, const Texture& t, int n) {
 		if (rs.tex_states[k].canvas) rep->max_tex = k + 1;
 	}
 	rep->blend_valid = false;
+	rep->state_key_valid = false;
 }
 
 const Vector& Brush::getColor()const {
@@ -215,6 +225,33 @@ const gxScene::RenderState& Brush::getRenderState()const {
 	return rep->rs;
 }
 
+uint64_t Brush::getStateKey()const {
+	if (rep->state_key_valid) return rep->state_key;
+
+	uint64_t key = 0;
+
+	gxScene::RenderState& rs = rep->rs;
+	getBlend();
+
+	key ^= (uint64_t)(int)rs.blend;
+	key ^= (uint64_t)(int)rs.fx << 8;
+	key ^= (uint64_t)(int)(rs.alpha * 255.0f) << 16;
+	key ^= (uint64_t)(int)(rs.shininess * 255.0f) << 24;
+
+	for (int i = 0; i < gxScene::MAX_TEXTURES; ++i) {
+		if (rs.tex_states[i].canvas) {
+			uint64_t ptr = (uint64_t)(uintptr_t)rs.tex_states[i].canvas;
+			key ^= (ptr << (i * 8)) ^ (ptr >> (64 - i * 8));
+		}
+	}
+
+	if (rep->effect) key ^= (uint64_t)(uintptr_t)rep->effect << 32;
+
+	rep->state_key = key;
+	rep->state_key_valid = true;
+	return key;
+}
+
 bool Brush::operator<(const Brush& t)const {
 	return memcmp(&getRenderState(), &t.getRenderState(), sizeof(gxScene::RenderState)) < 0;
 }
@@ -222,6 +259,7 @@ bool Brush::operator<(const Brush& t)const {
 void Brush::setEffect(gxEffect* e) {
 	write()->effect = e;
 	rep->blend_valid = false;
+	rep->state_key_valid = false;
 }
 
 gxEffect* Brush::getEffect() const {
