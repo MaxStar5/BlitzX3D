@@ -4,7 +4,7 @@ This is a fork of Blitz3D TSS, originally based on Blitz3D and maintained by ZiY
 ### Used in
 * [**SCP: Containment Breach Multiplayer**](https://store.steampowered.com/app/1782380/SCP_Containment_Breach_Multiplayer/)
 * [**SCP: Containment Breach Ultimate Edition Reborn 1.5.x**](https://github.com/Jabka666/scpcb-ue-my/tree/1.5.x)
-* [**SCP: Containment Breach 1.3.12.5**](https://github.com/SCP-CB-CPP/scpcb)
+* [**SCP: Containment Breach 1.3.12.5 DX7**](https://github.com/SCP-CB-CPP/scpcb)
 * [**SCP: Containment Breach Faerov Mod**](https://www.moddb.com/mods/scp-containment-breach-faerov-mod)
 * [**SCP: Terror Hunt**](https://www.moddb.com/mods/scp-terror-hunt-mod)
 
