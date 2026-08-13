@@ -23,8 +23,11 @@
 
 static void writeMiniDump(EXCEPTION_POINTERS* pExp) {
 	char path[MAX_PATH];
-	if (!GetTempPathA(MAX_PATH, path)) return;
-	strcat_s(path, MAX_PATH, "blitz_crash.dmp");
+	GetModuleFileNameA(NULL, path, MAX_PATH);
+	char* slash = strrchr(path, '\\');
+	if (slash) *slash = '\0';
+	else path[0] = '\0';
+	strcat_s(path, MAX_PATH, "\\blitz_crash.dmp");
 
 	HANDLE hFile = CreateFileA(path, GENERIC_WRITE, 0, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
 	if (hFile == INVALID_HANDLE_VALUE) return;
@@ -42,8 +45,11 @@ static void writeMiniDump(EXCEPTION_POINTERS* pExp) {
 
 static void writeCrashLog(const char* fmt, ...) {
 	char path[MAX_PATH];
-	if (!GetTempPathA(MAX_PATH, path)) return;
-	strcat_s(path, MAX_PATH, "blitz_crash.log");
+	GetModuleFileNameA(NULL, path, MAX_PATH);
+	char* slash = strrchr(path, '\\');
+	if (slash) *slash = '\0';
+	else path[0] = '\0';
+	strcat_s(path, MAX_PATH, "\\blitz_crash.log");
 
 	HANDLE hFile = CreateFileA(path, GENERIC_WRITE, FILE_SHARE_READ, NULL, OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
 	if (hFile == INVALID_HANDLE_VALUE) return;
@@ -186,8 +192,11 @@ static void _cdecl seTranslator(unsigned int u, EXCEPTION_POINTERS* pExp) {
 		writeCrashLog("---");
 
 		char logPath[MAX_PATH];
-		GetTempPathA(MAX_PATH, logPath);
-		strcat_s(logPath, MAX_PATH, "blitz_crash.log");
+		GetModuleFileNameA(NULL, logPath, MAX_PATH);
+		char* slash = strrchr(logPath, '\\');
+		if (slash) *slash = '\0';
+		else logPath[0] = '\0';
+		strcat_s(logPath, MAX_PATH, "\\blitz_crash.log");
 
 		char msg[512];
 		sprintf_s(msg, sizeof(msg), "A crash has occurred.\n\nThe log and dump files have been saved to:\n%s\n\n" "Please send these files to the developers.", logPath);
