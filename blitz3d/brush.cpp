@@ -11,6 +11,7 @@ struct Brush::Rep {
 	bool state_key_valid;
 	gxScene::RenderState rs;
 	Texture texs[gxScene::MAX_TEXTURES];
+	int tex_frame[gxScene::MAX_TEXTURES];
 	gxEffect* effect;
 
 	static Rep* pool;
@@ -19,6 +20,7 @@ struct Brush::Rep {
 		ref_cnt(1), blend(0), max_tex(0), blend_valid(true),
 		state_key(0), state_key_valid(false), effect(nullptr) {
 		memset(&rs, 0, sizeof(rs));
+		memset(tex_frame, 0, sizeof(tex_frame));
 		rs.blend = gxScene::BLEND_REPLACE;
 		rs.color[0] = rs.color[1] = rs.color[2] = rs.alpha = 1;
 	}
@@ -27,6 +29,7 @@ struct Brush::Rep {
 		ref_cnt(1), blend(t.blend), max_tex(t.max_tex), rs(t.rs), blend_valid(t.blend_valid),
 		state_key(0), state_key_valid(false), effect(t.effect) {
 		for (int k = 0; k < max_tex; ++k) texs[k] = t.texs[k];
+		memcpy(tex_frame, t.tex_frame, sizeof(tex_frame));
 	}
 
 	void* operator new(size_t sz) {
@@ -74,13 +77,14 @@ Brush::Brush(const Brush& a, const Brush& b) :
 	if (b.rep->max_tex > rep->max_tex) rep->max_tex = b.rep->max_tex;
 
 	for (int k = 0; k < rep->max_tex; ++k) {
-		if (b.rep->rs.tex_states[k].canvas) {
-			rep->rs.tex_states[k].canvas = b.rep->rs.tex_states[k].canvas;
+		if (b.rep->texs[k].valid()) {
 			rep->texs[k] = b.rep->texs[k];
+			rep->tex_frame[k] = b.rep->tex_frame[k];
 		}
 	}
 
 	rep->blend_valid = false;
+	rep->state_key_valid = false;
 }
 
 Brush::~Brush() {
@@ -135,11 +139,11 @@ void Brush::setTexture(int index, const Texture& t, int n) {
 	gxScene::RenderState& rs = rep->rs;
 
 	rep->texs[index] = t;
-	rs.tex_states[index].canvas = t.getCanvas(n);
+	rep->tex_frame[index] = n;
 
 	rep->max_tex = 0;
 	for (int k = 0; k < gxScene::MAX_TEXTURES; ++k) {
-		if (rs.tex_states[k].canvas) rep->max_tex = k + 1;
+		if (rep->texs[k].valid()) rep->max_tex = k + 1;
 	}
 	rep->blend_valid = false;
 	rep->state_key_valid = false;
@@ -211,6 +215,7 @@ const gxScene::RenderState& Brush::getRenderState()const {
 	getBlend();
 	for (int k = 0; k < rep->max_tex; ++k) {
 		gxScene::RenderState::TexState* ts = &rep->rs.tex_states[k];
+		ts->canvas = rep->texs[k].getCanvas(rep->tex_frame[k]);
 		ts->matrix = rep->texs[k].getMatrix();
 		ts->blend = rep->texs[k].getBlend();
 		ts->flags = rep->texs[k].getFlags();
@@ -239,9 +244,10 @@ uint64_t Brush::getStateKey()const {
 	key ^= (uint64_t)(int)(rs.shininess * 255.0f) << 24;
 
 	for (int i = 0; i < gxScene::MAX_TEXTURES; ++i) {
-		if (rs.tex_states[i].canvas) {
-			uint64_t ptr = (uint64_t)(uintptr_t)rs.tex_states[i].canvas;
+		if (rep->texs[i].valid()) {
+			uint64_t ptr = (uint64_t)(uintptr_t)rep->texs[i].getCachedTexture();
 			key ^= (ptr << (i * 8)) ^ (ptr >> (64 - i * 8));
+			key ^= (uint64_t)rep->tex_frame[i] << (i * 4 + 32);
 		}
 	}
 
@@ -253,7 +259,35 @@ uint64_t Brush::getStateKey()const {
 }
 
 bool Brush::operator<(const Brush& t)const {
-	return memcmp(&getRenderState(), &t.getRenderState(), sizeof(gxScene::RenderState)) < 0;
+	if (rep == t.rep) return false;
+	int c = memcmp(rep->rs.color, t.rep->rs.color, 12);
+	if (c) return c < 0;
+	if (rep->rs.shininess != t.rep->rs.shininess) return rep->rs.shininess < t.rep->rs.shininess;
+	if (rep->rs.alpha != t.rep->rs.alpha) return rep->rs.alpha < t.rep->rs.alpha;
+	if (rep->rs.blend != t.rep->rs.blend) return rep->rs.blend < t.rep->rs.blend;
+	if (rep->rs.fx != t.rep->rs.fx) return rep->rs.fx < t.rep->rs.fx;
+	if (rep->max_tex != t.rep->max_tex) return rep->max_tex < t.rep->max_tex;
+	if (rep->effect != t.rep->effect) return rep->effect < t.rep->effect;
+	for (int k = 0; k < gxScene::MAX_TEXTURES; ++k) {
+		const Texture& ta = rep->texs[k];
+		const Texture& tb = t.rep->texs[k];
+		CachedTexture* ca = ta.getCachedTexture();
+		CachedTexture* cb = tb.getCachedTexture();
+		if (ca != cb) return ca < cb;
+		if (rep->tex_frame[k] != t.rep->tex_frame[k]) return rep->tex_frame[k] < t.rep->tex_frame[k];
+		if (ta.getBlend() != tb.getBlend()) return ta.getBlend() < tb.getBlend();
+		if (ta.getFlags() != tb.getFlags()) return ta.getFlags() < tb.getFlags();
+		if (ta.getBumpEnvMat(0, 0) != tb.getBumpEnvMat(0, 0)) return ta.getBumpEnvMat(0, 0) < tb.getBumpEnvMat(0, 0);
+		if (ta.getBumpEnvMat(1, 0) != tb.getBumpEnvMat(1, 0)) return ta.getBumpEnvMat(1, 0) < tb.getBumpEnvMat(1, 0);
+		if (ta.getBumpEnvMat(0, 1) != tb.getBumpEnvMat(0, 1)) return ta.getBumpEnvMat(0, 1) < tb.getBumpEnvMat(0, 1);
+		if (ta.getBumpEnvMat(1, 1) != tb.getBumpEnvMat(1, 1)) return ta.getBumpEnvMat(1, 1) < tb.getBumpEnvMat(1, 1);
+		if (ta.getBumpEnvScale() != tb.getBumpEnvScale()) return ta.getBumpEnvScale() < tb.getBumpEnvScale();
+		if (ta.getBumpEnvOffset() != tb.getBumpEnvOffset()) return ta.getBumpEnvOffset() < tb.getBumpEnvOffset();
+		const gxScene::Matrix* ma = ta.getMatrix();
+		const gxScene::Matrix* mb = tb.getMatrix();
+		if (ma != mb) return ma < mb;
+	}
+	return false;
 }
 
 void Brush::setEffect(gxEffect* e) {

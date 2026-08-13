@@ -28,6 +28,7 @@ public:
 	void setBumpEnvOffset(float envoffset);
 
 	int getCanvasFlags()const;
+	bool valid()const;
 	gxCanvas* getCanvas(int frame)const;
 	const gxScene::Matrix* getMatrix()const;
 	int getBlend()const;

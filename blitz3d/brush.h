@@ -20,7 +20,6 @@ public:
 	void setFX(int fx);
 	void setTexture(int index, const Texture& t, int frame);
 	void setEffect(gxEffect* effect);
-
 	const Vector& getColor()const;
 	float getAlpha()const;
 	float getShininess()const;

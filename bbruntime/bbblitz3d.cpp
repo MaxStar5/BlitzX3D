@@ -5,6 +5,7 @@
 #include "../blitz3d/blitz3d.h"
 #include "../blitz3d/world.h"
 #include "../blitz3d/texture.h"
+#include "../blitz3d/cachedtexture.h"
 #include "../blitz3d/brush.h"
 #include "../blitz3d/camera.h"
 #include "../blitz3d/sprite.h"
@@ -330,6 +331,8 @@ void bbCaptureWorld() {
 void bbRenderWorld(float tween) {
 	debug3d("RenderWorld");
 
+	CachedTexture::flushAll();
+
 	//Should we remove this stuff?
 #ifdef BETA
 	int tris = gx_scene->getTrianglesDrawn();
@@ -484,7 +487,7 @@ Texture* bbLoadTexture(BBStr* file, int flags) {
 	}
 	delete file;
 	Texture* t = new Texture(path, flags);
-	if (!t->getCanvas(0)) { delete t; return 0; }
+	if (!t->valid()) { delete t; return 0; }
 	texture_set.insert(t);
 	return t;
 }
@@ -493,7 +496,7 @@ Texture* bbLoadAnimTexture(BBStr* file, int flags, int w, int h, int first, int 
 	debug3d("LoadAnimTexture");
 	Texture* t = new Texture(*file, flags, w, h, first, cnt);
 	delete file;
-	if (!t->getCanvas(0)) {
+	if (!t->valid()) {
 		delete t;
 		return 0;
 	}
@@ -571,12 +574,14 @@ void bbBumpNormalize(int enable) {
 
 int bbTextureWidth(Texture* t) {
 	debugTexture(t, "TextureWidth");
-	return t->getCanvas(0)->getWidth();
+	gxCanvas* c = t->getCanvas(0);
+	return c ? c->getWidth() : 0;
 }
 
 int bbTextureHeight(Texture* t) {
 	debugTexture(t, "TextureHeight");
-	return t->getCanvas(0)->getHeight();
+	gxCanvas* c = t->getCanvas(0);
+	return c ? c->getHeight() : 0;
 }
 
 BBStr* bbTextureName(Texture* t) {

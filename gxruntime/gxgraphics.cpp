@@ -416,6 +416,15 @@ gxCanvas* gxGraphics::loadCanvas(const std::string& f, int flags) {
 	return c;
 }
 
+gxCanvas* gxGraphics::createCanvasFromImage(void* fib32, int w, int h, int flags) {
+	IDirect3DTexture9* tex = ddUtil::textureFromDecoded(fib32, w, h, flags, this, true, &w, &h);
+	if (!tex) return nullptr;
+	gxCanvas* c = new gxCanvas(this, tex, flags);
+	if (w > 0 && h > 0) c->setLogicalSize(w, h);
+	canvas_set.insert(c);
+	return c;
+}
+
 gxCanvas* gxGraphics::verifyCanvas(gxCanvas* c) {
 	return canvas_set.count(c) || c == front_canvas || c == back_canvas ? c : 0;
 }

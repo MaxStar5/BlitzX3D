@@ -1,5 +1,6 @@
 #include "std.h"
 #include "cachedtexture.h"
+#include "../gxruntime/gxgraphics.h"
 
 int active_texs;
 
@@ -10,19 +11,30 @@ std::set<CachedTexture::Rep*> CachedTexture::rep_set;
 
 static std::string path;
 
+std::vector<CachedTexture::Rep*> CachedTexture::pending_reps;
+
 CachedTexture::PathMutator CachedTexture::pathMutator = nullptr;
 void CachedTexture::setPathMutator(PathMutator m) {
 	pathMutator = m;
+}
+
+static bool fileExists(const std::string& f) {
+	return GetFileAttributesA(f.c_str()) != INVALID_FILE_ATTRIBUTES;
 }
 
 struct CachedTexture::Rep {
 	int ref_cnt;
 	std::string file;
 	int flags, w, h, first;
+	int requested_cnt;
 	std::vector<gxCanvas*> frames;
+	std::shared_ptr<AsyncImageLoader::Job> job;
+	bool materialized;
+	bool failed;
 
 	Rep(int w, int h, int flags, int cnt) :
-		ref_cnt(1), flags(flags), w(w), h(h), first(0) {
+		ref_cnt(1), flags(flags), w(w), h(h), first(0), requested_cnt(cnt),
+		job(nullptr), materialized(true), failed(false) {
 		++active_texs;
 		while (cnt-- > 0) {
 			if (gxCanvas* t = gx_graphics->createCanvas(w, h, flags)) {
@@ -33,17 +45,65 @@ struct CachedTexture::Rep {
 	}
 
 	Rep(const std::string& f, int flags, int w, int h, int first, int cnt) :
-		ref_cnt(1), file(f), flags(flags), w(w), h(h), first(first) {
+		ref_cnt(1), file(f), flags(flags), w(w), h(h), first(first), requested_cnt(cnt),
+		job(nullptr), materialized(false), failed(false) {
 		++active_texs;
-		if (!(flags & gxCanvas::CANVAS_TEX_CUBE)) {
-			if (w <= 0 || h <= 0 || first < 0 || cnt <= 0) {
-				w = h = first = 0;
-				if (gxCanvas* t = gx_graphics->loadCanvas(f, flags)) {
-					frames.push_back(t);
-				}
+		if (!fileExists(f)) {
+			failed = true;
+			materialized = true;
+			return;
+		}
+		job = AsyncImageLoader::instance().load(f);
+		pending_reps.push_back(this);
+	}
+
+	~Rep() {
+		--active_texs;
+		for (int k = 0; k < frames.size(); ++k) gx_graphics->freeCanvas(frames[k]);
+		cancelJob();
+	}
+
+	void cancelJob() {
+		for (auto it = pending_reps.begin(); it != pending_reps.end(); ++it) {
+			if (*it == this) {
+				pending_reps.erase(it);
+				break;
+			}
+		}
+		if (job) {
+			AsyncImageLoader::instance().cancel(job);
+			job.reset();
+		}
+	}
+
+	void materialize(bool blocking) {
+		if (materialized) return;
+
+		if (job) {
+			if (blocking) {
+				AsyncImageLoader::instance().wait(job);
+			}
+			else {
+				int s = job->state.load();
+				if (s == AsyncImageLoader::STATE_QUEUED || s == AsyncImageLoader::STATE_DECODING) return;
+			}
+			if (job->state.load() == AsyncImageLoader::STATE_FAILED) {
+				failed = true;
+				cancelJob();
+				materialized = true;
+				return;
+			}
+			if (job->state.load() == AsyncImageLoader::STATE_CANCELLED) {
+				failed = true;
+				cancelJob();
+				materialized = true;
 				return;
 			}
 		}
+
+		void* fib32 = job ? job->fib32 : nullptr;
+		int iw = job ? job->w : 0;
+		int ih = job ? job->h : 0;
 
 		int t_flags = (flags & (
 			gxCanvas::CANVAS_TEX_RGB |
@@ -51,25 +111,59 @@ struct CachedTexture::Rep {
 			gxCanvas::CANVAS_TEX_MASK |
 			gxCanvas::CANVAS_TEX_HICOLOR)) | gxCanvas::CANVAS_NONDISPLAY | gxCanvas::CANVAS_TEXTURE;
 
-		gxCanvas* t = gx_graphics->loadCanvas(f, t_flags);
-		if (!t) return;
+		if (!(flags & gxCanvas::CANVAS_TEX_CUBE)) {
+			if (w <= 0 || h <= 0 || first < 0 || requested_cnt <= 0) {
+				if (fib32) {
+					if (gxCanvas* t = gx_graphics->createCanvasFromImage(fib32, iw, ih, flags)) {
+						frames.push_back(t);
+					}
+				}
+				cancelJob();
+				materialized = true;
+				return;
+			}
+		}
+
+		if (!fib32) {
+			failed = true;
+			cancelJob();
+			materialized = true;
+			return;
+		}
+
+		gxCanvas* t = gx_graphics->createCanvasFromImage(fib32, iw, ih, t_flags);
+		if (!t) {
+			failed = true;
+			cancelJob();
+			materialized = true;
+			return;
+		}
 		if (!t->getDepth()) {
 			gx_graphics->freeCanvas(t);
+			failed = true;
+			cancelJob();
+			materialized = true;
 			return;
 		}
 
 		if (flags & gxCanvas::CANVAS_TEX_CUBE) {
-			int w = t->getWidth() / 6;
-			if (w * 6 != t->getWidth()) return;
-			int h = t->getHeight();
+			int cw = t->getWidth() / 6;
+			if (cw * 6 != t->getWidth()) {
+				gx_graphics->freeCanvas(t);
+				failed = true;
+				cancelJob();
+				materialized = true;
+				return;
+			}
+			int ch = t->getHeight();
 
-			gxCanvas* tex = gx_graphics->createCanvas(w, h, flags);
+			gxCanvas* tex = gx_graphics->createCanvas(cw, ch, flags);
 			if (tex) {
 				frames.push_back(tex);
 
 				for (int face = 0; face < 6; ++face) {
 					tex->setCubeFace(face);
-					gx_graphics->copy(tex, 0, 0, tex->getWidth(), tex->getHeight(), t, face * w, 0, w, h);
+					gx_graphics->copy(tex, 0, 0, tex->getWidth(), tex->getHeight(), t, face * cw, 0, cw, ch);
 				}
 				tex->setCubeFace(1);
 			}
@@ -77,12 +171,16 @@ struct CachedTexture::Rep {
 		else {
 			int x_tiles = t->getWidth() / w;
 			int y_tiles = t->getHeight() / h;
-			if (first + cnt > x_tiles * y_tiles) {
+			if (first + requested_cnt > x_tiles * y_tiles) {
 				gx_graphics->freeCanvas(t);
+				failed = true;
+				cancelJob();
+				materialized = true;
 				return;
 			}
 			int x = (first % x_tiles) * w;
 			int y = (first / x_tiles) * h;
+			int cnt = requested_cnt;
 			while (cnt--) {
 				gxCanvas* p = gx_graphics->createCanvas(w, h, flags);
 				gx_graphics->copy(p, 0, 0, p->getWidth(), p->getHeight(), t, x, y, w, h);
@@ -91,19 +189,17 @@ struct CachedTexture::Rep {
 			}
 		}
 		gx_graphics->freeCanvas(t);
-	}
 
-	~Rep() {
-		--active_texs;
-		for (int k = 0; k < frames.size(); ++k) gx_graphics->freeCanvas(frames[k]);
+		cancelJob();
+		materialized = true;
 	}
 };
 
 CachedTexture::Rep* CachedTexture::findRep(const std::string& f, int flags, int w, int h, int first, int cnt) {
-	std::set<Rep*>::const_iterator it;
-	for (it = rep_set.begin(); it != rep_set.end(); ++it) {
-		Rep* rep = *it;
-		if (rep->file == f && rep->flags == flags && rep->w == w && rep->h == h && rep->first == first && rep->frames.size() == cnt) {
+	for (Rep* rep : rep_set) {
+		if (rep->file == f && rep->flags == flags && rep->w == w && rep->h == h && rep->first == first) {
+			int have = rep->materialized ? (int)rep->frames.size() : rep->requested_cnt;
+			if (have != cnt) continue;
 			++rep->ref_cnt; return rep;
 		}
 	}
@@ -121,11 +217,8 @@ CachedTexture::CachedTexture(const std::string& f_, int flags, int w, int h, int
 		std::string t = path + tolower(filenamefile(f));
 		if (rep = findRep(t, flags, w, h, first, cnt)) return;
 		rep = new Rep(t, flags, w, h, first, cnt);
-		if (rep->frames.size()) {
-			rep_set.insert(rep);
-			return;
-		}
-		delete rep;
+		rep_set.insert(rep);
+		return;
 	}
 
 	if (pathMutator) {
@@ -134,11 +227,8 @@ CachedTexture::CachedTexture(const std::string& f_, int flags, int w, int h, int
 			std::string t = tolower(fullfilename(mutated));
 			if (rep = findRep(t, flags, w, h, first, cnt)) return;
 			rep = new Rep(t, flags, w, h, first, cnt);
-			if (rep->frames.size()) {
-				rep_set.insert(rep);
-				return;
-			}
-			delete rep;
+			rep_set.insert(rep);
+			return;
 		}
 	}
 
@@ -175,7 +265,27 @@ std::string CachedTexture::getName()const {
 }
 
 const std::vector<gxCanvas*>& CachedTexture::getFrames()const {
+	rep->materialize(true);
 	return rep->frames;
+}
+
+bool CachedTexture::valid()const {
+	if (!rep || rep->failed) return false;
+	return true;
+}
+
+void CachedTexture::flushAll() {
+	int budget = 16;
+	for (size_t idx = 0; idx < pending_reps.size() && budget > 0; ) {
+		Rep* r = pending_reps[idx];
+		r->materialize(false);
+		if (r->materialized) {
+			--budget;
+		}
+		else {
+			++idx;
+		}
+	}
 }
 
 void CachedTexture::setPath(const std::string& t) {

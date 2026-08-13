@@ -113,6 +113,7 @@ public:
 	//OBJECTS
 	gxCanvas* createCanvas(int width, int height, int flags);
 	gxCanvas* loadCanvas(const std::string& file, int flags);
+	gxCanvas* createCanvasFromImage(void* fib32, int w, int h, int flags);
 	gxCanvas* verifyCanvas(gxCanvas* canvas);
 	void freeCanvas(gxCanvas* canvas);
 

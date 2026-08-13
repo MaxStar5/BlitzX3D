@@ -32,7 +32,6 @@ struct Texture::Rep {
 
 	int ref_cnt;
 	CachedTexture cached_tex;
-	std::vector<gxCanvas*> tex_frames;
 
 	int tex_blend, tex_flags;
 	bool transparent;
@@ -48,7 +47,6 @@ struct Texture::Rep {
 		ref_cnt(1), cached_tex(w, h, flags, cnt),
 		tex_blend(gxScene::BLEND_MULTIPLY), tex_flags(0),
 		sx(1), sy(1), tx(0), ty(0), rot(0), mat_used(false) {
-		tex_frames = cached_tex.getFrames();
 		transparent =
 			(flags & gxCanvas::CANVAS_TEX_ALPHA) &&
 			!(flags & gxCanvas::CANVAS_TEX_MASK);
@@ -59,7 +57,6 @@ struct Texture::Rep {
 		ref_cnt(1), cached_tex(f, flags, w, h, first, cnt),
 		tex_blend(gxScene::BLEND_MULTIPLY), tex_flags(0),
 		sx(1), sy(1), tx(0), ty(0), rot(0), mat_used(false) {
-		tex_frames = cached_tex.getFrames();
 		transparent =
 			(flags & gxCanvas::CANVAS_TEX_ALPHA) &&
 			!(flags & gxCanvas::CANVAS_TEX_MASK);
@@ -67,7 +64,7 @@ struct Texture::Rep {
 	}
 
 	Rep(const Rep& t) :
-		ref_cnt(1), cached_tex(t.cached_tex), tex_frames(t.tex_frames),
+		ref_cnt(1), cached_tex(t.cached_tex),
 		tex_blend(t.tex_blend), tex_flags(t.tex_flags),
 		sx(t.sx), sy(t.sy), tx(t.tx), ty(t.ty), rot(t.rot),
 		mat_used(t.mat_used), mat_valid(t.mat_valid), matrix(t.matrix),
@@ -164,11 +161,19 @@ bool Texture::isTransparent()const {
 }
 
 gxCanvas* Texture::getCanvas(int n)const {
-	return rep && n >= 0 && n < rep->tex_frames.size() ? rep->tex_frames[n] : 0;
+	if (!rep) return 0;
+	const std::vector<gxCanvas*>& frames = rep->cached_tex.getFrames();
+	return n >= 0 && n < (int)frames.size() ? frames[n] : 0;
 }
 
 int Texture::getCanvasFlags()const {
-	return rep && rep->tex_frames.size() ? rep->tex_frames[0]->getFlags() : 0;
+	if (!rep) return 0;
+	const std::vector<gxCanvas*>& frames = rep->cached_tex.getFrames();
+	return frames.size() ? frames[0]->getFlags() : 0;
+}
+
+bool Texture::valid()const {
+	return rep && rep->cached_tex.valid();
 }
 
 CachedTexture* Texture::getCachedTexture()const {
