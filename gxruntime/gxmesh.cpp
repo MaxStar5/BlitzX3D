@@ -95,15 +95,15 @@ void gxMesh::render(int first_vert, int vert_cnt, int first_tri, int tri_cnt) {
 
     if (skinned) {
         dev->SetVertexDeclaration(vertex_decl);
-        dev->SetStreamSource(0, vertex_buff, 0, sizeof(dxSkinVertex));
-        dev->SetIndices(index_buff);
+        graphics->setStreamSource0(vertex_buff, sizeof(dxSkinVertex));
+        graphics->setIndices(index_buff);
         dev->DrawIndexedPrimitive(D3DPT_TRIANGLELIST, first_vert, 0, vert_cnt, first_tri * 3, tri_cnt);
         return;
     }
 
-    dev->SetStreamSource(0, vertex_buff, 0, sizeof(dxVertex));
-    dev->SetFVF(VTXFMT);
-    dev->SetIndices(index_buff);
+    graphics->setStreamSource0(vertex_buff, sizeof(dxVertex));
+    graphics->setFVF(VTXFMT);
+    graphics->setIndices(index_buff);
     dev->DrawIndexedPrimitive(D3DPT_TRIANGLELIST, first_vert, 0, vert_cnt, first_tri * 3, tri_cnt);
 }
 
@@ -121,8 +121,8 @@ void gxMesh::renderSkinned(int first_vert, int vert_cnt, int first_tri, int tri_
 
     dev->SetVertexDeclaration(vertex_decl);
     dev->SetVertexShader(shader);
-    dev->SetStreamSource(0, vertex_buff, 0, sizeof(dxSkinVertex));
-    dev->SetIndices(index_buff);
+    graphics->setStreamSource0(vertex_buff, sizeof(dxSkinVertex));
+    graphics->setIndices(index_buff);
     dev->DrawIndexedPrimitive(D3DPT_TRIANGLELIST, first_vert, 0, vert_cnt, first_tri * 3, tri_cnt);
 
     dev->SetVertexShader(nullptr);

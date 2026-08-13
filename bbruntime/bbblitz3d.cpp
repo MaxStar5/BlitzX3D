@@ -329,6 +329,10 @@ void bbCaptureWorld() {
 	world->capture();
 }
 
+void blitz3d_markFrameEnd() {
+	if (world) world->markFrameEnd();
+}
+
 void bbRenderWorld(float tween) {
 	debug3d("RenderWorld");
 

@@ -35,6 +35,7 @@ public:
 	void capture();
 	void render(float tween);
 	void renderEntity(Camera* cam, float tween);
+	void markFrameEnd() { frame_first_render = true; }
 
 	bool checkLOS(Object* src, Object* dest);
 	bool hitTest(const Line& line, float radius, Object* obj, const Transform& tf, int method, Collision* curr_coll);
@@ -42,6 +43,7 @@ public:
 
 private:
 	std::vector<Model*> transparents;
+	bool frame_first_render = true;
 
 	void collide(Object* src, const std::vector<CollInfo>& collinfos, const std::unordered_map<int, std::vector<Object*>>& objsByType);
 	void render(Camera* c, Mirror* m);

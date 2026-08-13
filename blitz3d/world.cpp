@@ -361,8 +361,6 @@ void World::render(float tween) {
 	ord_mods.clear();
 	unord_mods.clear();
 
-	_visible.clear();
-
 	Scene* curr = g_sceneManager.get(g_sceneManager.currentSceneId);
 	if (!curr) curr = g_sceneManager.get(0);
 	if (!curr) return; // should never happen
@@ -370,10 +368,16 @@ void World::render(float tween) {
 	curr->mirrors.clear();
 	curr->listeners.clear();
 
-	enumVisible();
+	static unsigned last_gen = ~0u;
+	bool reuse = !frame_first_render && Entity::generation() == last_gen;
+	if (!reuse) {
+		_visible.clear();
+		enumVisible();
+		last_gen = Entity::generation();
+	}
 
 	for (Object* o : _visible) {
-		if (!o->beginRender(tween)) continue;
+		if (!reuse && !o->beginRender(tween)) continue;
 
 		if (Light* t = o->getLight())    curr->lights.push_back(t->getGxLight());
 		else if (Camera* t = o->getCamera())   cam_que.push(t);

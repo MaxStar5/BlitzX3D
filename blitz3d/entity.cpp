@@ -4,12 +4,15 @@
 
 Entity* Entity::_orphans, * Entity::_last_orphan;
 
+unsigned Entity::gen = 0;
+
 enum {
 	INVALID_LOCALTFORM = 1,
 	INVALID_WORLDTFORM = 2
 };
 
 void Entity::remove() {
+	++gen;
 	if (sceneId != 0) {
 		if (Scene* s = g_sceneManager.get(sceneId)) {
 			s->remove(this);
@@ -29,6 +32,7 @@ void Entity::remove() {
 }
 
 void Entity::insert() {
+	++gen;
 	_succ = 0;
 	if (_parent) {
 		if (_pred = _parent->_last_child) _pred->_succ = this;
@@ -130,10 +134,12 @@ void Entity::setName(const std::string& t) {
 
 void Entity::setVisible(bool visible) {
 	_visible = visible;
+	++gen;
 }
 
 void Entity::setEnabled(bool enabled) {
 	_enabled = enabled;
+	++gen;
 }
 
 void Entity::enumVisible(std::vector<Object*>& out) {

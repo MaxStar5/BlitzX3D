@@ -8,7 +8,7 @@
 extern gxRuntime* gx_runtime;
 static Debugger* debugger;
 
-gxGraphics::gxGraphics(gxRuntime* rt, IDirect3DDevice9Ex* dev, IDirect3DSurface9* front, IDirect3DSurface9* back, bool d3d) : runtime(rt), dir3dDev(dev), frontBuffer(front), backBuffer(back), gfx_lost(false), dummy_mesh(0), skin_vshader(nullptr), skin_decl(nullptr), skin_shader_load_failed(false), skin_caps_checked(-1) {
+gxGraphics::gxGraphics(gxRuntime* rt, IDirect3DDevice9Ex* dev, IDirect3DSurface9* front, IDirect3DSurface9* back, bool d3d) : runtime(rt), dir3dDev(dev), frontBuffer(front), backBuffer(back), gfx_lost(false), dummy_mesh(0), skin_vshader(nullptr), skin_decl(nullptr), skin_shader_load_failed(false), skin_caps_checked(-1), d3d_stream0(nullptr), d3d_stream0_stride(0), d3d_fvf(0), d3d_indices(nullptr) {
 
 	if (dir3dDev) dir3dDev->AddRef();
 	if (frontBuffer) frontBuffer->AddRef();
@@ -560,6 +560,32 @@ gxMesh* gxGraphics::verifyMesh(gxMesh* m) {
 
 void gxGraphics::freeMesh(gxMesh* mesh) {
 	if (mesh_set.erase(mesh)) delete mesh;
+}
+
+void gxGraphics::resetStreamState() {
+	d3d_stream0 = (IDirect3DVertexBuffer9*)(uintptr_t)0x55555555;
+	d3d_stream0_stride = 0x55555555;
+	d3d_fvf = 0x55555555;
+	d3d_indices = (IDirect3DIndexBuffer9*)(uintptr_t)0x55555555;
+}
+
+void gxGraphics::setStreamSource0(IDirect3DVertexBuffer9* vb, UINT stride) {
+	if (d3d_stream0 == vb && d3d_stream0_stride == stride) return;
+	dir3dDev->SetStreamSource(0, vb, 0, stride);
+	d3d_stream0 = vb;
+	d3d_stream0_stride = stride;
+}
+
+void gxGraphics::setFVF(DWORD fvf) {
+	if (d3d_fvf == fvf) return;
+	dir3dDev->SetFVF(fvf);
+	d3d_fvf = fvf;
+}
+
+void gxGraphics::setIndices(IDirect3DIndexBuffer9* ib) {
+	if (d3d_indices == ib) return;
+	dir3dDev->SetIndices(ib);
+	d3d_indices = ib;
 }
 
 // GPU SKINNING

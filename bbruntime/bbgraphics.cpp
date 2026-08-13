@@ -11,6 +11,8 @@ gxGraphics* gx_graphics;
 gxCanvas* gx_canvas;
 gxCanvas* gx_depth_canvas;
 
+extern void blitz3d_markFrameEnd();
+
 struct GfxMode
 {
     int w, h, d, caps;
@@ -911,6 +913,7 @@ void bbVWait(int n)
 
 void bbFlip(int vwait)
 {
+    blitz3d_markFrameEnd();
     gx_graphics->flip(vwait ? true : false);
     if (!gx_runtime->idle()) RTEX(0);
 }
