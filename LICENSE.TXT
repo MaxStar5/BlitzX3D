@@ -6,7 +6,7 @@ where applicable.
 
 ===============================================================================
 BLITZX3D COMMUNITY LICENSE
-Version 1.1
+Version 1.2
 Effective Date: July 16, 2026
 
 Copyright (c) 2026-present Chris A. (krimbopple)
