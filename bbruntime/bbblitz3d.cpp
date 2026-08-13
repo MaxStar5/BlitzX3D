@@ -224,6 +224,15 @@ static Entity* insertEntity(Entity* e, Entity* p) {
 	return e;
 }
 
+static void nameEntityFromFile(Entity* e, const std::string& file) {
+	if (!e || !e->getName().empty()) return;
+	e->setName(filenamefile(file));
+	auto it = entity_map.find(e);
+	if (it != entity_map.end()) {
+		it->second.name = e->getName();
+	}
+}
+
 static void erase(Entity* e) {
 	for (Entity* p = e->children(); p; p = p->successor()) {
 		erase(p);
@@ -705,25 +714,31 @@ Entity* bbCreateMesh(Entity* p) {
 
 Entity* bbLoadMesh(BBStr* f, Entity* p) {
 	debugParent(p, "LoadMesh");
-	Entity* e = loadEntity(f->c_str(), MeshLoader::HINT_COLLAPSE);
+	std::string file = *f;
+	Entity* e = loadEntity(file.c_str(), MeshLoader::HINT_COLLAPSE);
 	delete f;
 
 	if (!e) return 0;
 	MeshModel* m = new MeshModel();
 	collapseMesh(m, e);
-	return insertEntity(m, p);
+	Entity* r = insertEntity(m, p);
+	nameEntityFromFile(r, file);
+	return r;
 }
 
 Entity* bbLoadAnimMesh(BBStr* f, Entity* p) {
 	debugParent(p, "LoadAnimMesh");
-	Entity* e = loadEntity(f->c_str(), 0);
+	std::string file = *f;
+	Entity* e = loadEntity(file.c_str(), 0);
 	delete f;
 
 	if (!e) return 0;
 	if (Animator* anim = e->getObject()->getAnimator()) {
 		anim->animate(1, 0, 0, 0);
 	}
-	return insertEntity(e, p);
+	Entity* r = insertEntity(e, p);
+	nameEntityFromFile(r, file);
+	return r;
 }
 
 Entity* bbCreateCube(Entity* p) {
@@ -1443,9 +1458,12 @@ Entity* bbCreatePlane(int segs, Entity* p) {
 //////////////////
 Entity* bbLoadMD2(BBStr* file, Entity* p) {
 	debugParent(p, "LoadMD2");
-	MD2Model* t = new MD2Model(*file); delete file;
+	std::string name = *file;
+	MD2Model* t = new MD2Model(name); delete file;
 	if (!t->getValid()) { delete t; return 0; }
-	return insertEntity(t, p);
+	Entity* r = insertEntity(t, p);
+	nameEntityFromFile(r, name);
+	return r;
 }
 
 void  bbAnimateMD2(MD2Model* m, int mode, float speed, int first, int last, float trans) {
@@ -1473,13 +1491,16 @@ int  bbMD2Animating(MD2Model* m) {
 //////////////////
 Entity* bbLoadBSP(BBStr* file, float gam, Entity* p) {
 	debugParent(p, "LoadBSP");
-	CachedTexture::setPath(filenamepath(*file));
-	Q3BSPModel* t = new Q3BSPModel(*file, gam); delete file;
+	std::string name = *file;
+	CachedTexture::setPath(filenamepath(name));
+	Q3BSPModel* t = new Q3BSPModel(name, gam); delete file;
 	CachedTexture::setPath("");
 
 	if (!t->isValid()) { delete t; return 0; }
 
-	return insertEntity(t, p);
+	Entity* r = insertEntity(t, p);
+	nameEntityFromFile(r, name);
+	return r;
 }
 
 void  bbBSPAmbientLight(Q3BSPModel* t, float r, float g, float b) {
