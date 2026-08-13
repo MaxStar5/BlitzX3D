@@ -92,12 +92,27 @@ and must clearly indicate that modifications have been made.
 
 6. ATTRIBUTION
 
-Copies or substantial portions of BlitzX3D Contributions distributed in source
-or binary form must include:
+(a) Copies or substantial portions of BlitzX3D Contributions distributed in
+source or binary form must include:
 
   - the applicable copyright notice;
   - this license text; and
   - any additional notices required by the original authors.
+
+(b) Any product that incorporates BlitzX3D Contributions and is made
+available to end users must display visible attribution of the BlitzX3D
+engine in the product itself. Visible attribution must appear in the
+product's About screen, credits section, or startup splash, and must be
+readily discoverable without hidden menus or developer-only toggles.
+
+The visible attribution must state, at minimum:
+
+  - "Powered by BlitzX3D (https://github.com/krimbopple/BlitzX3D)"
+
+or words to that effect clearly identifying the BlitzX3D engine.
+
+This subsection (b) does not apply to internal development builds used only
+within the distributor's own organization.
 
 
 7. PATENT RIGHTS
