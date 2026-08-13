@@ -271,6 +271,7 @@ void bbHWMultiTex(int enable) {
 void bbGpuSkinning(int enable) {
 	debug3d("GpuSkinning");
 	MeshModel::setGpuSkinningEnabled(!!enable);
+	if (enable && gx_graphics) gx_graphics->ensureSkinningShader();
 }
 
 void bbWBuffer(int enable) {
