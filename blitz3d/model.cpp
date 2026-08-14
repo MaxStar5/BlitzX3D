@@ -51,7 +51,7 @@ public:
 			gx_scene->renderSkinned(mesh, fv, vc, ft, tc, bone_data.data(), bone_cnt);
 			return;
 		}
-		gx_scene->setEffect((effect && gx_graphics->verifyEffect(effect)) ? effect : nullptr);
+		gx_scene->setEffect(gx_graphics->verifyEffect(effect) ? effect : nullptr);
 		gx_scene->render(mesh, fv, vc, ft, tc);
 	}
 	void* operator new(size_t sz) {
@@ -75,7 +75,21 @@ public:
 Model::MeshQueue* Model::MeshQueue::pool;
 
 static uint64_t computeStateKey(const Brush& b, gxEffect* e) {
-	uint64_t key = b.getStateKey();
+	const auto& rs = b.getRenderState();
+	uint64_t key = 0;
+
+	key ^= (uint64_t)rs.blend;
+	key ^= (uint64_t)rs.fx << 8;
+	key ^= (uint64_t)(rs.alpha * 255.0f) << 16;
+	key ^= (uint64_t)(rs.shininess * 255.0f) << 24;
+
+	for (int i = 0; i < gxScene::MAX_TEXTURES; ++i) {
+		if (rs.tex_states[i].canvas) {
+			uint64_t ptr = (uint64_t)(uintptr_t)rs.tex_states[i].canvas;
+			key ^= (ptr << (i * 8)) ^ (ptr >> (64 - i * 8));
+		}
+	}
+
 	if (e) key ^= (uint64_t)(uintptr_t)e << 32;
 	return key;
 }
@@ -176,11 +190,4 @@ void Model::setEffect(gxEffect* e) {
 
 gxEffect* Model::getEffect() const {
 	return entityEffect;
-}
-
-uint64_t Model::getStateKey() const {
-	uint64_t key = brush.getStateKey();
-	gxEffect* e = entityEffect ? entityEffect : brush.getEffect();
-	if (e) key ^= (uint64_t)(uintptr_t)e << 32;
-	return key;
 }
