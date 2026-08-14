@@ -1443,7 +1443,7 @@ void bbDrawImage(bbImage* i, int x, int y, int frame)
     if (c->hasMask()) {
         gx_canvas->blit(x, y, c, 0, 0, w, h, false);
     }
-    else if (c->getFlags() & gxCanvas::CANVAS_TEX_ALPHA) {
+    else if ((c->getFlags() & gxCanvas::CANVAS_TEX_ALPHA) || c->format.hasAlphaMask()) {
         gx_canvas->blitAlpha(x, y, c, 0, 0, w, h, 0xffffffff, false);
     }
     else {
@@ -1504,7 +1504,7 @@ void bbDrawImageRect(bbImage* i, int x, int y, int r_x, int r_y, int r_w, int r_
     if (c->hasMask()) {
         gx_canvas->blit(x, y, c, r_x, r_y, r_w, r_h, false);
     }
-    else if (c->getFlags() & gxCanvas::CANVAS_TEX_ALPHA) {
+    else if ((c->getFlags() & gxCanvas::CANVAS_TEX_ALPHA) || c->format.hasAlphaMask()) {
         gx_canvas->blitAlpha(x, y, c, r_x, r_y, r_w, r_h, 0xffffffff, false);
     }
     else {

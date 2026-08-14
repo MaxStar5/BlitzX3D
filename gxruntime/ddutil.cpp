@@ -204,6 +204,18 @@ void ddUtil::copy(IDirect3DDevice9* dev, IDirect3DSurface9* dest_surf, int dx, i
     src_surf->GetDesc(&src_desc);
     dest_surf->GetDesc(&dst_desc);
 
+    IDirect3DSurface9* src_readback = nullptr;
+    bool srcIsRT = (src_desc.Usage & D3DUSAGE_RENDERTARGET) != 0;
+    if (srcIsRT && dev) {
+        if (FAILED(dev->CreateOffscreenPlainSurface(src_desc.Width, src_desc.Height, src_desc.Format, D3DPOOL_SYSTEMMEM, &src_readback, nullptr)))
+            return;
+        if (FAILED(dev->GetRenderTargetData(src_surf, src_readback))) {
+            src_readback->Release();
+            return;
+        }
+        src_surf = src_readback;
+    }
+
     bool dstIsRT = (dst_desc.Usage & D3DUSAGE_RENDERTARGET) != 0;
     if (dstIsRT && dev) {
         IDirect3DSurface9* staging = nullptr;
@@ -236,13 +248,18 @@ void ddUtil::copy(IDirect3DDevice9* dev, IDirect3DSurface9* dest_surf, int dx, i
             }
             staging->Release();
         }
+        if (src_readback) src_readback->Release();
         return;
     }
 
     D3DLOCKED_RECT src_lr, dst_lr;
-    if (FAILED(src_surf->LockRect(&src_lr, nullptr, D3DLOCK_READONLY))) return;
+    if (FAILED(src_surf->LockRect(&src_lr, nullptr, D3DLOCK_READONLY))) {
+        if (src_readback) src_readback->Release();
+        return;
+    }
     if (FAILED(dest_surf->LockRect(&dst_lr, nullptr, 0))) {
         src_surf->UnlockRect();
+        if (src_readback) src_readback->Release();
         return;
     }
 
@@ -263,6 +280,7 @@ void ddUtil::copy(IDirect3DDevice9* dev, IDirect3DSurface9* dest_surf, int dx, i
 
     dest_surf->UnlockRect();
     src_surf->UnlockRect();
+    if (src_readback) src_readback->Release();
 }
 
 IDirect3DSurface9* ddUtil::createDisplaySurface(int w, int h, gxGraphics* gfx) {

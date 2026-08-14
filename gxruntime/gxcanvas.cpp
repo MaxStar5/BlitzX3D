@@ -341,18 +341,8 @@ void gxCanvas::restore() {
     IDirect3DSurface9* newSurf = nullptr;
     newTex->GetSurfaceLevel(0, &newSurf);
 
-    D3DLOCKED_RECT srcLR, dstLR;
-    if (SUCCEEDED(t_surf->LockRect(&srcLR, nullptr, D3DLOCK_READONLY))) {
-        if (SUCCEEDED(newSurf->LockRect(&dstLR, nullptr, 0))) {
-            for (UINT y = 0; y < tdesc.Height; ++y) {
-                memcpy((BYTE*)dstLR.pBits + y * dstLR.Pitch,
-                    (BYTE*)srcLR.pBits + y * srcLR.Pitch,
-                    min((UINT)dstLR.Pitch, (UINT)srcLR.Pitch));
-            }
-            newSurf->UnlockRect();
-        }
-        t_surf->UnlockRect();
-    }
+    RECT fullRect = { 0, 0, (LONG)tdesc.Width, (LONG)tdesc.Height };
+    dev->UpdateSurface(t_surf, &fullRect, newSurf, nullptr);
 
     tex = newTex;
     surf = newSurf;
@@ -678,7 +668,7 @@ static IDirect3DTexture9* getOrBuildBlitTex(IDirect3DDevice9* dev, gxCanvas* src
     bool doMask = (maskRGB != ~0u);
     const PixelFormat& fmt = src->format;
     int pitch = fmt.getPitch();
-    bool srcHasAlphaFlag = (src->getFlags() & gxCanvas::CANVAS_TEX_ALPHA) != 0;
+    bool srcHasAlpha = fmt.hasAlphaMask();
 
     bool fastCopy = fmt.is8888();
 
@@ -689,7 +679,7 @@ static IDirect3DTexture9* getOrBuildBlitTex(IDirect3DDevice9* dev, gxCanvas* src
 
         if (fastCopy) {
             memcpy(dstRow, srcRow, logW * 4);
-            if (!srcHasAlphaFlag || !fmt.hasAlphaMask()) {
+            if (!srcHasAlpha) {
                 for (int x = 0; x < logW; ++x) dstRow[x] |= 0xff000000u;
             }
             if (doMask) {
@@ -703,7 +693,7 @@ static IDirect3DTexture9* getOrBuildBlitTex(IDirect3DDevice9* dev, gxCanvas* src
                 if (doMask && (argb & 0x00ffffffu) == maskRGB)
                     argb = 0x00000000u;
                 else
-                    if (!srcHasAlphaFlag) {
+                    if (!srcHasAlpha) {
                         argb |= 0xff000000u;
                     }
                 dstRow[x] = argb;
@@ -900,7 +890,6 @@ static void cpuBlit(gxCanvas* dest, const RECT& dest_r, gxCanvas* src, const REC
     bool srcPreLocked = src->isLocked();
     bool destPreLocked = dest->isLocked();
 
-    D3DLOCKED_RECT srcLR, dstLR;
     unsigned char* srcBits;  int srcPitchBytes;
     unsigned char* dstBits;  int dstPitchBytes;
 
@@ -909,9 +898,9 @@ static void cpuBlit(gxCanvas* dest, const RECT& dest_r, gxCanvas* src, const REC
         srcPitchBytes = src->getLockedPitch();
     }
     else {
-        if (FAILED(src->surf->LockRect(&srcLR, nullptr, D3DLOCK_READONLY))) return;
-        srcBits = (unsigned char*)srcLR.pBits;
-        srcPitchBytes = srcLR.Pitch;
+        if (!src->lock()) return;
+        srcBits = src->getLockedSurf();
+        srcPitchBytes = src->getLockedPitch();
     }
 
     if (destPreLocked) {
@@ -919,12 +908,12 @@ static void cpuBlit(gxCanvas* dest, const RECT& dest_r, gxCanvas* src, const REC
         dstPitchBytes = dest->getLockedPitch();
     }
     else {
-        if (FAILED(dest->surf->LockRect(&dstLR, nullptr, 0))) {
-            if (!srcPreLocked) src->surf->UnlockRect();
+        if (!dest->lock()) {
+            if (!srcPreLocked) src->unlock();
             return;
         }
-        dstBits = (unsigned char*)dstLR.pBits;
-        dstPitchBytes = dstLR.Pitch;
+        dstBits = dest->getLockedSurf();
+        dstPitchBytes = dest->getLockedPitch();
     }
 
     const PixelFormat& sf = src->format;
@@ -933,7 +922,7 @@ static void cpuBlit(gxCanvas* dest, const RECT& dest_r, gxCanvas* src, const REC
 
     unsigned maskRGB = solid ? ~0u : (sf.toARGB(src->mask_surf) & 0x00ffffffu);
     bool doMask = (maskRGB != ~0u);
-    bool doAlpha = (src->getFlags() & gxCanvas::CANVAS_TEX_ALPHA) != 0;
+    bool doAlpha = sf.hasAlphaMask();
 
     if (!stretch && !doMask && !doAlpha && sp == dp && sf.getDepth() == df.getDepth()) {
         int rowBytes = dw * sp;
@@ -958,8 +947,8 @@ static void cpuBlit(gxCanvas* dest, const RECT& dest_r, gxCanvas* src, const REC
         }
     }
 
-    if (!destPreLocked) dest->surf->UnlockRect();
-    if (!srcPreLocked) src->surf->UnlockRect();
+    if (!destPreLocked) dest->unlock();
+    if (!srcPreLocked) src->unlock();
     dest->damage(dest_r);
 }
 
@@ -1209,7 +1198,12 @@ void gxCanvas::blitAlpha(int x, int y, gxCanvas* src,
     if (!dev) return;
 
     IDirect3DBaseTexture9* tex = src->getTexture();
-    if (!tex) return;
+    IDirect3DTexture9* builtTex = nullptr;
+    if (!tex) {
+        builtTex = getOrBuildBlitTex(dev, src, ~0u);
+        if (!builtTex) return;
+        tex = builtTex;
+    }
 
     bool ownBatch = !blit_batch_active;
     if (ownBatch) beginBlitBatch();
