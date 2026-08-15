@@ -6,8 +6,44 @@
 #include <cstdlib>
 #include <fstream>
 #include <sstream>
+#include <filesystem>
+
+#if defined(_WIN32)
+#include <windows.h>
+#else
+#include <unistd.h>
+#include <climits>
+#endif
 
 Prefs prefs;
+
+static std::string getExeDir() {
+#if defined(_WIN32)
+	char buf[MAX_PATH];
+	DWORD n = GetModuleFileNameA(NULL, buf, MAX_PATH);
+	if (!n) return "";
+	return std::string(buf, n);
+#else
+	char buf[PATH_MAX];
+	ssize_t n = readlink("/proc/self/exe", buf, sizeof(buf) - 1);
+	if (n <= 0) return "";
+	buf[n] = 0;
+	return std::string(buf);
+#endif
+}
+
+static std::string resolveHomeDir() {
+	const char* p = std::getenv("blitzpath");
+	if (p && *p) return p;
+
+	std::string exe = getExeDir();
+	if (exe.empty()) return "";
+	std::filesystem::path ep(exe);
+	std::filesystem::path home = ep.parent_path().parent_path();
+	std::string h = home.string();
+	if (h.empty()) return "";
+	return h;
+}
 
 static void parseColor(const std::string& s, int* rgb) {
 	rgb[0] = rgb[1] = rgb[2] = 0;
@@ -25,12 +61,11 @@ static std::string boolToString(bool value) {
 }
 
 void Prefs::open() {
-	const char* p = std::getenv("blitzpath");
-	if (!p) {
+	homeDir = resolveHomeDir();
+	if (homeDir.empty()) {
 		std::fprintf(stderr, "blitzpath environment variable not found!\n");
 		return;
 	}
-	homeDir = p;
 
 	std::ifstream in((homeDir + "/cfg/blitzide.ini").c_str(), std::ios::in);
 	if (!in.good()) return;
