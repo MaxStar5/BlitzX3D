@@ -844,7 +844,7 @@ void App::drawPicker() {
 		ImGui::TextWrapped("Choose your IDE:");
 		ImGui::Spacing();
 		ImGui::Spacing();
-		if (ImGui::Button("New BlitzX3D IDE (cross-platform)", ImVec2(-1, 0))) {
+		if (ImGui::Button("New BlitzX3D IDE", ImVec2(-1, 0))) {
 			glfwMaximizeWindow(window);
 			windowW = prefs.win_w; windowH = prefs.win_h;
 			pickerDone = true;
