@@ -39,7 +39,6 @@ private:
 	void shutdown();
 	void frame();
 	void mainloop();
-	void setupDockLayout(ImGuiID dockspace_id);
 	void launchLegacyIDE();
 	void drawPicker();
 

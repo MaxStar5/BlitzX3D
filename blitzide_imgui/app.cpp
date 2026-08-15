@@ -7,7 +7,6 @@
 #include "update.h"
 
 #include "../imgui/imgui.h"
-#include "../imgui/imgui_internal.h"
 #include "../imgui/backends/imgui_impl_glfw.h"
 #include "../imgui/backends/imgui_impl_opengl3.h"
 
@@ -54,17 +53,6 @@ void App::openUrl(const std::string& url) { openUrlImpl(url); }
 
 static void glfw_error_callback(int error, const char* description) {
 	fprintf(stderr, "GLFW Error %d: %s\n", error, description);
-}
-
-static void DockNodeWindowMenuHandler_NoHideTabBar(ImGuiContext*, ImGuiDockNode* node, ImGuiTabBar* tab_bar) {
-	for (int tab_n = 0; tab_n < tab_bar->Tabs.Size; tab_n++) {
-		ImGuiTabItem* tab = &tab_bar->Tabs[tab_n];
-		if (tab->Flags & ImGuiTabItemFlags_Button) continue;
-		if (ImGui::Selectable(ImGui::TabBarGetTabName(tab_bar, tab), tab->ID == tab_bar->SelectedTabId))
-			ImGui::TabBarQueueFocus(tab_bar, tab);
-		ImGui::SameLine();
-		ImGui::Text("   ");
-	}
 }
 
 static void applyDarkStyle() {
@@ -188,7 +176,6 @@ bool App::init(int argc, char* argv[]) {
 	IMGUI_CHECKVERSION();
 	ImGui::CreateContext();
 	ImGuiIO& io = ImGui::GetIO();
-	io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
 	io.ConfigFlags |= ImGuiConfigFlags_ViewportsEnable;
 	if (!prefs.homeDir.empty()) {
 		io.IniFilename = strdup((prefs.homeDir + "/cfg/imgui.ini").c_str());
@@ -249,19 +236,6 @@ void App::frame() {
 	ImGui_ImplOpenGL3_NewFrame();
 	ImGui_ImplGlfw_NewFrame();
 	ImGui::NewFrame();
-
-	ImGuiContext* ctx = ImGui::GetCurrentContext();
-	if (ctx && ctx->DockNodeWindowMenuHandler != &DockNodeWindowMenuHandler_NoHideTabBar)
-		ctx->DockNodeWindowMenuHandler = &DockNodeWindowMenuHandler_NoHideTabBar;
-
-	ImGuiID dockspace_id = ImGui::DockSpaceOverViewport(0, ImGui::GetMainViewport());
-	static bool layoutDone = false;
-	if (!skipPicker && !pickerDone) {
-	}
-	else if (!layoutDone) {
-		setupDockLayout(dockspace_id);
-		layoutDone = true;
-	}
 
 	if (skipPicker || pickerDone) {
 		ImGuiIO& kio = ImGui::GetIO();
@@ -345,24 +319,6 @@ void App::frame() {
 	glfwSwapBuffers(window);
 }
 
-void App::setupDockLayout(ImGuiID dockspace_id) {
-	ImGui::DockBuilderRemoveNode(dockspace_id);
-	ImGui::DockBuilderAddNode(dockspace_id, ImGuiDockNodeFlags_DockSpace);
-	ImGui::DockBuilderSetNodeSize(dockspace_id, ImGui::GetMainViewport()->WorkSize);
-
-	ImGuiID center = dockspace_id;
-	ImGuiID left, bottom;
-
-	ImGui::DockBuilderSplitNode(center, ImGuiDir_Left, 0.22f, &left, &center);
-	ImGui::DockBuilderSplitNode(center, ImGuiDir_Down, 0.30f, &bottom, &center);
-
-	ImGui::DockBuilderDockWindow("Functions", left);
-	ImGui::DockBuilderDockWindow("Output", bottom);
-	ImGui::DockBuilderDockWindow("Editor", center);
-
-	ImGui::DockBuilderFinish(dockspace_id);
-}
-
 void App::menuBar() {
 	if (!ImGui::BeginMainMenuBar()) return;
 
@@ -400,9 +356,8 @@ void App::menuBar() {
 		if (ImGui::MenuItem("Paste", "Ctrl+V")) editPaste();
 		if (ImGui::MenuItem("Select All", "Ctrl+A")) editSelectAll();
 		ImGui::Separator();
-		if (ImGui::MenuItem("Find...", "Ctrl+F")) editFind();
+		if (ImGui::MenuItem("Find / Replace...", "Ctrl+F")) editFind();
 		if (ImGui::MenuItem("Find Next", "F3")) editFindNext();
-		if (ImGui::MenuItem("Replace...", "Ctrl+H")) editReplace();
 		ImGui::EndMenu();
 	}
 
@@ -450,6 +405,9 @@ void App::drawTabs() {
 }
 
 void App::drawEditorPane() {
+	ImGuiViewport* vp = ImGui::GetMainViewport();
+	ImGui::SetNextWindowPos(ImVec2(vp->WorkPos.x + vp->WorkSize.x * 0.22f, vp->WorkPos.y + 21), ImGuiCond_Once);
+	ImGui::SetNextWindowSize(ImVec2(vp->WorkSize.x * 0.78f, vp->WorkSize.y - 21 - vp->WorkSize.y * 0.30f), ImGuiCond_Once);
 	ImGui::Begin("Editor", nullptr, ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
 	drawTabs();
 
@@ -484,6 +442,9 @@ void App::applyPalette(Doc& d) {
 }
 
 void App::drawFuncList() {
+	ImGuiViewport* vp = ImGui::GetMainViewport();
+	ImGui::SetNextWindowPos(ImVec2(vp->WorkPos.x, vp->WorkPos.y + 21), ImGuiCond_Once);
+	ImGui::SetNextWindowSize(ImVec2(vp->WorkSize.x * 0.22f, vp->WorkSize.y - 21), ImGuiCond_Once);
 	ImGui::Begin("Functions");
 	Doc* d = currentDoc();
 	if (d) {
@@ -503,6 +464,9 @@ void App::drawFuncList() {
 }
 
 void App::drawOutput() {
+	ImGuiViewport* vp = ImGui::GetMainViewport();
+	ImGui::SetNextWindowPos(ImVec2(vp->WorkPos.x + vp->WorkSize.x * 0.22f, vp->WorkPos.y + vp->WorkSize.y * 0.70f), ImGuiCond_Once);
+	ImGui::SetNextWindowSize(ImVec2(vp->WorkSize.x * 0.78f, vp->WorkSize.y * 0.30f), ImGuiCond_Once);
 	ImGui::Begin("Output");
 	ImGui::BeginChild("##outlines", ImVec2(0, -ImGui::GetFrameHeightWithSpacing() - 4), false);
 	{
@@ -529,23 +493,21 @@ void App::drawFindReplace() {
 	if (!showFind && !showReplace) return;
 	int flags = ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_AlwaysAutoResize;
 	ImGui::SetNextWindowPos(ImVec2(windowW / 2.0f - 200, 40), ImGuiCond_Appearing);
-	if (ImGui::Begin(showReplace ? "Replace" : "Find", nullptr, flags)) {
+	if (ImGui::Begin("Find / Replace", &showFind, flags)) {
 		bool doFind = false, doReplace = false, doReplaceAll = false;
 		static char findBuf[512], replaceBuf[512];
 		strcpy(findBuf, findStr.c_str());
 		ImGui::SetNextItemWidth(300);
-		ImGui::InputText("Find", findBuf, sizeof(findBuf));
+		ImGui::InputText("Find text", findBuf, sizeof(findBuf));
 		ImGui::SameLine();
 		if (ImGui::Button("Find")) doFind = true;
 		ImGui::Checkbox("Match case", &matchCase);
-		if (showReplace) {
-			strcpy(replaceBuf, replaceStr.c_str());
-			ImGui::SetNextItemWidth(300);
-			ImGui::InputText("Replace", replaceBuf, sizeof(replaceBuf));
-			ImGui::SameLine();
-			if (ImGui::Button("Replace")) doReplace = true;
-			if (ImGui::Button("Replace All")) doReplaceAll = true;
-		}
+		strcpy(replaceBuf, replaceStr.c_str());
+		ImGui::SetNextItemWidth(300);
+		ImGui::InputText("Replace text", replaceBuf, sizeof(replaceBuf));
+		ImGui::SameLine();
+		if (ImGui::Button("Replace")) doReplace = true;
+		if (ImGui::Button("Replace All")) doReplaceAll = true;
 		findStr = findBuf;
 		replaceStr = replaceBuf;
 		if (doFind || doReplace || doReplaceAll) {
@@ -748,7 +710,7 @@ void App::editCut() { if (Doc* d = currentDoc()) d->editor.Cut(); }
 void App::editCopy() { if (Doc* d = currentDoc()) d->editor.Copy(); }
 void App::editPaste() { if (Doc* d = currentDoc()) d->editor.Paste(); }
 void App::editSelectAll() { if (Doc* d = currentDoc()) d->editor.SelectAll(); }
-void App::editFind() { showFind = true; showReplace = false; }
+void App::editFind() { showFind = true; showReplace = true; }
 void App::editReplace() { showReplace = true; showFind = true; }
 
 void App::editFindNext() {
