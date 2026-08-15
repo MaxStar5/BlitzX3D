@@ -52,6 +52,8 @@ Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "inipp", "inipp\inipp.vcxpro
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "MultiLang", "MultiLang\MultiLang.vcxproj", "{63708558-DF5B-4162-8C14-B0FD55DB549F}"
 EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "blitzide_imgui", "blitzide_imgui\blitzide_imgui.vcxproj", "{E3B0C442-98FC-11D3-A6D4-4C8A7B2D1F01}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -266,6 +268,18 @@ Global
 		{63708558-DF5B-4162-8C14-B0FD55DB549F}.Release|x64.Build.0 = Release|x64
 		{63708558-DF5B-4162-8C14-B0FD55DB549F}.Release|x86.ActiveCfg = Release|Win32
 		{63708558-DF5B-4162-8C14-B0FD55DB549F}.Release|x86.Build.0 = Release|Win32
+		{E3B0C442-98FC-11D3-A6D4-4C8A7B2D1F01}.Debug|Any CPU.ActiveCfg = Debug|Win32
+		{E3B0C442-98FC-11D3-A6D4-4C8A7B2D1F01}.Debug|Any CPU.Build.0 = Debug|Win32
+		{E3B0C442-98FC-11D3-A6D4-4C8A7B2D1F01}.Debug|x64.ActiveCfg = Debug|x64
+		{E3B0C442-98FC-11D3-A6D4-4C8A7B2D1F01}.Debug|x64.Build.0 = Debug|x64
+		{E3B0C442-98FC-11D3-A6D4-4C8A7B2D1F01}.Debug|x86.ActiveCfg = Debug|Win32
+		{E3B0C442-98FC-11D3-A6D4-4C8A7B2D1F01}.Debug|x86.Build.0 = Debug|Win32
+		{E3B0C442-98FC-11D3-A6D4-4C8A7B2D1F01}.Release|Any CPU.ActiveCfg = Release|Win32
+		{E3B0C442-98FC-11D3-A6D4-4C8A7B2D1F01}.Release|Any CPU.Build.0 = Release|Win32
+		{E3B0C442-98FC-11D3-A6D4-4C8A7B2D1F01}.Release|x64.ActiveCfg = Release|x64
+		{E3B0C442-98FC-11D3-A6D4-4C8A7B2D1F01}.Release|x64.Build.0 = Release|x64
+		{E3B0C442-98FC-11D3-A6D4-4C8A7B2D1F01}.Release|x86.ActiveCfg = Release|Win32
+		{E3B0C442-98FC-11D3-A6D4-4C8A7B2D1F01}.Release|x86.Build.0 = Release|Win32
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

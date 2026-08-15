@@ -1,0 +1,49 @@
+#ifndef PREFS_H
+#define PREFS_H
+
+#include <string>
+#include <vector>
+
+struct Prefs {
+	bool prg_preprocess = false;
+	bool prg_debug = true;
+	bool prg_nolaa = false;
+	std::string prg_lastbuild;
+	std::string cmd_line;
+
+	int win_x = 0, win_y = 0, win_w = 800, win_h = 600;
+	bool win_maximized = false;
+	bool win_notoolbar = false;
+
+	std::string font_editor = "consolas";
+	int font_editor_height = 14;
+	std::string font_tabs = "consolas";
+	int font_tabs_height = 10;
+	std::string font_debug = "consolas";
+	int font_debug_height = 14;
+
+	int rgb_bkgrnd[3] = { 34, 85, 136 };
+	int rgb_string[3] = { 0, 255, 102 };
+	int rgb_ident[3] = { 255, 255, 255 };
+	int rgb_keyword[3] = { 170, 255, 255 };
+	int rgb_comment[3] = { 255, 238, 0 };
+	int rgb_digit[3] = { 51, 255, 221 };
+	int rgb_default[3] = { 238, 238, 238 };
+
+	int edit_tabs = 4;
+	int edit_backup = 2;
+	bool noBackup = false;
+	std::string img_toolbar = "toolbar.bmp";
+
+	std::vector<std::string> recentFiles;
+	std::string ignore_version_update;
+
+	std::string homeDir;
+
+	void open();
+	void close();
+};
+
+extern Prefs prefs;
+
+#endif

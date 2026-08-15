@@ -17,10 +17,11 @@ static void fail(const char* p) {
 
 int WINAPI WinMain(_In_ HINSTANCE inst, _In_opt_ HINSTANCE prev, _In_ char* cmd, _In_ int show) {
 	std::string basedir = getAppDir();
-	std::string idePath = "\\bin\\ide.exe ";
 
 	_putenv_s("blitzpath", basedir.c_str());
 	SetCurrentDirectory(basedir.c_str());
+
+	std::string idePath = "\\bin\\blitzide_imgui.exe ";
 	basedir += idePath + cmd;
 
 	STARTUPINFO startupInfo;

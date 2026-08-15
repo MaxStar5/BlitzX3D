@@ -1,0 +1,143 @@
+#ifndef APP_H
+#define APP_H
+
+#include <string>
+#include <vector>
+#include <set>
+#include <thread>
+#include <atomic>
+#include <mutex>
+#include <functional>
+
+#include "prefs.h"
+#include "TextEditor.h"
+
+struct GLFWwindow;
+
+struct Doc {
+	std::string path;
+	std::string name;
+	TextEditor editor;
+	bool modified = false;
+
+	struct FuncItem { std::string label; int line; int kind; };
+	std::vector<FuncItem> funcs;
+
+	std::string getText() const { return editor.GetText(); }
+};
+
+class App {
+public:
+	static int run(int argc, char* argv[], bool skipPicker);
+	static void openUrl(const std::string& url);
+
+private:
+	App();
+	~App();
+
+	bool init(int argc, char* argv[]);
+	void shutdown();
+	void frame();
+	void mainloop();
+	void setupDockLayout(ImGuiID dockspace_id);
+	void launchLegacyIDE();
+	void drawPicker();
+
+	void fileNew();
+	void fileOpen();
+	bool fileSave(int idx);
+	bool fileSaveAs(int idx);
+	bool fileSaveAll();
+	void fileClose(int idx);
+	void fileExit();
+	void fileRecent(const std::string& path);
+	void addRecent(const std::string& path);
+
+	void editCut();
+	void editCopy();
+	void editPaste();
+	void editSelectAll();
+	void editFind();
+	void editFindNext();
+	void editReplace();
+
+	void programExecute();
+	void programCompile();
+	void programPublish();
+	void programPreprocess();
+	void programDebug();
+	void programNoLAA();
+
+	void helpHome();
+	void helpAbout();
+	void drawUpdate();
+	void drawUpdateDialog();
+
+	void build(bool exec, bool publish);
+	void compile(const std::string& cmd);
+	void appendOutput(const std::string& text);
+	void parseOutputLine(const std::string& line);
+
+	int current() const { return currentIndex; }
+	Doc* doc(int idx) { return idx >= 0 && idx < (int)docs.size() ? &docs[idx] : nullptr; }
+	Doc* currentDoc() { return doc(currentIndex); }
+	int addDoc(const std::string& path);
+	bool openFile(const std::string& path);
+	bool openProject(const std::string& path);
+	bool openPath(const std::string& path);
+	void rebuildFuncList(Doc& d);
+	void applyPalette(Doc& d);
+
+	void menuBar();
+	void drawTabs();
+	void drawEditorPane();
+	void drawFuncList();
+	void drawOutput();
+	void drawFindReplace();
+	void drawMenus();
+	void drawCommandLine();
+
+	void initKeywords();
+
+	GLFWwindow* window = nullptr;
+	int windowW = 800, windowH = 600;
+
+	std::vector<Doc> docs;
+	int currentIndex = -1;
+
+	bool showFuncList = true;
+	bool showOutput = true;
+	bool showFind = false;
+	bool showReplace = false;
+	std::string findStr, replaceStr;
+	int findFlags = 0;
+	bool matchCase = false;
+
+	std::string output;
+	std::vector<std::string> outputLines;
+	std::thread compileThread;
+	std::atomic<bool> compiling{ false };
+	std::mutex outputMutex;
+	bool compileOK = false;
+
+	std::string publishExePath;
+	std::string publishIconPath;
+
+	std::set<std::string> keywords;
+	std::set<std::string> funcs;
+	std::thread keywordThread;
+	std::mutex keywordMutex;
+	std::atomic<bool> keywordsLoaded = false;
+
+	bool skipPicker = false;
+	bool pickerDone = false;
+	bool pickLegacy = false;
+
+	bool showCommandLine = false;
+	bool updateOpen = false;
+
+	bool aboutOpen = false;
+	bool quitting = false;
+};
+
+#endif

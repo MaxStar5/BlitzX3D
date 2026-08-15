@@ -1,0 +1,145 @@
+#include "prefs.h"
+
+#include "../inipp/inipp.h"
+
+#include <cstdio>
+#include <cstdlib>
+#include <fstream>
+#include <sstream>
+
+Prefs prefs;
+
+static void parseColor(const std::string& s, int* rgb) {
+	rgb[0] = rgb[1] = rgb[2] = 0;
+	sscanf(s.c_str(), "%d %d %d", &rgb[0], &rgb[1], &rgb[2]);
+}
+
+static std::string colorToString(const int* rgb) {
+	char b[64];
+	sprintf(b, "%d %d %d", rgb[0], rgb[1], rgb[2]);
+	return b;
+}
+
+static std::string boolToString(bool value) {
+	return value ? "true" : "false";
+}
+
+void Prefs::open() {
+	const char* p = std::getenv("blitzpath");
+	if (!p) {
+		std::fprintf(stderr, "blitzpath environment variable not found!\n");
+		return;
+	}
+	homeDir = p;
+
+	std::ifstream in((homeDir + "/cfg/blitzide.ini").c_str(), std::ios::in);
+	if (!in.good()) return;
+	in.seekg(0, std::ios::end);
+	if (in.tellg() == 0) { in.close(); return; }
+	in.seekg(0, std::ios::beg);
+
+	inipp::Ini<char> ini;
+	ini.parse(in);
+	in.close();
+
+	inipp::get_value(ini.sections["COMPILER"], "Preprocess", prg_preprocess);
+	inipp::get_value(ini.sections["COMPILER"], "Debug", prg_debug);
+	inipp::get_value(ini.sections["COMPILER"], "NoLAA", prg_nolaa);
+	inipp::get_value(ini.sections["COMPILER"], "LastBuild", prg_lastbuild);
+	inipp::get_value(ini.sections["COMPILER"], "CommandLine", cmd_line);
+
+	bool maximized = false, notoolbar = false;
+	inipp::get_value(ini.sections["WINDOW"], "Maximized", maximized);
+	inipp::get_value(ini.sections["WINDOW"], "NoToolbar", notoolbar);
+	win_maximized = maximized;
+	win_notoolbar = notoolbar;
+	std::string rect;
+	inipp::get_value(ini.sections["WINDOW"], "WindowRect", rect);
+	sscanf(rect.c_str(), "%d %d %d %d", &win_x, &win_y, &win_w, &win_h);
+
+	inipp::get_value(ini.sections["FONTS"], "EditorFont", font_editor);
+	inipp::get_value(ini.sections["FONTS"], "EditorFontSize", font_editor_height);
+	inipp::get_value(ini.sections["FONTS"], "TabsFont", font_tabs);
+	inipp::get_value(ini.sections["FONTS"], "TabsFontSize", font_tabs_height);
+	inipp::get_value(ini.sections["FONTS"], "DebugFont", font_debug);
+	inipp::get_value(ini.sections["FONTS"], "DebugFontSize", font_debug_height);
+
+	std::string c;
+	inipp::get_value(ini.sections["COLORS"], "Background", c); parseColor(c, rgb_bkgrnd);
+	inipp::get_value(ini.sections["COLORS"], "String", c); parseColor(c, rgb_string);
+	inipp::get_value(ini.sections["COLORS"], "Ident", c); parseColor(c, rgb_ident);
+	inipp::get_value(ini.sections["COLORS"], "Keyword", c); parseColor(c, rgb_keyword);
+	inipp::get_value(ini.sections["COLORS"], "Comment", c); parseColor(c, rgb_comment);
+	inipp::get_value(ini.sections["COLORS"], "Digit", c); parseColor(c, rgb_digit);
+	inipp::get_value(ini.sections["COLORS"], "Default", c); parseColor(c, rgb_default);
+
+	inipp::get_value(ini.sections["EDITOR"], "TabSpaces", edit_tabs);
+	inipp::get_value(ini.sections["EDITOR"], "BackupCount", edit_backup);
+	inipp::get_value(ini.sections["EDITOR"], "ToolbarImage", img_toolbar);
+	inipp::get_value(ini.sections["EDITOR"], "NoBackup", noBackup);
+
+	inipp::get_value(ini.sections["UPDATE"], "IgnoreVersion", ignore_version_update);
+
+	std::string recentFile;
+	for (int i = 1; i < 11; ++i) {
+		inipp::get_value(ini.sections["RECENT_FILES"], "File" + std::to_string(i), recentFile);
+		if (recentFile.empty()) continue;
+		recentFiles.push_back(recentFile);
+	}
+}
+
+void Prefs::close() {
+	if (homeDir.empty()) return;
+	std::fstream out((homeDir + "/cfg/blitzide.ini").c_str(), std::ios::out | std::ios::trunc);
+	if (!out.good()) return;
+
+	inipp::Ini<char> ini;
+
+	auto& compilerSection = ini.sections["COMPILER"];
+	compilerSection.insert(std::make_pair("Preprocess", boolToString(prg_preprocess)));
+	compilerSection.insert(std::make_pair("Debug", boolToString(prg_debug)));
+	compilerSection.insert(std::make_pair("NoLAA", boolToString(prg_nolaa)));
+	compilerSection.insert(std::make_pair("LastBuild", prg_lastbuild));
+	compilerSection.insert(std::make_pair("CommandLine", cmd_line));
+
+	auto& windowSection = ini.sections["WINDOW"];
+	windowSection.insert(std::make_pair("Maximized", boolToString(win_maximized)));
+	windowSection.insert(std::make_pair("NoToolbar", boolToString(win_notoolbar)));
+	windowSection.insert(std::make_pair("WindowRect",
+		std::to_string(win_x) + " " + std::to_string(win_y) + " " +
+		std::to_string(win_w) + " " + std::to_string(win_h)));
+
+	auto& fontsSection = ini.sections["FONTS"];
+	fontsSection.insert(std::make_pair("EditorFont", font_editor));
+	fontsSection.insert(std::make_pair("EditorFontSize", std::to_string(font_editor_height)));
+	fontsSection.insert(std::make_pair("TabsFont", font_tabs));
+	fontsSection.insert(std::make_pair("TabsFontSize", std::to_string(font_tabs_height)));
+	fontsSection.insert(std::make_pair("DebugFont", font_debug));
+	fontsSection.insert(std::make_pair("DebugFontSize", std::to_string(font_debug_height)));
+
+	auto& colorsSection = ini.sections["COLORS"];
+	colorsSection.insert(std::make_pair("Background", colorToString(rgb_bkgrnd)));
+	colorsSection.insert(std::make_pair("String", colorToString(rgb_string)));
+	colorsSection.insert(std::make_pair("Ident", colorToString(rgb_ident)));
+	colorsSection.insert(std::make_pair("Keyword", colorToString(rgb_keyword)));
+	colorsSection.insert(std::make_pair("Comment", colorToString(rgb_comment)));
+	colorsSection.insert(std::make_pair("Digit", colorToString(rgb_digit)));
+	colorsSection.insert(std::make_pair("Default", colorToString(rgb_default)));
+
+	auto& editorSection = ini.sections["EDITOR"];
+	editorSection.insert(std::make_pair("TabSpaces", std::to_string(edit_tabs)));
+	editorSection.insert(std::make_pair("BackupCount", std::to_string(edit_backup)));
+	editorSection.insert(std::make_pair("ToolbarImage", img_toolbar));
+	editorSection.insert(std::make_pair("NoBackup", boolToString(noBackup)));
+
+	auto& updateSection = ini.sections["UPDATE"];
+	updateSection.insert(std::make_pair("IgnoreVersion", ignore_version_update));
+
+	auto& recentFilesSection = ini.sections["RECENT_FILES"];
+	for (int i = 1; i < 11; ++i) {
+		recentFilesSection.insert(std::make_pair("File" + std::to_string(i),
+			i <= (int)recentFiles.size() ? recentFiles[i - 1] : ""));
+	}
+
+	ini.generate(out);
+}

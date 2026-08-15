@@ -2,6 +2,7 @@ Debug
 Release
 _release/bin
 _release/cfg/blitzide.ini
+_release/cfg/imgui.ini
 _release/temp
 _release/userlibs
 _release/Blitz3D.exe
@@ -20,3 +21,4 @@ _release/*.ttf
 temp
 linker/cryptseed.h
 llvm
+blitzide_imgui/bin
