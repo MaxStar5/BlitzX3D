@@ -10,6 +10,7 @@ _release/*.bb
 _release/*.ttf
 *.exe
 *.dll
+!packages/**/*.dll
 *.pdb
 *.ilk
 *.aps
