@@ -70,6 +70,8 @@ Brush::Brush(const Brush& a, const Brush& b) :
 
 	rep->rs.fx |= b.rep->rs.fx;
 
+	rep->rs.fx = (rep->rs.fx & ~(unsigned)gxScene::FX_NOFOG) | (b.rep->rs.fx & gxScene::FX_NOFOG);
+
 	if (b.rep->max_tex > rep->max_tex) rep->max_tex = b.rep->max_tex;
 
 	for (int k = 0; k < rep->max_tex; ++k) {
