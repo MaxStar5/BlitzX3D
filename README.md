@@ -1,5 +1,20 @@
-# BlitzX3D
-This is a fork of Blitz3D TSS, originally based on Blitz3D and maintained by ZiYueCommentary.
+<p align="center">
+  <img width="1920" height="600" alt="banner" src="https://github.com/user-attachments/assets/b02c6fe2-f50d-480f-92ef-936bd5d42227" />
+</p>
+
+BlitzX3D is a community-maintained fork of Blitz3D TSS, originally based on Blitz3D. It focuses on maintaining and extending the Blitz3D engine while preserving compatibility with existing projects and libraries.
+
+### Features
+
+- New ImGui-based IDE & Debugger replacing the legacy editors.
+- Debugger runs as a separate process for better performance, and now has expandable arrays in variable trees.
+- Built-in profiler with per-function timing, call counts, memory statistics, and a flame graph for identifying performance bottlenecks.
+- [New scene system with commands for creating, switching, clearing, and querying scenes.](https://github.com/krimbopple/BlitzX3D/wiki/New-Commands#createscene--setscene--clearscene--getcurrentscene)
+- Async texture loading, dramatically reducing boot and loading times.
+- Improved rendering performance through render-state batching, draw-call sorting, brush-bucketed rendering, and faster font lookups.
+- [Improved shader support, including .fx effects, runtime effect textures, and per-frame shader parameters.](https://github.com/krimbopple/BlitzX3D/wiki/New-Commands#loadeffect--setentityeffect--setbrusheffect)
+- Better render-target control with SetBufferDepth and RenderEntity.
+- Improved texture handling, including automatic alpha detection, animated texture grids, mipmapped filtering, cubemap fixes, and better transparency handling.
 
 ### Used in
 * [**SCP: Containment Breach Multiplayer**](https://store.steampowered.com/app/1782380/SCP_Containment_Breach_Multiplayer/)
