@@ -750,7 +750,6 @@ bool gxScene::begin(const std::vector<gxLight*>& lights) {
 	memset(d3d_tss, 0x55, sizeof(d3d_tss));
 	memset(d3d_samp, 0x55, sizeof(d3d_samp));
 	memset(d3d_tex, 0x55, sizeof(d3d_tex));
-	graphics->resetStreamState();
 	blend = fx = ~0;
 	shininess = -1;
 

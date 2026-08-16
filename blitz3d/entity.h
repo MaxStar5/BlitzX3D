@@ -47,9 +47,6 @@ public:
 	Entity* children()const { return _children; }
 	Entity* successor()const { return _succ; }
 
-	static unsigned gen;
-	static unsigned generation() { return gen; }
-
 	std::string getName()const { return _name; }
 	Entity* getParent()const { return _parent; }
 
@@ -75,7 +72,7 @@ public:
 
 	static Entity* orphans() { return _orphans; }
 
-	void setScene(int id) { sceneId = id; ++gen; }
+	void setScene(int id) { sceneId = id; }
 	int getScene() const { return sceneId; }
 private:
 	Entity* _succ, * _pred, * _parent, * _children, * _last_child;

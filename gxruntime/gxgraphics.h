@@ -140,21 +140,11 @@ public:
 	bool ensureSkinningShader();
 	IDirect3DVertexShader9* getSkinningShader()const { return skin_vshader; }
 
-	void resetStreamState();
-	void setStreamSource0(IDirect3DVertexBuffer9* vb, UINT stride);
-	void setFVF(DWORD fvf);
-	void setIndices(IDirect3DIndexBuffer9* ib);
-
 private:
 	IDirect3DVertexShader9* skin_vshader;
 	IDirect3DVertexDeclaration9* skin_decl;
 	bool skin_shader_load_failed;
 	int skin_caps_checked;   //-1 unknown, 0 unsupported, 1 supported
-
-	IDirect3DVertexBuffer9* d3d_stream0;
-	UINT d3d_stream0_stride;
-	DWORD d3d_fvf;
-	IDirect3DIndexBuffer9* d3d_indices;
 };
 
 #endif
