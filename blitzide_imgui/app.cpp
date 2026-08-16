@@ -9,6 +9,7 @@
 #include "../imgui/imgui.h"
 #include "../imgui/backends/imgui_impl_glfw.h"
 #include "../imgui/backends/imgui_impl_opengl3.h"
+#include "../imgui/backends/imgui_impl_opengl3_loader.h"
 
 #include <GLFW/glfw3.h>
 
@@ -307,6 +308,13 @@ void App::frame() {
 	}
 
 	ImGui::Render();
+
+	int fbw = 0, fbh = 0;
+	glfwGetFramebufferSize(window, &fbw, &fbh);
+	glViewport(0, 0, fbw, fbh);
+	glClearColor(0.11f, 0.11f, 0.13f, 1.0f);
+	glClear(GL_COLOR_BUFFER_BIT);
+
 	ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
 
 	ImGuiIO& io = ImGui::GetIO();
@@ -406,9 +414,10 @@ void App::drawTabs() {
 
 void App::drawEditorPane() {
 	ImGuiViewport* vp = ImGui::GetMainViewport();
-	ImGui::SetNextWindowPos(ImVec2(vp->WorkPos.x + vp->WorkSize.x * 0.22f, vp->WorkPos.y + 21), ImGuiCond_Once);
-	ImGui::SetNextWindowSize(ImVec2(vp->WorkSize.x * 0.78f, vp->WorkSize.y - 21 - vp->WorkSize.y * 0.30f), ImGuiCond_Once);
-	ImGui::Begin("Editor", nullptr, ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
+	float menuH = ImGui::GetFrameHeight();
+	ImGui::SetNextWindowPos(ImVec2(vp->WorkPos.x + vp->WorkSize.x * 0.22f, vp->WorkPos.y + menuH), ImGuiCond_Always);
+	ImGui::SetNextWindowSize(ImVec2(vp->WorkSize.x * 0.78f, vp->WorkSize.y - menuH - vp->WorkSize.y * 0.30f), ImGuiCond_Always);
+	ImGui::Begin("Editor", nullptr, ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize);
 	drawTabs();
 
 	Doc* d = currentDoc();
@@ -443,9 +452,10 @@ void App::applyPalette(Doc& d) {
 
 void App::drawFuncList() {
 	ImGuiViewport* vp = ImGui::GetMainViewport();
-	ImGui::SetNextWindowPos(ImVec2(vp->WorkPos.x, vp->WorkPos.y + 21), ImGuiCond_Once);
-	ImGui::SetNextWindowSize(ImVec2(vp->WorkSize.x * 0.22f, vp->WorkSize.y - 21), ImGuiCond_Once);
-	ImGui::Begin("Functions");
+	float menuH = ImGui::GetFrameHeight();
+	ImGui::SetNextWindowPos(ImVec2(vp->WorkPos.x, vp->WorkPos.y + menuH), ImGuiCond_Always);
+	ImGui::SetNextWindowSize(ImVec2(vp->WorkSize.x * 0.22f, vp->WorkSize.y - menuH), ImGuiCond_Always);
+	ImGui::Begin("Functions", nullptr, ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize);
 	Doc* d = currentDoc();
 	if (d) {
 		for (size_t k = 0; k < d->funcs.size(); ++k) {
@@ -465,9 +475,9 @@ void App::drawFuncList() {
 
 void App::drawOutput() {
 	ImGuiViewport* vp = ImGui::GetMainViewport();
-	ImGui::SetNextWindowPos(ImVec2(vp->WorkPos.x + vp->WorkSize.x * 0.22f, vp->WorkPos.y + vp->WorkSize.y * 0.70f), ImGuiCond_Once);
-	ImGui::SetNextWindowSize(ImVec2(vp->WorkSize.x * 0.78f, vp->WorkSize.y * 0.30f), ImGuiCond_Once);
-	ImGui::Begin("Output");
+	ImGui::SetNextWindowPos(ImVec2(vp->WorkPos.x + vp->WorkSize.x * 0.22f, vp->WorkPos.y + vp->WorkSize.y * 0.70f), ImGuiCond_Always);
+	ImGui::SetNextWindowSize(ImVec2(vp->WorkSize.x * 0.78f, vp->WorkSize.y * 0.30f), ImGuiCond_Always);
+	ImGui::Begin("Output", nullptr, ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize);
 	ImGui::BeginChild("##outlines", ImVec2(0, -ImGui::GetFrameHeightWithSpacing() - 4), false);
 	{
 		std::lock_guard<std::mutex> lock(outputMutex);
@@ -494,8 +504,7 @@ void App::drawFindReplace() {
 	int flags = ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_AlwaysAutoResize;
 	ImGui::SetNextWindowPos(ImVec2(windowW / 2.0f - 200, 40), ImGuiCond_Appearing);
 	if (ImGui::Begin("Find / Replace", &showFind, flags)) {
-		bool doFind = false, doReplace = false, doReplaceAll = false;
-		static char findBuf[512], replaceBuf[512];
+		bool doFind = false, doReplace = false, doReplaceAll = false;static char findBuf[512], replaceBuf[512];
 		strcpy(findBuf, findStr.c_str());
 		ImGui::SetNextItemWidth(300);
 		ImGui::InputText("Find text", findBuf, sizeof(findBuf));
@@ -538,6 +547,7 @@ void App::drawFindReplace() {
 		}
 	}
 	ImGui::End();
+	if (!showFind) showReplace = false;
 }
 
 int App::addDoc(const std::string& path) {
