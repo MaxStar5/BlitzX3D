@@ -181,12 +181,21 @@ void ddUtil::buildMipMaps(IDirect3DTexture9* tex) {
                 unsigned char* p3 = p2 + src_fmt.getPitch();
                 unsigned c0 = src_fmt.getPixel(p0), c1 = src_fmt.getPixel(p1);
                 unsigned c2 = src_fmt.getPixel(p2), c3 = src_fmt.getPixel(p3);
-                unsigned argb =
-                    ((c0 & 0xfcfcfcfc) >> 2) + ((c1 & 0xfcfcfcfc) >> 2) +
-                    ((c2 & 0xfcfcfcfc) >> 2) + ((c3 & 0xfcfcfcfc) >> 2);
-                argb += (((c0 & 0x03030303) + (c1 & 0x03030303) +
-                    (c2 & 0x03030303) + (c3 & 0x03030303)) >> 2) & 0x03030303;
-                dst_fmt.setPixel(dst_t + x * dst_fmt.getPitch(), argb);
+                unsigned a0 = (c0 >> 24) & 0xFF, a1 = (c1 >> 24) & 0xFF;
+                unsigned a2 = (c2 >> 24) & 0xFF, a3 = (c3 >> 24) & 0xFF;
+                unsigned sum_a = a0 + a1 + a2 + a3;
+                unsigned sum_r = ((c0 >> 16) & 0xFF) * a0 + ((c1 >> 16) & 0xFF) * a1 +
+                    ((c2 >> 16) & 0xFF) * a2 + ((c3 >> 16) & 0xFF) * a3;
+                unsigned sum_g = ((c0 >> 8) & 0xFF) * a0 + ((c1 >> 8) & 0xFF) * a1 +
+                    ((c2 >> 8) & 0xFF) * a2 + ((c3 >> 8) & 0xFF) * a3;
+                unsigned sum_b = (c0 & 0xFF) * a0 + (c1 & 0xFF) * a1 +
+                    (c2 & 0xFF) * a2 + (c3 & 0xFF) * a3;
+                unsigned a = sum_a >> 2;
+                unsigned r = sum_a ? sum_r / sum_a : 0;
+                unsigned g = sum_a ? sum_g / sum_a : 0;
+                unsigned b = sum_a ? sum_b / sum_a : 0;
+                dst_fmt.setPixel(dst_t + x * dst_fmt.getPitch(),
+                    (a << 24) | (r << 16) | (g << 8) | b);
             }
         }
         tex->UnlockRect(mip + 1);

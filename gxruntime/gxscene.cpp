@@ -35,6 +35,19 @@ void gxScene::setTex(int n, IDirect3DBaseTexture9* t) {
 	d3d_tex[n] = t;
 }
 
+static int computeAlphaRef(const gxScene::RenderState& rs) {
+	if (rs.fx & gxScene::FX_VERTEXALPHA) return 0;
+	int base = 128;
+	for (int k = 0; k < gxScene::MAX_TEXTURES; ++k) {
+		const gxScene::RenderState::TexState& ts = rs.tex_states[k];
+		if (ts.canvas && (ts.canvas->getFlags() & gxCanvas::CANVAS_TEX_MASK)) {
+			base = 200;
+			break;
+		}
+	}
+	return (int)(base * rs.alpha);
+}
+
 static uint64_t computeRenderStateKey(const gxScene::RenderState& rs) {
 	uint64_t key = 0;
 
@@ -608,8 +621,7 @@ void gxScene::setRenderState(const RenderState& rs) {
 	if (rs.alpha != material.Diffuse.a) {
 		material.Diffuse.a = rs.alpha;
 		if (rs.fx & FX_ALPHATEST) {
-			int alpharef = (rs.fx & FX_VERTEXALPHA) ? 0 : (int)(128 * rs.alpha);
-			setRS(D3DRS_ALPHAREF, alpharef);
+			setRS(D3DRS_ALPHAREF, computeAlphaRef(rs));
 		}
 		setmat = true;
 	}
@@ -673,12 +685,12 @@ void gxScene::setRenderState(const RenderState& rs) {
 			setRS(D3DRS_EMISSIVEMATERIALSOURCE, n ? D3DMCS_COLOR1 : D3DMCS_MATERIAL);
 			setRS(D3DRS_COLORVERTEX, n ? true : false);
 		}
-		if(t & FX_ALPHATEST) {
-			if(fx & FX_ALPHATEST) {
-				int alpharef = (rs.fx & FX_VERTEXALPHA) ? 0 : 128 * rs.alpha;
-				setRS(D3DRS_ALPHAREF, alpharef);
-			}
-			setRS(D3DRS_ALPHATESTENABLE, fx & FX_ALPHATEST ? true : false);
+		if(fx & FX_ALPHATEST) {
+			setRS(D3DRS_ALPHAREF, computeAlphaRef(rs));
+			setRS(D3DRS_ALPHATESTENABLE, true);
+		}
+		else if(t & FX_ALPHATEST) {
+			setRS(D3DRS_ALPHATESTENABLE, false);
 		}
 	}
 	if(setmat) {

@@ -417,6 +417,9 @@ gxCanvas* gxGraphics::loadCanvas(const std::string& f, int flags) {
 }
 
 gxCanvas* gxGraphics::createCanvasFromImage(void* fib32, int w, int h, int flags) {
+	if ((flags & gxCanvas::CANVAS_TEX_MASK) && !(flags & gxCanvas::CANVAS_TEX_ALPHA)) {
+		flags |= gxCanvas::CANVAS_TEX_ALPHA;
+	}
 	IDirect3DTexture9* tex = ddUtil::textureFromDecoded(fib32, w, h, flags, this, true, &w, &h);
 	if (!tex) return nullptr;
 	gxCanvas* c = new gxCanvas(this, tex, flags);
