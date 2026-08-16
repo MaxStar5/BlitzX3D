@@ -93,6 +93,14 @@ static std::string normalizePath(const std::string& p) {
 	catch (...) { return p; }
 }
 
+static bool samePath(const std::string& a, const std::string& b) {
+#if defined(_WIN32)
+	return toLower(normalizePath(a)) == toLower(normalizePath(b));
+#else
+	return normalizePath(a) == normalizePath(b);
+#endif
+}
+
 static bool fileDefinesFunction(const std::string& path, const std::string& name, int& outLine) {
 	std::ifstream in(path, std::ios::binary);
 	if (!in.good()) return false;
@@ -642,11 +650,13 @@ void App::drawFuncList() {
 			const Doc::FuncItem& f = d->funcs[k];
 			const char* prefix = f.kind == 0 ? "F " : f.kind == 1 ? "T " : ". ";
 			std::string label = prefix + f.label;
+			ImGui::PushID((int)k);
 			if (ImGui::Selectable(label.c_str())) {
 				d->editor.SetCursorPosition(TextEditor::Coordinates(f.line, 0));
 				d->editor.SetSelection(TextEditor::Coordinates(f.line, 0),
 					TextEditor::Coordinates(f.line, 0));
 			}
+			ImGui::PopID();
 		}
 		if (d->funcs.empty()) ImGui::TextDisabled("(no functions)");
 	}
@@ -762,7 +772,7 @@ int App::addDoc(const std::string& path) {
 
 bool App::openFile(const std::string& path, bool recent) {
 	for (int k = 0; k < (int)docs.size(); ++k) {
-		if (docs[k].path == path) { currentIndex = k; return true; }
+		if (samePath(docs[k].path, path)) { currentIndex = k; return true; }
 	}
 	fs::path p(path);
 	if (!fs::exists(p)) return false;
@@ -847,8 +857,9 @@ void App::fileOpen() {
 	if (fileOpenDialog(path)) openPath(path);
 }
 void App::addRecent(const std::string& path) {
+	if (path.empty()) return;
 	for (auto it = prefs.recentFiles.begin(); it != prefs.recentFiles.end(); ++it) {
-		if (*it == path) { prefs.recentFiles.erase(it); break; }
+		if (samePath(*it, path)) { prefs.recentFiles.erase(it); break; }
 	}
 	prefs.recentFiles.insert(prefs.recentFiles.begin(), path);
 	if (prefs.recentFiles.size() > 10) prefs.recentFiles.pop_back();

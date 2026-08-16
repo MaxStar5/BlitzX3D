@@ -4,6 +4,7 @@
 
 #include <cstdio>
 #include <cstdlib>
+#include <cctype>
 #include <fstream>
 #include <sstream>
 #include <filesystem>
@@ -119,7 +120,15 @@ void Prefs::open() {
 	for (int i = 1; i < 11; ++i) {
 		inipp::get_value(ini.sections["RECENT_FILES"], "File" + std::to_string(i), recentFile);
 		if (recentFile.empty()) continue;
-		recentFiles.push_back(recentFile);
+		bool dup = false;
+		for (const auto& existing : recentFiles) {
+			if (existing.size() != recentFile.size()) continue;
+			bool same = true;
+			for (size_t c = 0; c < existing.size(); ++c)
+				if (std::tolower((unsigned char)existing[c]) != std::tolower((unsigned char)recentFile[c])) { same = false; break; }
+			if (same) { dup = true; break; }
+		}
+		if (!dup) recentFiles.push_back(recentFile);
 	}
 }
 
