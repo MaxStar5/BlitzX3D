@@ -945,6 +945,11 @@ void App::programPublish() {
 	}
 	std::string defaultName = e->name;
 	if (defaultName.empty() || defaultName == "untitled") defaultName = "untitled.exe";
+	else {
+		size_t dot = defaultName.rfind('.');
+		if (dot != std::string::npos) defaultName = defaultName.substr(0, dot);
+		defaultName += ".exe";
+	}
 	if (!fileSaveDialog(publishExePath, defaultName.c_str(),
 		"Executable files (*.exe)|*.exe|All files (*.*)|*.*")) return;
 
