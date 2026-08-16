@@ -309,11 +309,26 @@ int _cdecl main(int argc, char* argv[]) {
 		Debugger* debugger = 0;
 
 		if (debug) {
-			dbgHandle = LoadLibrary((home + "/bin/debugger.dll").c_str());
-			if (dbgHandle) {
-				typedef Debugger* (_cdecl* GetDebugger)(Module*, Environ*);
-				GetDebugger gd = (GetDebugger)GetProcAddress(dbgHandle, "debuggerGetDebugger");
-				if (gd) debugger = gd(module, environ);
+			std::vector<std::string> candidates;
+			const char* legacyDbg = getenv("BLITZ_LEGACY_DEBUGGER");
+			if (legacyDbg && legacyDbg[0] == '1') {
+				candidates.push_back("debugger.dll");
+			}
+			else {
+				candidates.push_back("debugger_imgui.dll");
+				candidates.push_back("debugger.dll");
+			}
+			for (size_t k = 0; k < candidates.size() && !debugger; ++k) {
+				dbgHandle = LoadLibrary((home + "/bin/" + candidates[k]).c_str());
+				if (dbgHandle) {
+					typedef Debugger* (_cdecl* GetDebugger)(Module*, Environ*);
+					GetDebugger gd = (GetDebugger)GetProcAddress(dbgHandle, "debuggerGetDebugger");
+					if (gd) debugger = gd(module, environ);
+					else {
+						FreeLibrary(dbgHandle);
+						dbgHandle = 0;
+					}
+				}
 			}
 			if (!debugger) err("Error launching debugger!");
 		}
