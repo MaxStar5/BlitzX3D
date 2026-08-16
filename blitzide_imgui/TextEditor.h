@@ -211,6 +211,7 @@ public:
 	std::string GetLineText(int aLine) const;
 
 	bool TakeCtrlClick(std::string& word, int& line, int& column);
+	bool TakeRightClick(int& line, int& column);
 
 	int GetTotalLines() const { return (int)mLines.size(); }
 	bool IsOverwrite() const { return mOverwrite; }
@@ -264,6 +265,11 @@ public:
 	void Cut();
 	void Paste();
 	void Delete();
+	void DuplicateLine();
+	void DeleteLine();
+	void ToggleComment();
+	void Indent();
+	void Outdent();
 
 	bool CanUndo() const;
 	bool CanRedo() const;
@@ -399,4 +405,8 @@ private:
 	std::string mCtrlClickWord;
 	int mCtrlClickLine = 0;
 	int mCtrlClickColumn = 0;
+
+	bool mRightClick = false;
+	int mRightClickLine = 0;
+	int mRightClickColumn = 0;
 };

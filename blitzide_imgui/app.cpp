@@ -305,6 +305,7 @@ bool App::init(int argc, char* argv[]) {
 	ImGui::CreateContext();
 	ImGuiIO& io = ImGui::GetIO();
 	io.ConfigFlags |= ImGuiConfigFlags_ViewportsEnable;
+	io.Fonts->AddFontDefaultBitmap();
 	if (!prefs.homeDir.empty()) {
 		io.IniFilename = strdup((prefs.homeDir + "/cfg/imgui.ini").c_str());
 	}
@@ -551,15 +552,58 @@ void App::drawEditorPane() {
 	Doc* d = currentDoc();
 	if (!d) { ImGui::End(); return; }
 
+	ImGuiIO& io = ImGui::GetIO();
+	bool ctrl = io.ConfigMacOSXBehaviors ? io.KeySuper : io.KeyCtrl;
+	if (ctrl && ImGui::IsWindowHovered(ImGuiHoveredFlags_ChildWindows)) {
+		float delta = 0.0f;
+		if (io.MouseWheel != 0.0f) delta = io.MouseWheel;
+		if (ImGui::IsKeyPressed(ImGuiKey_Minus) || ImGui::IsKeyPressed(ImGuiKey_KeypadSubtract)) delta = -1.0f;
+		if (ImGui::IsKeyPressed(ImGuiKey_Equal) || ImGui::IsKeyPressed(ImGuiKey_KeypadAdd)) delta = 1.0f;
+		if (delta != 0.0f) {
+			const float base = ImGui::GetStyle().FontSizeBase;
+			int size = (int)std::lround(base * editorFontScale * (delta > 0.0f ? 1.1f : 1.0f / 1.1f));
+			size = std::clamp(size, 7, 48);
+			editorFontScale = (float)size / base;
+			io.InputQueueCharacters.resize(0);
+		}
+	}
+
 	applyPalette(*d);
 
 	ImVec2 avail = ImGui::GetContentRegionAvail();
+	ImGui::PushFont(nullptr, ImGui::GetStyle().FontSizeBase * editorFontScale);
 	d->editor.Render(d->name.c_str(), avail, false);
+	ImGui::PopFont();
 
 	std::string word;
 	int cline, ccol;
 	if (d->editor.TakeCtrlClick(word, cline, ccol))
 		handleCtrlClick(*d, word, cline, ccol);
+
+	int rcline, rccol;
+	if (d->editor.TakeRightClick(rcline, rccol))
+		ImGui::OpenPopup("editor_context");
+
+	if (ImGui::BeginPopup("editor_context")) {
+		TextEditor& ed = d->editor;
+		bool didEdit = false;
+		if (ImGui::MenuItem("Cut", "Ctrl+X")) { ed.Cut(); didEdit = true; }
+		if (ImGui::MenuItem("Copy", "Ctrl+C")) ed.Copy();
+		if (ImGui::MenuItem("Paste", "Ctrl+V")) { ed.Paste(); didEdit = true; }
+		if (ImGui::MenuItem("Select All", "Ctrl+A")) ed.SelectAll();
+		ImGui::Separator();
+		if (ImGui::MenuItem("Duplicate Line")) { ed.DuplicateLine(); didEdit = true; }
+		if (ImGui::MenuItem("Delete Line")) { ed.DeleteLine(); didEdit = true; }
+		ImGui::Separator();
+		if (ImGui::MenuItem("Toggle Comment", ";")) { ed.ToggleComment(); didEdit = true; }
+		if (ImGui::MenuItem("Indent", "Tab")) { ed.Indent(); didEdit = true; }
+		if (ImGui::MenuItem("Outdent", "Shift+Tab")) { ed.Outdent(); didEdit = true; }
+		ImGui::Separator();
+		if (ImGui::MenuItem("Undo", "Ctrl+Z")) ed.Undo();
+		if (ImGui::MenuItem("Redo", "Ctrl+Y")) ed.Redo();
+		if (didEdit) d->modified = true;
+		ImGui::EndPopup();
+	}
 
 	ImGui::End();
 }
@@ -581,6 +625,7 @@ void App::applyPalette(Doc& d) {
 	pal[(int)TextEditor::PaletteIndex::MultiLineComment] = col(prefs.rgb_comment);
 	pal[(int)TextEditor::PaletteIndex::Number] = col(prefs.rgb_digit);
 	pal[(int)TextEditor::PaletteIndex::Default] = col(prefs.rgb_default);
+	pal[(int)TextEditor::PaletteIndex::Selection] = IM_COL32(255, 200, 80, 170);
 	pal[(int)TextEditor::PaletteIndex::LineNumber] = IM_COL32(120, 120, 120, 200);
 	d.editor.SetPalette(pal);
 }

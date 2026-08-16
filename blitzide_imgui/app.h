@@ -135,6 +135,8 @@ private:
 	bool pickerDone = false;
 	bool pickLegacy = false;
 
+	float editorFontScale = 1.0f;
+
 	bool showCommandLine = false;
 	bool updateOpen = false;
 

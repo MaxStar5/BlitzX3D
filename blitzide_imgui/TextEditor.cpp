@@ -854,6 +854,19 @@ void TextEditor::HandleMouseInputs()
 				mState.mCursorPosition = mInteractiveEnd = ScreenPosToCoordinates(ImGui::GetMousePos());
 				SetSelection(mInteractiveStart, mInteractiveEnd, mSelectionMode);
 			}
+
+			if (ImGui::IsMouseClicked(1))
+			{
+				Coordinates rc = ScreenPosToCoordinates(ImGui::GetMousePos());
+				mRightClick = true;
+				mRightClickLine = rc.mLine;
+				mRightClickColumn = rc.mColumn;
+				if (!HasSelection() || !(mState.mSelectionStart <= rc && rc <= mState.mSelectionEnd))
+				{
+					mState.mCursorPosition = mInteractiveStart = mInteractiveEnd = rc;
+					SetSelection(rc, rc);
+				}
+			}
 		}
 	}
 }
@@ -1999,6 +2012,185 @@ void TextEditor::Paste()
 	}
 }
 
+void TextEditor::DuplicateLine()
+{
+	assert(!mReadOnly);
+	if (mLines.empty()) return;
+
+	UndoRecord u;
+	u.mBefore = mState;
+
+	auto pos = GetActualCursorCoordinates();
+	std::string text;
+	auto& line = mLines[pos.mLine];
+	for (auto& g : line) text.push_back(g.mChar);
+
+	std::string ins = "\n" + text;
+	Coordinates at(pos.mLine, GetLineMaxColumn(pos.mLine));
+	int totalLines = InsertTextAt(at, ins.c_str());
+
+	mState.mCursorPosition = at;
+	mInteractiveStart = mInteractiveEnd = mState.mCursorPosition;
+	SetSelection(mState.mCursorPosition, mState.mCursorPosition);
+
+	u.mAdded = ins;
+	u.mAddedStart = Coordinates(pos.mLine, GetLineMaxColumn(pos.mLine));
+	u.mAddedEnd = at;
+	u.mAfter = mState;
+	AddUndo(u);
+	mTextChanged = true;
+	Colorize(pos.mLine, totalLines + 1);
+}
+
+void TextEditor::DeleteLine()
+{
+	assert(!mReadOnly);
+	if (mLines.empty()) return;
+
+	UndoRecord u;
+	u.mBefore = mState;
+
+	auto pos = GetActualCursorCoordinates();
+	Coordinates start(pos.mLine, 0);
+
+	if (pos.mLine == (int)mLines.size() - 1)
+	{
+		Coordinates end(pos.mLine, GetLineMaxColumn(pos.mLine));
+		u.mRemoved = GetText(start, end);
+		u.mRemovedStart = start;
+		u.mRemovedEnd = end;
+		DeleteRange(start, end);
+	}
+	else
+	{
+		Coordinates end(pos.mLine + 1, 0);
+		u.mRemoved = GetText(start, end);
+		u.mRemovedStart = start;
+		u.mRemovedEnd = end;
+		DeleteRange(start, end);
+	}
+
+	mState.mCursorPosition = Coordinates(pos.mLine, 0);
+	mInteractiveStart = mInteractiveEnd = mState.mCursorPosition;
+	SetSelection(mState.mCursorPosition, mState.mCursorPosition);
+	u.mAfter = mState;
+	AddUndo(u);
+	mTextChanged = true;
+	Colorize(std::max(0, pos.mLine - 1), 3);
+}
+
+void TextEditor::ToggleComment()
+{
+	assert(!mReadOnly);
+	if (mLines.empty()) return;
+
+	UndoRecord u;
+	u.mBefore = mState;
+
+	int firstLine = HasSelection() ? mState.mSelectionStart.mLine : mState.mCursorPosition.mLine;
+	int lastLine = HasSelection() ? mState.mSelectionEnd.mLine : mState.mCursorPosition.mLine;
+	if (HasSelection() && mState.mSelectionEnd.mColumn == 0 && mState.mSelectionEnd.mLine > firstLine)
+		--lastLine;
+
+	bool allCommented = true;
+	for (int ln = firstLine; ln <= lastLine; ++ln)
+	{
+		auto& line = mLines[ln];
+		size_t i = 0;
+		while (i < line.size() && (line[i].mChar == ' ' || line[i].mChar == '\t')) ++i;
+		if (i >= line.size() || line[i].mChar != ';') { allCommented = false; break; }
+	}
+
+	Coordinates cstart(firstLine, 0);
+	Coordinates cend(lastLine, GetLineMaxColumn(lastLine));
+	u.mRemoved = GetText(cstart, cend);
+	u.mRemovedStart = cstart;
+	u.mRemovedEnd = cend;
+
+	for (int ln = firstLine; ln <= lastLine; ++ln)
+	{
+		auto& line = mLines[ln];
+		size_t i = 0;
+		while (i < line.size() && (line[i].mChar == ' ' || line[i].mChar == '\t')) ++i;
+		if (allCommented)
+		{
+			if (i < line.size() && line[i].mChar == ';')
+				line.erase(line.begin() + i);
+		}
+		else
+		{
+			line.insert(line.begin() + i, Glyph(';', PaletteIndex::Default));
+		}
+	}
+
+	u.mAdded = GetText(cstart, cend);
+	u.mAddedStart = cstart;
+	u.mAddedEnd = cend;
+	u.mAfter = mState;
+	AddUndo(u);
+	mTextChanged = true;
+	Colorize(firstLine - 1, lastLine - firstLine + 3);
+}
+
+void TextEditor::Indent()
+{
+	assert(!mReadOnly);
+	if (mLines.empty()) return;
+	EnterCharacter('\t', false);
+}
+
+void TextEditor::Outdent()
+{
+	assert(!mReadOnly);
+	if (mLines.empty()) return;
+
+	if (HasSelection() && mState.mSelectionStart.mLine != mState.mSelectionEnd.mLine)
+	{
+		EnterCharacter('\t', true);
+		return;
+	}
+
+	UndoRecord u;
+	u.mBefore = mState;
+
+	auto pos = GetActualCursorCoordinates();
+	auto& line = mLines[pos.mLine];
+
+	int chars = 0;
+	int spaces = 0;
+	for (int i = 0; i < (int)line.size(); ++i)
+	{
+		if (line[i].mChar == '\t')
+		{
+			chars = i + 1;
+			break;
+		}
+		if (line[i].mChar == ' ')
+		{
+			chars = i + 1;
+			if (++spaces >= mTabSize) break;
+			continue;
+		}
+		break;
+	}
+	if (chars == 0) return;
+
+	Coordinates start(pos.mLine, 0);
+	Coordinates end(pos.mLine, GetCharacterColumn(pos.mLine, chars));
+	u.mRemoved = GetText(start, end);
+	u.mRemovedStart = start;
+	u.mRemovedEnd = end;
+	DeleteRange(start, end);
+
+	mState.mCursorPosition = Coordinates(pos.mLine, std::max(0, pos.mColumn - GetCharacterColumn(pos.mLine, chars)));
+	mInteractiveStart = mInteractiveEnd = mState.mCursorPosition;
+	SetSelection(mState.mCursorPosition, mState.mCursorPosition);
+	u.mAfter = mState;
+	AddUndo(u);
+	mTextChanged = true;
+	Colorize(pos.mLine - 1, 2);
+}
+
 bool TextEditor::CanUndo() const
 {
 	return !mReadOnly && mUndoIndex > 0;
@@ -2040,7 +2232,7 @@ const TextEditor::Palette & TextEditor::GetDarkPalette()
 			0xff406020, // Comment (multi line)
 			0xff101010, // Background
 			0xffe0e0e0, // Cursor
-			0x80a06020, // Selection
+			0xaaffc850, // Selection
 			0x800020ff, // ErrorMarker
 			0x40f08000, // Breakpoint
 			0xff707000, // Line number
@@ -2070,7 +2262,7 @@ const TextEditor::Palette & TextEditor::GetLightPalette()
 			0xff405020, // Comment (multi line)
 			0xffffffff, // Background
 			0xff000000, // Cursor
-			0x80600000, // Selection
+			0x965a78ff, // Selection
 			0xa00010ff, // ErrorMarker
 			0x80f08000, // Breakpoint
 			0xff505000, // Line number
@@ -2167,6 +2359,15 @@ bool TextEditor::TakeCtrlClick(std::string& word, int& line, int& column)
 	word = mCtrlClickWord;
 	line = mCtrlClickLine;
 	column = mCtrlClickColumn;
+	return true;
+}
+
+bool TextEditor::TakeRightClick(int& line, int& column)
+{
+	if (!mRightClick) return false;
+	mRightClick = false;
+	line = mRightClickLine;
+	column = mRightClickColumn;
 	return true;
 }
 
