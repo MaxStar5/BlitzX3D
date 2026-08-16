@@ -2,7 +2,8 @@
 #define SPAWN_H
 
 #include <string>
+#include <vector>
 
-int runProcess(const std::string& cmd, std::string& output, int* exitCode = nullptr);
+int runProcess(const std::vector<std::string>& args, std::string& output, int* exitCode = nullptr);
 
 #endif

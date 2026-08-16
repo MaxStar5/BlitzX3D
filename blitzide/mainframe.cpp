@@ -5,6 +5,7 @@
 #include "blitzide.h"
 #include "libs.h"
 #include "update.h"
+#include "../procutil.h"
 
 #include <mmsystem.h>
 
@@ -705,7 +706,7 @@ void MainFrame::editReplace() {
 	if (Editor* e = getEditor()) e->replace();
 }
 
-static HANDLE startProc(const std::string& proc) {
+static HANDLE startProc(const std::vector<std::string>& args) {
 	HANDLE rd, wr;
 
 	SECURITY_ATTRIBUTES sa = { sizeof(sa),0,true };
@@ -715,7 +716,10 @@ static HANDLE startProc(const std::string& proc) {
 		si.dwFlags = STARTF_USESTDHANDLES;
 		si.hStdOutput = si.hStdError = wr;
 		PROCESS_INFORMATION pi = { 0 };
-		if (CreateProcess(0, (char*)proc.c_str(), 0, 0, true, DETACHED_PROCESS, 0, 0, &si, &pi)) {
+		std::string cmdline = buildWindowsCommandLine(args);
+		std::vector<char> mutableCmd(cmdline.begin(), cmdline.end());
+		mutableCmd.push_back('\0');
+		if (CreateProcess(0, mutableCmd.data(), 0, 0, true, DETACHED_PROCESS, 0, 0, &si, &pi)) {
 			CloseHandle(pi.hProcess);
 			CloseHandle(pi.hThread);
 			CloseHandle(wr);
@@ -733,7 +737,7 @@ public:
 	void OnCancel() {}
 };
 
-void MainFrame::compile(const std::string& cmd) {
+void MainFrame::compile(const std::vector<std::string>& args) {
 
 	CDialog compiling;
 	compiling.Create(IDD_COMPILING);
@@ -743,7 +747,7 @@ void MainFrame::compile(const std::string& cmd) {
 
 	putenv("blitzide=1");
 
-	HANDLE rd = startProc(cmd);
+	HANDLE rd = startProc(args);
 
 	if (!rd) {
 		putenv("blitzide");
@@ -830,11 +834,13 @@ void MainFrame::build(bool exec, bool publish) {
 		}
 	}
 
-	std::string opts = " ";
+	std::vector<std::string> args;
+	args.push_back(prefs.homeDir + "/bin/blitzcc");
+	args.push_back("-q");
 
-	if (prefs.prg_preprocess) opts += "-p ";
-	if (prefs.prg_debug) opts += "-d ";
-	if (prefs.prg_nolaa) opts += "-nlaa ";
+	if (prefs.prg_preprocess) args.push_back("-p");
+	if (prefs.prg_debug) args.push_back("-d");
+	if (prefs.prg_nolaa) args.push_back("-nlaa");
 
 	if (publish) {
 		std::string exe = src_file;
@@ -854,7 +860,8 @@ void MainFrame::build(bool exec, bool publish) {
 		if (fd.DoModal() == IDCANCEL) return;
 
 		std::string outExePath = (LPCTSTR)fd.GetPathName();
-		opts += "-o \"" + outExePath + "\" ";
+		args.push_back("-o");
+		args.push_back(outExePath);
 
 		std::string iconPath;
 		CFileDialog iconDlg(TRUE, "ico", NULL, OFN_FILEMUSTEXIST | OFN_HIDEREADONLY, "Icon files (*.ico)|*.ico||");
@@ -863,7 +870,12 @@ void MainFrame::build(bool exec, bool publish) {
 			iconPath = iconDlg.GetPathName();
 		}
 
-		compile(prefs.homeDir + "/bin/blitzcc -q " + opts + " \"" + src_file + "\" " + prefs.cmd_line);
+		args.push_back(src_file);
+		if (!prefs.cmd_line.empty()) {
+			std::vector<std::string> extra = splitCommandLine(prefs.cmd_line);
+			args.insert(args.end(), extra.begin(), extra.end());
+		}
+		compile(args);
 
 		if (!iconPath.empty()) {
 			if (!ApplyIconToExe(outExePath, iconPath)) {
@@ -873,7 +885,7 @@ void MainFrame::build(bool exec, bool publish) {
 		return;
 	}
 	else if (!exec) {
-		opts += "-c ";
+		args.push_back("-c");
 	}
 
 	std::string src = src_file;
@@ -900,7 +912,12 @@ void MainFrame::build(bool exec, bool publish) {
 		prefs.prg_lastbuild = e->getName();
 	}
 
-	compile(prefs.homeDir + "/bin/blitzcc -q " + opts + " \"" + src + "\" " + prefs.cmd_line);
+	args.push_back(src);
+	if (!prefs.cmd_line.empty()) {
+		std::vector<std::string> extra = splitCommandLine(prefs.cmd_line);
+		args.insert(args.end(), extra.begin(), extra.end());
+	}
+	compile(args);
 
 	if (!src_file.size()) e->setName("");
 }

@@ -4,6 +4,7 @@
 #include "filedialog.h"
 #include "publish.h"
 #include "spawn.h"
+#include "../procutil.h"
 #include "update.h"
 
 #include "../imgui/imgui.h"
@@ -983,15 +984,16 @@ void App::launchLegacyIDE() {
 #if defined(_WIN32)
 	const char* bp = std::getenv("blitzpath");
 	if (bp && *bp) {
-		std::string ide = "\"" + std::string(bp) + "\\bin\\ide.exe\"";
+		std::vector<std::string> args = { std::string(bp) + "\\bin\\ide.exe" };
+		std::string cmdline = buildWindowsCommandLine(args);
 		STARTUPINFOA si = { sizeof(si) };
 		PROCESS_INFORMATION pi = { 0 };
-		char* cmdline = _strdup(ide.c_str());
-		if (CreateProcessA(NULL, cmdline, NULL, NULL, FALSE, 0, NULL, NULL, &si, &pi)) {
+		std::vector<char> mutableCmd(cmdline.begin(), cmdline.end());
+		mutableCmd.push_back('\0');
+		if (CreateProcessA(NULL, mutableCmd.data(), NULL, NULL, FALSE, 0, NULL, NULL, &si, &pi)) {
 			CloseHandle(pi.hThread);
 			CloseHandle(pi.hProcess);
 		}
-		free(cmdline);
 	}
 #endif
 	quitting = true;
@@ -1053,18 +1055,21 @@ void App::build(bool exec, bool publish) {
 	}
 
 	std::string src_file = e->path;
-	std::string opts = " ";
-	if (prefs.prg_preprocess) opts += "-p ";
-	if (prefs.prg_debug) opts += "-d ";
-	if (prefs.prg_nolaa) opts += "-nlaa ";
+	std::vector<std::string> args;
+	args.push_back(prefs.homeDir + "/bin/blitzcc");
+	args.push_back("-q");
+	if (prefs.prg_preprocess) args.push_back("-p");
+	if (prefs.prg_debug) args.push_back("-d");
+	if (prefs.prg_nolaa) args.push_back("-nlaa");
 
 	if (publish) {
 		std::string exe = publishExePath.empty() ? src_file : publishExePath;
 		if (exe.empty()) exe = "untitled.exe";
-		opts += "-o \"" + exe + "\" ";
+		args.push_back("-o");
+		args.push_back(exe);
 	}
 	else if (!exec) {
-		opts += "-c ";
+		args.push_back("-c");
 	}
 
 	std::string src = src_file;
@@ -1085,20 +1090,29 @@ void App::build(bool exec, bool publish) {
 		prefs.prg_lastbuild = e->path;
 	}
 
-	std::string cmd = prefs.homeDir + "/bin/blitzcc -q " + opts + " \"" + src + "\" " + prefs.cmd_line;
-	compile(cmd);
+	args.push_back(src);
+	if (!prefs.cmd_line.empty()) {
+		std::vector<std::string> extra = splitCommandLine(prefs.cmd_line);
+		args.insert(args.end(), extra.begin(), extra.end());
+	}
+	compile(args);
 }
 
-void App::compile(const std::string& cmd) {
+void App::compile(const std::vector<std::string>& args) {
 	if (compiling) return;
 	if (compileThread.joinable()) compileThread.join();
 	compiling = true;
 	compileOK = true;
+	std::string cmd;
+	for (size_t k = 0; k < args.size(); ++k) {
+		if (k) cmd += ' ';
+		cmd += args[k];
+	}
 	appendOutput(">>> " + cmd + "\n");
 
-	compileThread = std::thread([this, cmd]() {
+	compileThread = std::thread([this, args]() {
 		std::string output;
-		int code = runProcess(cmd, output);
+		int code = runProcess(args, output);
 		{
 			std::lock_guard<std::mutex> lock(outputMutex);
 			this->output += output;
@@ -1245,7 +1259,7 @@ void App::initKeywords() {
 	keywordThread = std::thread([this]() {
 		std::string kws;
 		int code = 0;
-		runProcess(prefs.homeDir + "/bin/blitzcc +k", kws, &code);
+		runProcess({ prefs.homeDir + "/bin/blitzcc", "+k" }, kws, &code);
 		std::set<std::string> loaded;
 		std::set<std::string> loadedFuncs;
 		std::stringstream ss(kws);

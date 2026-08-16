@@ -2,12 +2,13 @@
 #include "libs.h"
 #include "editor.h"
 #include "blitzide.h"
+#include "../procutil.h"
 
 static std::map<std::string, std::string> keyhelps;
 
 int linker_ver, runtime_ver;
 
-static std::string execProc(const std::string& proc) {
+static std::string execProc(const std::vector<std::string>& args) {
 	HANDLE rd, wr;
 
 	SECURITY_ATTRIBUTES sa = { sizeof(sa),0,true };
@@ -17,7 +18,10 @@ static std::string execProc(const std::string& proc) {
 		si.dwFlags = STARTF_USESTDHANDLES;
 		si.hStdOutput = si.hStdError = wr;
 		PROCESS_INFORMATION pi = { 0 };
-		if(CreateProcess(0, (char*)proc.c_str(), 0, 0, true, DETACHED_PROCESS, 0, 0, &si, &pi)) {
+		std::string cmdline = buildWindowsCommandLine(args);
+		std::vector<char> mutableCmd(cmdline.begin(), cmdline.end());
+		mutableCmd.push_back('\0');
+		if(CreateProcess(0, mutableCmd.data(), 0, 0, true, DETACHED_PROCESS, 0, 0, &si, &pi)) {
 			CloseHandle(pi.hProcess);
 			CloseHandle(pi.hThread);
 			CloseHandle(wr);
@@ -39,7 +43,7 @@ static std::string execProc(const std::string& proc) {
 		CloseHandle(rd);
 		CloseHandle(wr);
 	}
-	AfxMessageBox((proc + " failed").c_str());
+	AfxMessageBox((buildWindowsCommandLine(args) + " failed").c_str());
 	ExitProcess(0);
 	return "";
 }
@@ -54,18 +58,18 @@ int version(std::string vers, std::string t) {
 
 void initLibs() {
 
-	std::string valid = execProc(prefs.homeDir + "/bin/blitzcc -q");
+	std::string valid = execProc({ prefs.homeDir + "/bin/blitzcc", "-q" });
 	if(valid.size()) {
 		AfxMessageBox(("Compiler environment error: " + valid).c_str());
 		ExitProcess(0);
 	}
 
-	std::string vers = tolower(execProc(prefs.homeDir + "/bin/blitzcc -v"));
+	std::string vers = tolower(execProc({ prefs.homeDir + "/bin/blitzcc", "-v" }));
 	linker_ver = version(vers, "linker");
 	runtime_ver = version(vers, "runtime");
 
 	//generate keywords!
-	std::string kws = execProc(prefs.homeDir + "/bin/blitzcc +k");
+	std::string kws = execProc({ prefs.homeDir + "/bin/blitzcc", "+k" });
 
 	if(!kws.size()) {
 		AfxMessageBox("Error generating keywords");

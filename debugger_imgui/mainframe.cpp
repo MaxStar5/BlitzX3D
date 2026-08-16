@@ -2,6 +2,7 @@
 #include "mainframe.h"
 
 #include "../MultiLang/MultiLang.h"
+#include "../procutil.h"
 
 #include <functional>
 #include <unordered_map>
@@ -78,10 +79,13 @@ void MainFrame::start(void* mod, void* env) {
 
 	std::string dir = dllDir();
 	std::string uiPath = dir + "\\blitz_debugger.exe";
-	std::string cmdline = "\"" + uiPath + "\" " + std::to_string(pid);
+	std::vector<std::string> args = { uiPath, std::to_string(pid) };
+	std::string cmdline = buildWindowsCommandLine(args);
 	STARTUPINFOA si = { sizeof(si) };
 	PROCESS_INFORMATION pi = { 0 };
-	if (CreateProcessA(NULL, (char*)cmdline.c_str(), NULL, NULL, FALSE, 0, NULL, NULL, &si, &pi)) {
+	std::vector<char> mutableCmd(cmdline.begin(), cmdline.end());
+	mutableCmd.push_back('\0');
+	if (CreateProcessA(NULL, mutableCmd.data(), NULL, NULL, FALSE, 0, NULL, NULL, &si, &pi)) {
 		CloseHandle(pi.hThread);
 		CloseHandle(pi.hProcess);
 	}

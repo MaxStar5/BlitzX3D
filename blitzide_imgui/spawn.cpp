@@ -1,5 +1,7 @@
 #include "spawn.h"
 
+#include "../procutil.h"
+
 #include <cstdio>
 
 #if defined(_WIN32)
@@ -12,7 +14,7 @@
 #include <cstring>
 #endif
 
-int runProcess(const std::string& cmd, std::string& output, int* exitCode) {
+int runProcess(const std::vector<std::string>& args, std::string& output, int* exitCode) {
 	output.clear();
 	if (exitCode) *exitCode = -1;
 
@@ -28,8 +30,10 @@ int runProcess(const std::string& cmd, std::string& output, int* exitCode) {
 	si.hStdInput = NULL;
 
 	PROCESS_INFORMATION pi = { 0 };
-	std::string mutableCmd = cmd;
-	if (!CreateProcessA(NULL, &mutableCmd[0], NULL, NULL, TRUE, CREATE_NO_WINDOW, NULL, NULL, &si, &pi)) {
+	std::string cmdline = buildWindowsCommandLine(args);
+	std::vector<char> mutableCmd(cmdline.begin(), cmdline.end());
+	mutableCmd.push_back('\0');
+	if (!CreateProcessA(NULL, mutableCmd.data(), NULL, NULL, TRUE, CREATE_NO_WINDOW, NULL, NULL, &si, &pi)) {
 		CloseHandle(g_hChildStd_OUT_Rd);
 		CloseHandle(g_hChildStd_OUT_Wr);
 		return -1;
@@ -65,7 +69,10 @@ int runProcess(const std::string& cmd, std::string& output, int* exitCode) {
 		dup2(pipefd[1], 2);
 		close(pipefd[0]);
 		close(pipefd[1]);
-		execl("/bin/sh", "sh", "-c", cmd.c_str(), (char*)NULL);
+		std::vector<char*> argv;
+		for (const auto& a : args) argv.push_back(const_cast<char*>(a.c_str()));
+		argv.push_back(nullptr);
+		execvp(argv[0], argv.data());
 		_exit(127);
 	}
 	close(pipefd[1]);
