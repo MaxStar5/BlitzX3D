@@ -1117,6 +1117,8 @@ void TextEditor::Render()
 			auto id = GetWordAt(ScreenPosToCoordinates(ImGui::GetMousePos()));
 			if (!id.empty())
 			{
+				if (!id.empty() && (id.back() == '$' || id.back() == '#' || id.back() == '%'))
+					id.pop_back();
 				auto it = mLanguageDefinition.mIdentifiers.find(id);
 				if (it != mLanguageDefinition.mIdentifiers.end())
 				{
@@ -2468,22 +2470,19 @@ void TextEditor::ColorizeRange(int aFromLine, int aToLine)
 
 					if (!line[first - bufferBegin].mPreprocessor)
 					{
+						std::string idn = id;
+						if (!idn.empty() && (idn.back() == '$' || idn.back() == '#' || idn.back() == '%'))
+							idn.pop_back();
 						if (mLanguageDefinition.mKeywords.count(id) != 0)
 							token_color = PaletteIndex::Keyword;
-						else if (mLanguageDefinition.mIdentifiers.count(id) != 0)
+						else if (mLanguageDefinition.mIdentifiers.count(idn) != 0)
 							token_color = PaletteIndex::KnownIdentifier;
-						else if (mLanguageDefinition.mPreprocIdentifiers.count(id) != 0)
+						else if (mLanguageDefinition.mPreprocIdentifiers.count(idn) != 0)
 							token_color = PaletteIndex::PreprocIdentifier;
-						else
-						{
-							std::string idn = id;
-							if (!idn.empty() && (idn.back() == '$' || idn.back() == '#' || idn.back() == '%'))
-								idn.pop_back();
-							if (mLanguageDefinition.mGlobals.count(idn) != 0)
-								token_color = PaletteIndex::Global;
-							else if (mLanguageDefinition.mConsts.count(idn) != 0)
-								token_color = PaletteIndex::Const;
-						}
+						else if (mLanguageDefinition.mGlobals.count(idn) != 0)
+							token_color = PaletteIndex::Global;
+						else if (mLanguageDefinition.mConsts.count(idn) != 0)
+							token_color = PaletteIndex::Const;
 					}
 					else
 					{
