@@ -888,6 +888,7 @@ void App::build(bool exec, bool publish) {
 
 void App::compile(const std::string& cmd) {
 	if (compiling) return;
+	if (compileThread.joinable()) compileThread.join();
 	compiling = true;
 	compileOK = true;
 	appendOutput(">>> " + cmd + "\n");
