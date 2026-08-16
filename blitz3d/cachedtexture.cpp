@@ -19,7 +19,8 @@ void CachedTexture::setPathMutator(PathMutator m) {
 }
 
 static bool fileExists(const std::string& f) {
-	return GetFileAttributesA(f.c_str()) != INVALID_FILE_ATTRIBUTES;
+	DWORD attrs = GetFileAttributesA(f.c_str());
+	return attrs != INVALID_FILE_ATTRIBUTES && !(attrs & FILE_ATTRIBUTE_DIRECTORY);
 }
 
 struct CachedTexture::Rep {
@@ -105,6 +106,13 @@ struct CachedTexture::Rep {
 		int iw = job ? job->w : 0;
 		int ih = job ? job->h : 0;
 
+		if (!fib32) {
+			failed = true;
+			cancelJob();
+			materialized = true;
+			return;
+		}
+
 		int t_flags = (flags & (
 			gxCanvas::CANVAS_TEX_RGB |
 			gxCanvas::CANVAS_TEX_ALPHA |
@@ -123,17 +131,11 @@ struct CachedTexture::Rep {
 						frames.push_back(t);
 					}
 				}
+				if (frames.empty()) failed = true;
 				cancelJob();
 				materialized = true;
 				return;
 			}
-		}
-
-		if (!fib32) {
-			failed = true;
-			cancelJob();
-			materialized = true;
-			return;
 		}
 
 		gxCanvas* t = gx_graphics->createCanvasFromImage(fib32, iw, ih, t_flags);
@@ -280,12 +282,10 @@ bool CachedTexture::valid()const {
 }
 
 void CachedTexture::flushAll() {
-	int budget = 16;
-	for (size_t idx = 0; idx < pending_reps.size() && budget > 0; ) {
+	for (size_t idx = 0; idx < pending_reps.size(); ) {
 		Rep* r = pending_reps[idx];
 		r->materialize(false);
 		if (r->materialized) {
-			--budget;
 		}
 		else {
 			++idx;

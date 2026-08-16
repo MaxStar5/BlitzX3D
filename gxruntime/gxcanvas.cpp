@@ -682,6 +682,10 @@ static IDirect3DTexture9* getOrBuildBlitTex(IDirect3DDevice9* dev, gxCanvas* src
             if (!srcHasAlpha) {
                 for (int x = 0; x < logW; ++x) dstRow[x] |= 0xff000000u;
             }
+            else {
+                for (int x = 0; x < logW; ++x)
+                    if ((dstRow[x] >> 24) == 0) dstRow[x] = 0;
+            }
             if (doMask) {
                 for (int x = 0; x < logW; ++x)
                     if ((dstRow[x] & 0x00ffffffu) == maskRGB) dstRow[x] = 0x00000000u;
@@ -692,10 +696,12 @@ static IDirect3DTexture9* getOrBuildBlitTex(IDirect3DDevice9* dev, gxCanvas* src
                 unsigned argb = fmt.toARGB(fmt.getPixel((void*)(srcRow + x * pitch)));
                 if (doMask && (argb & 0x00ffffffu) == maskRGB)
                     argb = 0x00000000u;
-                else
-                    if (!srcHasAlpha) {
-                        argb |= 0xff000000u;
-                    }
+                else if (!srcHasAlpha) {
+                    argb |= 0xff000000u;
+                }
+                else if ((argb >> 24) == 0) {
+                    argb = 0;
+                }
                 dstRow[x] = argb;
             }
         }
@@ -824,6 +830,16 @@ static void restoreBlitState(IDirect3DDevice9* dev, SavedBlitState& s) {
 static bool isRenderTarget(IDirect3DSurface9* s) {
     D3DSURFACE_DESC desc;
     return SUCCEEDED(s->GetDesc(&desc)) && (desc.Usage & D3DUSAGE_RENDERTARGET);
+}
+
+static bool isBoundAsRenderTarget(IDirect3DDevice9* dev, IDirect3DSurface9* s) {
+    if (!dev || !s) return false;
+    IDirect3DSurface9* cur = nullptr;
+    dev->GetRenderTarget(0, &cur);
+    if (!cur) return false;
+    bool same = (cur == s);
+    cur->Release();
+    return same;
 }
 
 void gxCanvas::beginBlitBatch() const {
@@ -1085,7 +1101,7 @@ void gxCanvas::blitstretch(int x, int y, int w, int h,
 
     FillModeGuard guard(dev);
 
-    unsigned maskRGB = solid ? ~0u : (src->format.toARGB(src->mask_surf) & 0x00ffffffu);
+    unsigned maskRGB = useMask ? (src->format.toARGB(src->mask_surf) & 0x00ffffffu) : ~0u;
     IDirect3DTexture9* blitTex = getOrBuildBlitTex(dev, src, maskRGB);
     if (!blitTex) return;
 
@@ -1157,18 +1173,17 @@ static void cpuBlitAlpha(gxCanvas* dest, const RECT& dest_r, gxCanvas* src, cons
             if (srcA == 0) continue;
 
             int dx = dest_r.left + x, dy = dest_r.top + y;
-            if (srcA >= 255) {
-                unsigned outArgb = 0xff000000 | (tintR << 16) | (tintG << 8) | tintB;
-                dest->setPixelFast(dx, dy, df.fromARGB(outArgb));
-                continue;
-            }
-
             unsigned dstArgb = df.toARGB(dest->getPixelFast(dx, dy));
+            unsigned dstA = (dstArgb >> 24) & 0xff;
+            unsigned outA = srcA + dstA * (255 - srcA) / 255;
+
+            unsigned srcR = (srcArgb >> 16) & 0xff, srcG = (srcArgb >> 8) & 0xff, srcB = srcArgb & 0xff;
             unsigned dstR = (dstArgb >> 16) & 0xff, dstG = (dstArgb >> 8) & 0xff, dstB = dstArgb & 0xff;
-            unsigned outR = (tintR * srcA + dstR * (255 - srcA)) / 255;
-            unsigned outG = (tintG * srcA + dstG * (255 - srcA)) / 255;
-            unsigned outB = (tintB * srcA + dstB * (255 - srcA)) / 255;
-            dest->setPixelFast(dx, dy, df.fromARGB(0xff000000 | (outR << 16) | (outG << 8) | outB));
+            unsigned invA = 255 - srcA;
+            unsigned outR = (tintR * srcA + dstR * invA) / 255;
+            unsigned outG = (tintG * srcA + dstG * invA) / 255;
+            unsigned outB = (tintB * srcA + dstB * invA) / 255;
+            dest->setPixelFast(dx, dy, df.fromARGB((outA << 24) | (outR << 16) | (outG << 8) | outB));
         }
     }
 
@@ -1199,7 +1214,7 @@ void gxCanvas::blitAlpha(int x, int y, gxCanvas* src,
 
     IDirect3DBaseTexture9* tex = src->getTexture();
     IDirect3DTexture9* builtTex = nullptr;
-    if (!tex) {
+    if (!tex || isBoundAsRenderTarget(dev, src->surf)) {
         builtTex = getOrBuildBlitTex(dev, src, ~0u);
         if (!builtTex) return;
         tex = builtTex;
@@ -1438,9 +1453,9 @@ unsigned gxCanvas::getPixel(int x, int y) const {
 void gxCanvas::copyPixelFast(int x, int y, gxCanvas* src, int src_x, int src_y) {
     if (format.getDepth() == src->format.getDepth()) {
         switch (format.getDepth()) {
-        case 16: *(short*)(locked_surf + y * locked_pitch + x * 2) = *(short*)(src->locked_surf + src_y * src->locked_pitch + src_x * 2); return;
-        case 24: { unsigned char* p = locked_surf + y * locked_pitch + x * 3; unsigned char* t = src->locked_surf + src_y * src->locked_pitch + src_x * 3; *(short*)p = *(short*)t; *(char*)(p + 2) = *(char*)(t + 2); } return;
-        case 32: *(int*)(locked_surf + y * locked_pitch + x * 4) = *(int*)(src->locked_surf + src_y * src->locked_pitch + src_x * 4); return;
+        case 16: *(short*)(locked_surf + y * locked_pitch + x * 2) = *(short*)(src->locked_surf + src_y * src->locked_pitch + src_x * 2); ++mod_cnt; return;
+        case 24: { unsigned char* p = locked_surf + y * locked_pitch + x * 3; unsigned char* t = src->locked_surf + src_y * src->locked_pitch + src_x * 3; *(short*)p = *(short*)t; *(char*)(p + 2) = *(char*)(t + 2); } ++mod_cnt; return;
+        case 32: *(int*)(locked_surf + y * locked_pitch + x * 4) = *(int*)(src->locked_surf + src_y * src->locked_pitch + src_x * 4); ++mod_cnt; return;
         }
     }
     int sp = src->format.getPitch();
@@ -1449,6 +1464,7 @@ void gxCanvas::copyPixelFast(int x, int y, gxCanvas* src, int src_x, int src_y) 
     unsigned char* dPix = locked_surf + y * locked_pitch + x * dp;
     unsigned argb = src->format.toARGB(src->format.getPixel(sPix));
     format.setPixel(dPix, format.fromARGB(argb));
+    ++mod_cnt;
 }
 
 void gxCanvas::copyPixel(int x, int y, gxCanvas* src, int src_x, int src_y) {

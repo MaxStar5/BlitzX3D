@@ -71,16 +71,8 @@ void AsyncImageLoader::worker() {
 			job = queue.back();
 			queue.pop_back();
 			++inFlight;
+			job->state.store(STATE_DECODING);
 		}
-
-		if (job->state.load() == STATE_CANCELLED) {
-			std::unique_lock<std::mutex> lock(mutex);
-			--inFlight;
-			cv.notify_all();
-			continue;
-		}
-
-		job->state.store(STATE_DECODING);
 
 		int w = 0, h = 0;
 		FIBITMAP* fib;
@@ -92,12 +84,18 @@ void AsyncImageLoader::worker() {
 		std::unique_lock<std::mutex> lock(mutex);
 		if (job->state.load() == STATE_CANCELLED) {
 			--inFlight;
-			if (fib) FreeImage_Unload(fib);
+			if (fib) {
+				std::unique_lock<std::mutex> fim(g_freeimage_mutex);
+				FreeImage_Unload(fib);
+			}
 			cv.notify_all();
 			continue;
 		}
 		if (fib) {
-			if (job->fib32) FreeImage_Unload((FIBITMAP*)job->fib32);
+			if (job->fib32) {
+				std::unique_lock<std::mutex> fim(g_freeimage_mutex);
+				FreeImage_Unload((FIBITMAP*)job->fib32);
+			}
 			job->fib32 = fib;
 			job->w = w;
 			job->h = h;
@@ -113,36 +111,44 @@ void AsyncImageLoader::worker() {
 
 void AsyncImageLoader::wait(const std::shared_ptr<Job>& job) {
 	std::unique_lock<std::mutex> lock(mutex);
-	if (cv.wait_for(lock, std::chrono::seconds(10), [&]() {
-		int s = job->state.load();
-		return s == STATE_DONE || s == STATE_FAILED || s == STATE_CANCELLED;
-	})) return;
 
 	//decode synchronously as fallback to avoid infinite loads
-	for (auto it = queue.begin(); it != queue.end(); ++it) {
-		if (*it == job) { queue.erase(it); break; }
-	}
-	job->state.store(STATE_CANCELLED);
-	lock.unlock();
+	if (job->state.load() == STATE_QUEUED) {
+		for (auto it = queue.begin(); it != queue.end(); ++it) {
+			if (*it == job) { queue.erase(it); break; }
+		}
+		job->state.store(STATE_DECODING);
+		lock.unlock();
 
-	int w = 0, h = 0;
-	FIBITMAP* fib;
-	{
-		std::unique_lock<std::mutex> fim(g_freeimage_mutex);
-		fib = decodeTo32(job->file, &w, &h);
+		int w = 0, h = 0;
+		FIBITMAP* fib;
+		{
+			std::unique_lock<std::mutex> fim(g_freeimage_mutex);
+			fib = decodeTo32(job->file, &w, &h);
+		}
+
+		lock.lock();
+		if (fib) {
+			if (job->fib32) {
+				std::unique_lock<std::mutex> fim(g_freeimage_mutex);
+				FreeImage_Unload((FIBITMAP*)job->fib32);
+			}
+			job->fib32 = fib;
+			job->w = w;
+			job->h = h;
+			job->state.store(STATE_DONE);
+		}
+		else {
+			job->state.store(STATE_FAILED);
+		}
+		cv.notify_all();
+		return;
 	}
 
-	lock.lock();
-	if (fib) {
-		if (job->fib32) FreeImage_Unload((FIBITMAP*)job->fib32);
-		job->fib32 = fib;
-		job->w = w;
-		job->h = h;
-		job->state.store(STATE_DONE);
-	}
-	else {
-		job->state.store(STATE_FAILED);
-	}
+	cv.wait(lock, [&]() {
+		int s = job->state.load();
+		return s == STATE_DONE || s == STATE_FAILED || s == STATE_CANCELLED;
+	});
 }
 
 void AsyncImageLoader::waitAll() {
