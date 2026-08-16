@@ -7,6 +7,7 @@
 #include "update.h"
 
 #include "../imgui/imgui.h"
+#include "../imgui/imgui_internal.h"
 #include "../imgui/backends/imgui_impl_glfw.h"
 #include "../imgui/backends/imgui_impl_opengl3.h"
 #include "../imgui/backends/imgui_impl_opengl3_loader.h"
@@ -300,6 +301,7 @@ void App::frame() {
 
 	if (aboutOpen) {
 		ImGui::Begin("About BlitzX3D", &aboutOpen);
+		ImGui::BringWindowToDisplayFront(ImGui::GetCurrentWindow());
 		ImGui::Text("BlitzX3D IDE");
 		ImGui::Text("Version V1.3.5");
 		ImGui::Separator();
@@ -504,6 +506,7 @@ void App::drawFindReplace() {
 	int flags = ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_AlwaysAutoResize;
 	ImGui::SetNextWindowPos(ImVec2(windowW / 2.0f - 200, 40), ImGuiCond_Appearing);
 	if (ImGui::Begin("Find / Replace", &showFind, flags)) {
+		ImGui::BringWindowToDisplayFront(ImGui::GetCurrentWindow());
 		bool doFind = false, doReplace = false, doReplaceAll = false;static char findBuf[512], replaceBuf[512];
 		strcpy(findBuf, findStr.c_str());
 		ImGui::SetNextItemWidth(300);
@@ -835,6 +838,7 @@ void App::drawCommandLine() {
 	int flags = ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_AlwaysAutoResize;
 	ImGui::SetNextWindowPos(ImVec2(windowW / 2.0f - 220, 60), ImGuiCond_Appearing);
 	if (ImGui::Begin("Command Line", &showCommandLine, flags)) {
+		ImGui::BringWindowToDisplayFront(ImGui::GetCurrentWindow());
 		static char buf[512];
 		strcpy(buf, prefs.cmd_line.c_str());
 		ImGui::SetNextItemWidth(400);

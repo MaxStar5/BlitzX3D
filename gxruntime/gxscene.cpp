@@ -814,7 +814,6 @@ void gxScene::render(gxMesh* mesh, int first_vert, int vert_cnt, int first_tri, 
 				}
 			}
 			currentEffect->end();
-			graphics->resetStreamState();
 		}
 		tris_drawn += tri_cnt;
 		return;
