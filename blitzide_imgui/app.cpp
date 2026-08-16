@@ -37,6 +37,132 @@ namespace fs = std::filesystem;
 
 static App* g_app = nullptr;
 
+static std::string toLower(const std::string& s) {
+	std::string t = s;
+	std::transform(t.begin(), t.end(), t.begin(), [](unsigned char c) { return (char)std::tolower(c); });
+	return t;
+}
+
+static bool startsWithWord(const std::string& s, const std::string& w) {
+	if (s.size() < w.size()) return false;
+	if (s.compare(0, w.size(), w) != 0) return false;
+	if (s.size() == w.size()) return true;
+	return std::isspace((unsigned char)s[w.size()]) != 0;
+}
+
+static void parseBlitzDecl(const std::string& text, std::set<std::string>& names) {
+	std::vector<std::string> parts;
+	int depth = 0;
+	bool inStr = false;
+	std::string cur;
+	for (char c : text) {
+		if (inStr) { if (c == '"') inStr = false; cur += c; continue; }
+		if (c == '"') { inStr = true; cur += c; continue; }
+		if (c == '(' || c == '[' || c == '{') { ++depth; cur += c; continue; }
+		if (c == ')' || c == ']' || c == '}') { if (depth > 0) --depth; cur += c; continue; }
+		if (c == ',' && depth == 0) { parts.push_back(cur); cur.clear(); continue; }
+		cur += c;
+	}
+	if (!cur.empty()) parts.push_back(cur);
+
+	for (const auto& part : parts) {
+		size_t i = 0;
+		while (i < part.size() && (std::isspace((unsigned char)part[i]) || part[i] == ':')) ++i;
+		if (i >= part.size() || !(std::isalpha((unsigned char)part[i]) || part[i] == '_')) continue;
+		size_t start = i;
+		while (i < part.size() && (std::isalnum((unsigned char)part[i]) || part[i] == '_')) ++i;
+		if (i > start) names.insert(part.substr(start, i - start));
+	}
+}
+
+static std::string stripDeclSuffix(const std::string& s) {
+	if (s.empty()) return s;
+	char last = s.back();
+	if (last == '$' || last == '#' || last == '%') return s.substr(0, s.size() - 1);
+	return s;
+}
+
+static std::string stripBOM(const std::string& s) {
+	if (s.size() >= 3 && (unsigned char)s[0] == 0xEF && (unsigned char)s[1] == 0xBB && (unsigned char)s[2] == 0xBF)
+		return s.substr(3);
+	return s;
+}
+
+static std::string normalizePath(const std::string& p) {
+	try { return fs::weakly_canonical(p).string(); }
+	catch (...) { return p; }
+}
+
+static bool fileDefinesFunction(const std::string& path, const std::string& name, int& outLine) {
+	std::ifstream in(path, std::ios::binary);
+	if (!in.good()) return false;
+	std::stringstream ss;
+	ss << in.rdbuf();
+	std::stringstream lines(stripBOM(ss.str()));
+	std::string line;
+	int ln = 0;
+	while (std::getline(lines, line, '\n')) {
+		if (!line.empty() && line.back() == '\r') line.pop_back();
+		size_t lead = line.find_first_not_of(" \t");
+		std::string t = lead == std::string::npos ? "" : toLower(line.substr(lead));
+		if (startsWithWord(t, "function")) {
+			size_t p = line.find_first_of(" \t", lead);
+			std::string fname = p == std::string::npos ? "" : line.substr(p + 1);
+			fname = fname.substr(0, fname.find_first_of(" ("));
+			if (!fname.empty() && stripDeclSuffix(toLower(fname)) == name) {
+				outLine = ln;
+				return true;
+			}
+		}
+		++ln;
+	}
+	return false;
+}
+
+static std::vector<std::string> getIncludePaths(const std::string& path) {
+	std::vector<std::string> result;
+	if (path.empty()) return result;
+	std::ifstream in(path, std::ios::binary);
+	if (!in.good()) return result;
+	std::stringstream ss;
+	ss << in.rdbuf();
+	std::stringstream lines(stripBOM(ss.str()));
+	std::string line;
+	while (std::getline(lines, line, '\n')) {
+		if (!line.empty() && line.back() == '\r') line.pop_back();
+		size_t lead = line.find_first_not_of(" \t");
+		std::string t = lead == std::string::npos ? "" : toLower(line.substr(lead));
+		if (startsWithWord(t, "include")) {
+			size_t q1 = line.find('"');
+			size_t q2 = q1 == std::string::npos ? std::string::npos : line.find('"', q1 + 1);
+			if (q1 != std::string::npos && q2 != std::string::npos) {
+				std::string rel = line.substr(q1 + 1, q2 - q1 - 1);
+				fs::path target(rel);
+				if (target.is_relative())
+					target = fs::path(path).parent_path() / target;
+				if (fs::exists(target)) result.push_back(target.string());
+				else if (fs::exists(rel)) result.push_back(fs::absolute(rel).string());
+			}
+		}
+	}
+	return result;
+}
+
+static std::string findFunctionInIncludes(const std::string& startFile, const std::string& name, std::vector<std::string>& visited, int& outLine) {
+	if (startFile.empty()) return "";
+	std::string key = normalizePath(startFile);
+	if (std::find(visited.begin(), visited.end(), key) != visited.end()) return "";
+	visited.push_back(key);
+
+	if (fileDefinesFunction(startFile, name, outLine)) return startFile;
+
+	for (const auto& inc : getIncludePaths(startFile)) {
+		std::string found = findFunctionInIncludes(inc, name, visited, outLine);
+		if (!found.empty()) return found;
+	}
+	return "";
+}
+
 static void openUrlImpl(const std::string& url) {
 #if defined(_WIN32)
 	ShellExecuteA(nullptr, "open", url.c_str(), nullptr, nullptr, SW_SHOWNORMAL);
@@ -280,7 +406,7 @@ void App::frame() {
 			for (const auto& f : d.funcs) {
 				if (f.kind == 0) custom.insert(f.label);
 			}
-			d.editor.SetLanguageDefinition(makeBlitzLangDef(keywords, funcs, custom));
+			d.editor.SetLanguageDefinition(makeBlitzLangDef(keywords, funcs, custom, d.globals, d.consts));
 		}
 	}
 
@@ -430,6 +556,11 @@ void App::drawEditorPane() {
 	ImVec2 avail = ImGui::GetContentRegionAvail();
 	d->editor.Render(d->name.c_str(), avail, false);
 
+	std::string word;
+	int cline, ccol;
+	if (d->editor.TakeCtrlClick(word, cline, ccol))
+		handleCtrlClick(*d, word, cline, ccol);
+
 	ImGui::End();
 }
 
@@ -443,6 +574,8 @@ void App::applyPalette(Doc& d) {
 	pal[(int)TextEditor::PaletteIndex::Identifier] = col(prefs.rgb_ident);
 	pal[(int)TextEditor::PaletteIndex::KnownIdentifier] = IM_COL32(150, 255, 200, 255);
 	pal[(int)TextEditor::PaletteIndex::PreprocIdentifier] = IM_COL32(255, 200, 120, 255);
+	pal[(int)TextEditor::PaletteIndex::Global] = IM_COL32(196, 160, 255, 255);
+	pal[(int)TextEditor::PaletteIndex::Const] = IM_COL32(235, 205, 255, 255);
 	pal[(int)TextEditor::PaletteIndex::Keyword] = col(prefs.rgb_keyword);
 	pal[(int)TextEditor::PaletteIndex::Comment] = col(prefs.rgb_comment);
 	pal[(int)TextEditor::PaletteIndex::MultiLineComment] = col(prefs.rgb_comment);
@@ -575,21 +708,21 @@ int App::addDoc(const std::string& path) {
 	for (const auto& f : d.funcs) {
 		if (f.kind == 0) custom.insert(f.label);
 	}
-	d.editor.SetLanguageDefinition(makeBlitzLangDef(keywords, funcs, custom));
+	d.editor.SetLanguageDefinition(makeBlitzLangDef(keywords, funcs, custom, d.globals, d.consts));
 	d.modified = false;
 	docs.push_back(std::move(d));
 	currentIndex = (int)docs.size() - 1;
 	return currentIndex;
 }
 
-bool App::openFile(const std::string& path) {
+bool App::openFile(const std::string& path, bool recent) {
 	for (int k = 0; k < (int)docs.size(); ++k) {
 		if (docs[k].path == path) { currentIndex = k; return true; }
 	}
 	fs::path p(path);
 	if (!fs::exists(p)) return false;
 	addDoc(path);
-	addRecent(path);
+	if (recent) addRecent(path);
 	return true;
 }
 
@@ -644,7 +777,7 @@ bool App::openProject(const std::string& path) {
 		if (!r.empty() && (r[0] == '\\' || r[0] == '/')) r = r.substr(1);
 		std::replace(r.begin(), r.end(), '\\', '/');
 		fs::path f = dir / r;
-		if (fs::exists(f)) openFile(f.string());
+		if (fs::exists(f)) openFile(f.string(), false);
 	};
 
 	if (!mainRel.empty()) openRel(mainRel);
@@ -964,31 +1097,89 @@ void App::parseOutputLine(const std::string& line) {
 
 void App::rebuildFuncList(Doc& d) {
 	d.funcs.clear();
-	std::string text = d.editor.GetText();
+	d.globals.clear();
+	d.consts.clear();
+	std::string text = stripBOM(d.editor.GetText());
 	std::stringstream ss(text);
 	std::string line;
 	int ln = 0;
 	while (std::getline(ss, line, '\n')) {
 		if (!line.empty() && line.back() == '\r') line.pop_back();
-		std::string low = line;
-		std::transform(low.begin(), low.end(), low.begin(), ::tolower);
-		if (low.find("function") == 0) {
-			size_t p = line.find_first_of(" \t");
+		size_t lead = line.find_first_not_of(" \t");
+		std::string t = lead == std::string::npos ? "" : toLower(line.substr(lead));
+		if (startsWithWord(t, "function")) {
+			size_t p = line.find_first_of(" \t", lead);
 			std::string name = p == std::string::npos ? "" : line.substr(p + 1);
 			name = name.substr(0, name.find_first_of(" ("));
+			name = stripDeclSuffix(name);
 			if (name.size()) d.funcs.push_back({ name, ln, 0 });
 		}
-		else if (low.find("type") == 0) {
-			size_t p = line.find_first_of(" \t");
+		else if (startsWithWord(t, "type")) {
+			size_t p = line.find_first_of(" \t", lead);
 			std::string name = p == std::string::npos ? "" : line.substr(p + 1);
 			if (name.size()) d.funcs.push_back({ name, ln, 1 });
 		}
-		else if (line.size() && line[0] == '.') {
-			size_t p = line.find_first_of(" \t");
-			std::string name = p == std::string::npos ? line.substr(1) : line.substr(1, p - 1);
+		else if (startsWithWord(t, "global")) {
+			parseBlitzDecl(line.substr(lead + 6), d.globals);
+		}
+		else if (startsWithWord(t, "const")) {
+			parseBlitzDecl(line.substr(lead + 5), d.consts);
+		}
+		else if (t.size() && t[0] == '.') {
+			size_t p = line.find_first_of(" \t", lead);
+			std::string name = p == std::string::npos ? line.substr(lead + 1) : line.substr(lead + 1, p - lead - 1);
 			if (name.size()) d.funcs.push_back({ name, ln, 2 });
 		}
 		++ln;
+	}
+}
+
+void App::handleCtrlClick(Doc& d, const std::string& word, int line, int column) {
+	(void)column;
+	std::string ln = d.editor.GetLineText(line);
+	size_t lead = ln.find_first_not_of(" \t");
+	std::string t = lead == std::string::npos ? "" : toLower(ln.substr(lead));
+
+	if (startsWithWord(t, "include")) {
+		size_t q1 = ln.find('"');
+		size_t q2 = q1 == std::string::npos ? std::string::npos : ln.find('"', q1 + 1);
+		if (q1 != std::string::npos && q2 != std::string::npos) {
+			std::string rel = ln.substr(q1 + 1, q2 - q1 - 1);
+			fs::path target(rel);
+			if (target.is_relative() && !d.path.empty())
+				target = fs::path(d.path).parent_path() / target;
+			if (fs::exists(target)) { openFile(target.string()); return; }
+			if (fs::exists(rel)) { openFile(rel); return; }
+		}
+	}
+
+	if (word.empty()) return;
+
+	std::string lw = stripDeclSuffix(toLower(word));
+	for (size_t k = 0; k < docs.size(); ++k) {
+		Doc& t = docs[k];
+		for (const auto& f : t.funcs) {
+			if (stripDeclSuffix(toLower(f.label)) == lw) {
+				currentIndex = (int)k;
+				t.editor.SetCursorPosition(TextEditor::Coordinates(f.line, 0));
+				t.editor.SetSelection(TextEditor::Coordinates(f.line, 0),
+					TextEditor::Coordinates(f.line, 0));
+				return;
+			}
+		}
+	}
+
+	int foundLine = 0;
+	std::vector<std::string> visited;
+	std::string foundFile = findFunctionInIncludes(d.path, lw, visited, foundLine);
+	if (!foundFile.empty()) {
+		openFile(foundFile);
+		Doc* nd = currentDoc();
+		if (nd) {
+			nd->editor.SetCursorPosition(TextEditor::Coordinates(foundLine, 0));
+			nd->editor.SetSelection(TextEditor::Coordinates(foundLine, 0),
+				TextEditor::Coordinates(foundLine, 0));
+		}
 	}
 }
 

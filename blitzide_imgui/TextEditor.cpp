@@ -837,6 +837,14 @@ void TextEditor::HandleMouseInputs()
 					mSelectionMode = SelectionMode::Normal;
 				SetSelection(mInteractiveStart, mInteractiveEnd, mSelectionMode);
 
+				if (ctrl)
+				{
+					mCtrlClick = true;
+					mCtrlClickWord = GetWordAt(mState.mCursorPosition);
+					mCtrlClickLine = mState.mCursorPosition.mLine;
+					mCtrlClickColumn = mState.mCursorPosition.mColumn;
+				}
+
 				mLastClick = (float)ImGui::GetTime();
 			}
 			// Mouse left button dragging (=> update selection)
@@ -1010,22 +1018,38 @@ void TextEditor::Render()
 
 			// Render colorized text
 			auto prevColor = line.empty() ? mPalette[(int)PaletteIndex::Default] : GetGlyphColor(line[0]);
+			bool prevUnderline = !line.empty() && line[0].mUnderline;
 			ImVec2 bufferOffset;
+
+			auto flushLineBuffer = [&]() {
+				if (mLineBuffer.empty()) return;
+				const ImVec2 newOffset(textScreenPos.x + bufferOffset.x, textScreenPos.y + bufferOffset.y);
+				drawList->AddText(newOffset, prevColor, mLineBuffer.c_str());
+				auto textSize = ImGui::GetFont()->CalcTextSizeA(ImGui::GetFontSize(), FLT_MAX, -1.0f, mLineBuffer.c_str(), nullptr, nullptr);
+				if (prevUnderline)
+				{
+					float ulY;
+					if (ImFontBaked* baked = ImGui::GetFont()->GetFontBaked(ImGui::GetFontSize()))
+						ulY = textScreenPos.y + baked->Ascent - baked->Descent + 1.0f;
+					else
+						ulY = textScreenPos.y + mCharAdvance.y - 2.0f;
+					drawList->AddLine(ImVec2(newOffset.x, ulY), ImVec2(newOffset.x + textSize.x, ulY), prevColor, 1.0f);
+				}
+				bufferOffset.x += textSize.x;
+				mLineBuffer.clear();
+			};
 
 			for (int i = 0; i < line.size();)
 			{
 				auto& glyph = line[i];
 				auto color = GetGlyphColor(glyph);
+				bool underline = glyph.mUnderline;
 
-				if ((color != prevColor || glyph.mChar == '\t' || glyph.mChar == ' ') && !mLineBuffer.empty())
-				{
-					const ImVec2 newOffset(textScreenPos.x + bufferOffset.x, textScreenPos.y + bufferOffset.y);
-					drawList->AddText(newOffset, prevColor, mLineBuffer.c_str());
-					auto textSize = ImGui::GetFont()->CalcTextSizeA(ImGui::GetFontSize(), FLT_MAX, -1.0f, mLineBuffer.c_str(), nullptr, nullptr);
-					bufferOffset.x += textSize.x;
-					mLineBuffer.clear();
-				}
+				if ((color != prevColor || underline != prevUnderline || glyph.mChar == '\t' || glyph.mChar == ' ') && !mLineBuffer.empty())
+					flushLineBuffer();
+
 				prevColor = color;
+				prevUnderline = underline;
 
 				if (glyph.mChar == '\t')
 				{
@@ -1069,12 +1093,7 @@ void TextEditor::Render()
 				++columnNo;
 			}
 
-			if (!mLineBuffer.empty())
-			{
-				const ImVec2 newOffset(textScreenPos.x + bufferOffset.x, textScreenPos.y + bufferOffset.y);
-				drawList->AddText(newOffset, prevColor, mLineBuffer.c_str());
-				mLineBuffer.clear();
-			}
+			flushLineBuffer();
 
 			++lineNo;
 		}
@@ -2015,6 +2034,8 @@ const TextEditor::Palette & TextEditor::GetDarkPalette()
 			0xffaaaaaa, // Identifier
 			0xff9bc64d, // Known identifier
 			0xffc040a0, // Preproc identifier
+			0xffc4a0ff, // Global
+			0xffebcdff, // Const
 			0xff206020, // Comment (single line)
 			0xff406020, // Comment (multi line)
 			0xff101010, // Background
@@ -2043,6 +2064,8 @@ const TextEditor::Palette & TextEditor::GetLightPalette()
 			0xff404040, // Identifier
 			0xff606010, // Known identifier
 			0xffc040a0, // Preproc identifier
+			0xff5a3ca0, // Global
+			0xff8264c8, // Const
 			0xff205020, // Comment (single line)
 			0xff405020, // Comment (multi line)
 			0xffffffff, // Background
@@ -2071,6 +2094,8 @@ const TextEditor::Palette & TextEditor::GetRetroBluePalette()
 			0xff00ffff, // Identifier
 			0xffffffff, // Known identifier
 			0xffff00ff, // Preproc identifier
+			0xffff00ff, // Global
+			0xff00ffff, // Const
 			0xff808080, // Comment (single line)
 			0xff404040, // Comment (multi line)
 			0xff800000, // Background
@@ -2126,6 +2151,25 @@ std::string TextEditor::GetCurrentLineText()const
 		Coordinates(mState.mCursorPosition.mLine, lineLength));
 }
 
+std::string TextEditor::GetLineText(int aLine) const
+{
+	if (aLine < 0 || aLine >= (int)mLines.size()) return "";
+	std::string result;
+	auto& line = mLines[aLine];
+	for (auto& g : line) result.push_back(g.mChar);
+	return result;
+}
+
+bool TextEditor::TakeCtrlClick(std::string& word, int& line, int& column)
+{
+	if (!mCtrlClick) return false;
+	mCtrlClick = false;
+	word = mCtrlClickWord;
+	line = mCtrlClickLine;
+	column = mCtrlClickColumn;
+	return true;
+}
+
 void TextEditor::ProcessInputs()
 {
 }
@@ -2163,6 +2207,7 @@ void TextEditor::ColorizeRange(int aFromLine, int aToLine)
 			auto& col = line[j];
 			buffer[j] = col.mChar;
 			col.mColorIndex = PaletteIndex::Default;
+			col.mUnderline = false;
 		}
 
 		const char * bufferBegin = &buffer.front();
@@ -2228,6 +2273,16 @@ void TextEditor::ColorizeRange(int aFromLine, int aToLine)
 							token_color = PaletteIndex::KnownIdentifier;
 						else if (mLanguageDefinition.mPreprocIdentifiers.count(id) != 0)
 							token_color = PaletteIndex::PreprocIdentifier;
+						else
+						{
+							std::string idn = id;
+							if (!idn.empty() && (idn.back() == '$' || idn.back() == '#' || idn.back() == '%'))
+								idn.pop_back();
+							if (mLanguageDefinition.mGlobals.count(idn) != 0)
+								token_color = PaletteIndex::Global;
+							else if (mLanguageDefinition.mConsts.count(idn) != 0)
+								token_color = PaletteIndex::Const;
+						}
 					}
 					else
 					{
@@ -2237,7 +2292,11 @@ void TextEditor::ColorizeRange(int aFromLine, int aToLine)
 				}
 
 				for (size_t j = 0; j < token_length; ++j)
-					line[(token_begin - bufferBegin) + j].mColorIndex = token_color;
+				{
+					auto& g = line[(token_begin - bufferBegin) + j];
+					g.mColorIndex = token_color;
+					g.mUnderline = token_color == PaletteIndex::Const;
+				}
 
 				first = token_end;
 			}

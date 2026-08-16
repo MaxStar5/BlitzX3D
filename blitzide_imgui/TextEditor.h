@@ -25,6 +25,8 @@ public:
 		Identifier,
 		KnownIdentifier,
 		PreprocIdentifier,
+		Global,
+		Const,
 		Comment,
 		MultiLineComment,
 		Background,
@@ -140,9 +142,10 @@ public:
 		bool mComment : 1;
 		bool mMultiLineComment : 1;
 		bool mPreprocessor : 1;
+		bool mUnderline : 1;
 
 		Glyph(Char aChar, PaletteIndex aColorIndex) : mChar(aChar), mColorIndex(aColorIndex),
-			mComment(false), mMultiLineComment(false), mPreprocessor(false) {}
+			mComment(false), mMultiLineComment(false), mPreprocessor(false), mUnderline(false) {}
 	};
 
 	typedef std::vector<Glyph> Line;
@@ -158,6 +161,8 @@ public:
 		Keywords mKeywords;
 		Identifiers mIdentifiers;
 		Identifiers mPreprocIdentifiers;
+		Keywords mGlobals;
+		Keywords mConsts;
 		std::string mCommentStart, mCommentEnd, mSingleLineComment;
 		char mPreprocChar;
 		bool mAutoIndentation;
@@ -203,6 +208,9 @@ public:
 
 	std::string GetSelectedText() const;
 	std::string GetCurrentLineText()const;
+	std::string GetLineText(int aLine) const;
+
+	bool TakeCtrlClick(std::string& word, int& line, int& column);
 
 	int GetTotalLines() const { return (int)mLines.size(); }
 	bool IsOverwrite() const { return mOverwrite; }
@@ -386,4 +394,9 @@ private:
 	uint64_t mStartTime;
 
 	float mLastClick;
+
+	bool mCtrlClick = false;
+	std::string mCtrlClickWord;
+	int mCtrlClickLine = 0;
+	int mCtrlClickColumn = 0;
 };

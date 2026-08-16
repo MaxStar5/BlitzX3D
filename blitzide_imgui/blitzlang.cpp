@@ -77,7 +77,7 @@ const std::set<std::string>& builtinBlitzKeywords() {
 	return kws;
 }
 
-TextEditor::LanguageDefinition makeBlitzLangDef(const std::set<std::string>& keywords, const std::set<std::string>& engineFuncs, const std::set<std::string>& customFuncs) {
+TextEditor::LanguageDefinition makeBlitzLangDef(const std::set<std::string>& keywords, const std::set<std::string>& engineFuncs, const std::set<std::string>& customFuncs, const std::set<std::string>& globals, const std::set<std::string>& consts) {
 	TextEditor::LanguageDefinition langDef;
 
 	langDef.mName = "Blitz";
@@ -110,6 +110,18 @@ TextEditor::LanguageDefinition makeBlitzLangDef(const std::set<std::string>& key
 		TextEditor::Identifier id;
 		id.mDeclaration = "Function";
 		langDef.mPreprocIdentifiers.insert(std::make_pair(t, id));
+	}
+
+	for (const auto& g : globals) {
+		std::string t = g;
+		std::transform(t.begin(), t.end(), t.begin(), [](unsigned char c) { return std::toupper(c); });
+		langDef.mGlobals.insert(t);
+	}
+
+	for (const auto& c : consts) {
+		std::string t = c;
+		std::transform(t.begin(), t.end(), t.begin(), [](unsigned char c) { return std::toupper(c); });
+		langDef.mConsts.insert(t);
 	}
 
 	langDef.mTokenize = [](const char* in_begin, const char* in_end, const char*& out_begin, const char*& out_end, TextEditor::PaletteIndex& paletteIndex) -> bool {

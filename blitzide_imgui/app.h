@@ -22,6 +22,8 @@ struct Doc {
 
 	struct FuncItem { std::string label; int line; int kind; };
 	std::vector<FuncItem> funcs;
+	std::set<std::string> globals;
+	std::set<std::string> consts;
 
 	std::string getText() const { return editor.GetText(); }
 };
@@ -81,10 +83,11 @@ private:
 	Doc* doc(int idx) { return idx >= 0 && idx < (int)docs.size() ? &docs[idx] : nullptr; }
 	Doc* currentDoc() { return doc(currentIndex); }
 	int addDoc(const std::string& path);
-	bool openFile(const std::string& path);
+	bool openFile(const std::string& path, bool recent = true);
 	bool openProject(const std::string& path);
 	bool openPath(const std::string& path);
 	void rebuildFuncList(Doc& d);
+	void handleCtrlClick(Doc& d, const std::string& word, int line, int column);
 	void applyPalette(Doc& d);
 
 	void menuBar();
