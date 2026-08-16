@@ -32,6 +32,8 @@ public:
 
 	bool render(const RenderContext& rc);
 
+	static void flushStage();
+
 private:
 	float xhandle, yhandle;
 	float rot, xscale, yscale;

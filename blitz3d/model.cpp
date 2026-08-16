@@ -1,5 +1,6 @@
 #include "std.h"
 #include "model.h"
+#include "sprite.h"
 #include <algorithm>
 
 extern gxScene* gx_scene;
@@ -51,6 +52,7 @@ public:
 			gx_scene->renderSkinned(mesh, fv, vc, ft, tc, bone_data.data(), bone_cnt);
 			return;
 		}
+		Sprite::flushStage();
 		gx_scene->setEffect(gx_graphics->verifyEffect(effect) ? effect : nullptr);
 		gx_scene->render(mesh, fv, vc, ft, tc);
 	}

@@ -17,6 +17,11 @@ static gxMesh* mesh;
 static int mesh_size;
 static std::vector<int> mesh_indices;
 
+static std::vector<Vector> stage_verts;
+static std::vector<char> stage_slots;
+static bool stage_dirty;
+static bool stage_reflected;
+
 static int allocIndex() {
 	if(!mesh_indices.size()) {
 		if(mesh_size) gx_graphics->freeMesh(mesh);
@@ -24,6 +29,8 @@ static int allocIndex() {
 			mesh_indices.push_back(mesh_size++);
 		}
 		mesh = gx_graphics->createMesh(mesh_size * 4, mesh_size * 2, 0);
+		stage_verts.resize(mesh_size * 4);
+		stage_slots.assign(mesh_size, 0);
 	}
 	int n = mesh_indices.back();
 	mesh_indices.pop_back();
@@ -35,6 +42,9 @@ static void freeIndex(int n) {
 	if(mesh_indices.size() != mesh_size) return;
 	gx_graphics->freeMesh(mesh);
 	mesh_indices.clear();
+	stage_verts.clear();
+	stage_slots.clear();
+	stage_dirty = false;
 	mesh_size = 0;
 }
 
@@ -121,22 +131,44 @@ bool Sprite::render(const RenderContext& rc) {
 
 	if(!rc.getWorldFrustum().cull(verts, 4)) return false;
 
-	mesh->lock(false);
-	int fv = mesh_index * 4, ft = mesh_index * 2;
-	mesh->setVertex(fv + 0, &verts[0].x, null, tex_coords0);
-	mesh->setVertex(fv + 1, &verts[1].x, null, tex_coords1);
-	mesh->setVertex(fv + 2, &verts[2].x, null, tex_coords2);
-	mesh->setVertex(fv + 3, &verts[3].x, null, tex_coords3);
-	if(rc.isReflected()) {
-		mesh->setTriangle(ft + 0, 0, 2, 1);
-		mesh->setTriangle(ft + 1, 0, 3, 2);
+	int base = mesh_index * 4;
+	if(base + 3 < (int)stage_verts.size()) {
+		for(int k = 0; k < 4; ++k) stage_verts[base + k] = verts[k];
+		if(base / 4 < (int)stage_slots.size()) stage_slots[base / 4] = 1;
+		stage_reflected = rc.isReflected();
+		stage_dirty = true;
 	}
-	else {
-		mesh->setTriangle(ft + 0, 0, 1, 2);
-		mesh->setTriangle(ft + 1, 0, 2, 3);
-	}
-	mesh->unlock();
 
-	enqueue(mesh, fv, 4, ft, 2);
+	enqueue(mesh, base, 4, mesh_index * 2, 2);
 	return false;
+}
+
+void Sprite::flushStage() {
+	if(!stage_dirty) return;
+	stage_dirty = false;
+	if(!mesh || !stage_verts.size() || (int)stage_slots.size() < mesh_size) return;
+
+	mesh->lock(false);
+
+	for(int s = 0; s < mesh_size; ++s) {
+		if(!stage_slots[s]) continue;
+		stage_slots[s] = 0;
+
+		int fv = s * 4, ft = s * 2;
+		const Vector* v = &stage_verts[fv];
+		mesh->setVertex(fv + 0, &v[0].x, null, tex_coords0);
+		mesh->setVertex(fv + 1, &v[1].x, null, tex_coords1);
+		mesh->setVertex(fv + 2, &v[2].x, null, tex_coords2);
+		mesh->setVertex(fv + 3, &v[3].x, null, tex_coords3);
+		if(stage_reflected) {
+			mesh->setTriangle(ft + 0, 0, 2, 1);
+			mesh->setTriangle(ft + 1, 0, 3, 2);
+		}
+		else {
+			mesh->setTriangle(ft + 0, 0, 1, 2);
+			mesh->setTriangle(ft + 1, 0, 2, 3);
+		}
+	}
+
+	mesh->unlock();
 }

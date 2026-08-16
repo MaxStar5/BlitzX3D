@@ -391,18 +391,6 @@ void bbRenderWorld(float tween) {
 #endif
 }
 
-static void collectEntities(Entity* e, std::vector<Entity*>& out) {
-	out.push_back(e);
-	for (Entity* child = e->children(); child; child = child->successor())
-		collectEntities(child, out);
-}
-
-static void setVisibleRecursive(Entity* e, bool vis) {
-	e->setVisible(vis);
-	for (Entity* child = e->children(); child; child = child->successor())
-		setVisibleRecursive(child, vis);
-}
-
 void bbRenderEntity(Entity* e, Camera* cam, float tween) {
 	if (!gx_scene) {
 		ErrorLog("RenderEntity", MultiLang::graphics_not_set);
@@ -417,27 +405,9 @@ void bbRenderEntity(Entity* e, Camera* cam, float tween) {
 		return;
 	}
 
-	std::vector<Entity*> allEntities;
-	for (Entity* root = Entity::orphans(); root; root = root->successor()) {
-		collectEntities(root, allEntities);
-	}
-
-	std::vector<bool> visibility(allEntities.size());
-	for (size_t i = 0; i < allEntities.size(); ++i) {
-		visibility[i] = allEntities[i]->visible();
-		allEntities[i]->setVisible(false);
-	}
-
-	setVisibleRecursive(e, true);
-
 	extern World* world;
 	if (world) {
-		world->capture();
-		world->renderEntity(cam, tween);
-	}
-
-	for (size_t i = 0; i < allEntities.size(); ++i) {
-		allEntities[i]->setVisible(visibility[i]);
+		world->renderEntity(cam, e, tween);
 	}
 }
 

@@ -499,6 +499,39 @@ void World::renderEntity(Camera* cam, float tween) {
 	gx_scene->end();
 }
 
+void World::renderEntity(Camera* cam, Entity* target, float tween) {
+	ord_mods.clear();
+	unord_mods.clear();
+
+	_visible.clear();
+	_lights.clear();
+	_mirrors.clear();
+	_listeners.clear();
+
+	if (target) target->enumVisible(_visible);
+
+	for (Object* o : _visible) {
+		if (!o->beginRender(tween)) continue;
+		if (Light* t = o->getLight())    _lights.push_back(t->getGxLight());
+		else if (Mirror* t = o->getMirror())   _mirrors.push_back(t);
+		else if (Model* t = o->getModel()) {
+			if (t->getOrder()) ord_que.push(t);
+			else               unord_mods.push_back(t);
+		}
+	}
+
+	while (!ord_que.empty()) { ord_mods.push_back(ord_que.top()); ord_que.pop(); }
+
+	if (!gx_scene->begin(_lights)) return;
+
+	if (cam->beginRenderFrame()) {
+		for (Mirror* mir : _mirrors) render(cam, mir);
+		render(cam, nullptr);
+	}
+
+	gx_scene->end();
+}
+
 void World::flushTransparent() {
 	std::sort(transparents.begin(), transparents.end(), [](const Model* a, const Model* b) {
 			float da = cam_tform.v.distance(a->getRenderTform().v);
