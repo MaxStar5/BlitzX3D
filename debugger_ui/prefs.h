@@ -17,6 +17,8 @@ public:
 	std::string font_debug = "consolas";
 	int font_debug_height = 14;
 
+	std::string theme = "Classic Dark";
+	std::string configDir;
 	std::string homeDir;
 
 	void open();

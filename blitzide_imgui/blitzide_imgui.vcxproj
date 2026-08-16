@@ -160,6 +160,7 @@
     <ClCompile Include="blitzlang.cpp" />
     <ClCompile Include="filedialog.cpp" />
     <ClCompile Include="TextEditor.cpp" />
+    <ClCompile Include="..\theme.cpp" />
     <ClCompile Include="..\imgui\imgui.cpp" />
     <ClCompile Include="..\imgui\imgui_draw.cpp" />
     <ClCompile Include="..\imgui\imgui_tables.cpp" />
@@ -198,6 +199,7 @@
     <ClInclude Include="filedialog.h" />
     <ClInclude Include="TextEditor.h" />
     <ClInclude Include="update.h" />
+    <ClInclude Include="..\theme.h" />
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="blitzide_imgui.rc" />

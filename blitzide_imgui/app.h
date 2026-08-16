@@ -98,6 +98,8 @@ private:
 	void drawFindReplace();
 	void drawMenus();
 	void drawCommandLine();
+	void drawStylize();
+	void drawPaneBackground();
 
 	void initKeywords();
 
@@ -139,6 +141,8 @@ private:
 
 	bool showCommandLine = false;
 	bool updateOpen = false;
+
+	bool showStylize = false;
 
 	bool aboutOpen = false;
 	bool quitting = false;

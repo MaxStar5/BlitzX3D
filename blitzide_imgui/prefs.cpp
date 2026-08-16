@@ -1,5 +1,6 @@
 #include "prefs.h"
 
+#include "../theme.h"
 #include "../inipp/inipp.h"
 
 #include <cstdio>
@@ -46,6 +47,31 @@ static std::string resolveHomeDir() {
 	return h;
 }
 
+static std::string resolveConfigDir() {
+#if defined(_WIN32)
+	const char* ad = std::getenv("APPDATA");
+	if (ad && *ad) {
+		std::string dir = std::string(ad) + "/BlitzX3D";
+		std::filesystem::create_directories(dir);
+		return dir;
+	}
+	const char* ud = std::getenv("USERPROFILE");
+	if (ud && *ud) {
+		std::string dir = std::string(ud) + "/AppData/Roaming/BlitzX3D";
+		std::filesystem::create_directories(dir);
+		return dir;
+	}
+#else
+	const char* h = std::getenv("HOME");
+	if (h && *h) {
+		std::string dir = std::string(h) + "/.blitzx3d";
+		std::filesystem::create_directories(dir);
+		return dir;
+	}
+#endif
+	return prefs.homeDir + "/cfg";
+}
+
 static void parseColor(const std::string& s, int* rgb) {
 	rgb[0] = rgb[1] = rgb[2] = 0;
 	sscanf(s.c_str(), "%d %d %d", &rgb[0], &rgb[1], &rgb[2]);
@@ -61,14 +87,30 @@ static std::string boolToString(bool value) {
 	return value ? "true" : "false";
 }
 
+static void migrateLegacyConfig() {
+	if (prefs.homeDir.empty() || prefs.configDir == prefs.homeDir + "/cfg") return;
+	for (const char* name : { "blitzide.ini", "imgui.ini", "themes.ini" }) {
+		std::filesystem::path src = std::filesystem::path(prefs.homeDir) / "cfg" / name;
+		std::filesystem::path dst = std::filesystem::path(prefs.configDir) / name;
+		if (!std::filesystem::exists(src)) continue;
+		if (std::filesystem::exists(dst)) continue;
+		std::error_code ec;
+		std::filesystem::copy_file(src, dst, std::filesystem::copy_options::none, ec);
+	}
+}
+
 void Prefs::open() {
 	homeDir = resolveHomeDir();
+	configDir = resolveConfigDir();
+
+	migrateLegacyConfig();
+
 	if (homeDir.empty()) {
 		std::fprintf(stderr, "blitzpath environment variable not found!\n");
 		return;
 	}
 
-	std::ifstream in((homeDir + "/cfg/blitzide.ini").c_str(), std::ios::in);
+	std::ifstream in((configDir + "/blitzide.ini").c_str(), std::ios::in);
 	if (!in.good()) return;
 	in.seekg(0, std::ios::end);
 	if (in.tellg() == 0) { in.close(); return; }
@@ -114,6 +156,10 @@ void Prefs::open() {
 	inipp::get_value(ini.sections["EDITOR"], "ToolbarImage", img_toolbar);
 	inipp::get_value(ini.sections["EDITOR"], "NoBackup", noBackup);
 
+	inipp::get_value(ini.sections["UI"], "Theme", theme);
+	inipp::get_value(ini.sections["UI"], "Rounding", ui_rounding);
+	inipp::get_value(ini.sections["UI"], "Alpha", ui_alpha);
+
 	inipp::get_value(ini.sections["UPDATE"], "IgnoreVersion", ignore_version_update);
 
 	std::string recentFile;
@@ -130,11 +176,14 @@ void Prefs::open() {
 		}
 		if (!dup) recentFiles.push_back(recentFile);
 	}
+
+	themeLoadUserThemes(configDir + "/themes.ini");
 }
 
 void Prefs::close() {
-	if (homeDir.empty()) return;
-	std::fstream out((homeDir + "/cfg/blitzide.ini").c_str(), std::ios::out | std::ios::trunc);
+	if (configDir.empty()) return;
+	themeSaveUserThemes(configDir + "/themes.ini");
+	std::fstream out((configDir + "/blitzide.ini").c_str(), std::ios::out | std::ios::trunc);
 	if (!out.good()) return;
 
 	inipp::Ini<char> ini;
@@ -175,6 +224,11 @@ void Prefs::close() {
 	editorSection.insert(std::make_pair("BackupCount", std::to_string(edit_backup)));
 	editorSection.insert(std::make_pair("ToolbarImage", img_toolbar));
 	editorSection.insert(std::make_pair("NoBackup", boolToString(noBackup)));
+
+	auto& uiSection = ini.sections["UI"];
+	uiSection.insert(std::make_pair("Theme", theme));
+	uiSection.insert(std::make_pair("Rounding", std::to_string(ui_rounding)));
+	uiSection.insert(std::make_pair("Alpha", std::to_string(ui_alpha)));
 
 	auto& updateSection = ini.sections["UPDATE"];
 	updateSection.insert(std::make_pair("IgnoreVersion", ignore_version_update));

@@ -89,6 +89,7 @@
     <ClCompile Include="sourcefile.cpp" />
     <ClCompile Include="TextEditor.cpp" />
     <ClCompile Include="blitzlang.cpp" />
+    <ClCompile Include="..\theme.cpp" />
     <ClCompile Include="..\imgui\imgui.cpp" />
     <ClCompile Include="..\imgui\imgui_draw.cpp" />
     <ClCompile Include="..\imgui\imgui_tables.cpp" />
@@ -125,6 +126,7 @@
     <ClInclude Include="stdafx.h" />
     <ClInclude Include="TextEditor.h" />
     <ClInclude Include="blitzlang.h" />
+    <ClInclude Include="..\theme.h" />
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="debugger_ui.rc" />

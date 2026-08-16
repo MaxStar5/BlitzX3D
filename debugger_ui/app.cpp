@@ -2,6 +2,7 @@
 #include "app.h"
 #include "prefs.h"
 
+#include "../theme.h"
 #include "../imgui/imgui.h"
 #include "../imgui/backends/imgui_impl_glfw.h"
 #include "../imgui/backends/imgui_impl_opengl3.h"
@@ -15,71 +16,6 @@ App* g_app = nullptr;
 
 static void glfw_error_callback(int error, const char* description) {
 	fprintf(stderr, "Debugger UI GLFW Error %d: %s\n", error, description);
-}
-
-static void applyDarkStyle() {
-	ImGuiStyle& s = ImGui::GetStyle();
-	s.WindowRounding = 0.0f;
-	s.FrameRounding = 0.0f;
-	s.ChildRounding = 0.0f;
-	s.PopupRounding = 0.0f;
-	s.ScrollbarRounding = 0.0f;
-	s.TabRounding = 0.0f;
-	s.GrabRounding = 0.0f;
-	s.WindowBorderSize = 1.0f;
-	s.FrameBorderSize = 0.0f;
-	s.TabBorderSize = 0.0f;
-	s.WindowPadding = ImVec2(6, 6);
-	s.FramePadding = ImVec2(6, 4);
-	s.ItemSpacing = ImVec2(6, 5);
-	s.ItemInnerSpacing = ImVec2(6, 5);
-	s.IndentSpacing = 20.0f;
-	s.ScrollbarSize = 14.0f;
-
-	ImVec4* c = s.Colors;
-	auto col = [](float r, float g, float b, float a = 1.0f) { return ImVec4(r / 255.0f, g / 255.0f, b / 255.0f, a); };
-	c[ImGuiCol_Text] = col(220, 220, 220);
-	c[ImGuiCol_TextDisabled] = col(120, 120, 120);
-	c[ImGuiCol_WindowBg] = col(32, 32, 36);
-	c[ImGuiCol_ChildBg] = col(28, 28, 31);
-	c[ImGuiCol_PopupBg] = col(32, 32, 36);
-	c[ImGuiCol_Border] = col(58, 58, 64);
-	c[ImGuiCol_BorderShadow] = col(0, 0, 0, 0);
-	c[ImGuiCol_FrameBg] = col(24, 24, 27);
-	c[ImGuiCol_FrameBgHovered] = col(44, 44, 50);
-	c[ImGuiCol_FrameBgActive] = col(54, 54, 60);
-	c[ImGuiCol_TitleBg] = col(24, 24, 27);
-	c[ImGuiCol_TitleBgActive] = col(38, 38, 43);
-	c[ImGuiCol_TitleBgCollapsed] = col(24, 24, 27);
-	c[ImGuiCol_MenuBarBg] = col(28, 28, 31);
-	c[ImGuiCol_ScrollbarBg] = col(24, 24, 27);
-	c[ImGuiCol_ScrollbarGrab] = col(64, 64, 70);
-	c[ImGuiCol_ScrollbarGrabHovered] = col(80, 80, 88);
-	c[ImGuiCol_ScrollbarGrabActive] = col(95, 95, 104);
-	c[ImGuiCol_CheckMark] = col(120, 190, 240);
-	c[ImGuiCol_SliderGrab] = col(100, 100, 108);
-	c[ImGuiCol_SliderGrabActive] = col(120, 120, 130);
-	c[ImGuiCol_Button] = col(46, 46, 52);
-	c[ImGuiCol_ButtonHovered] = col(66, 66, 74);
-	c[ImGuiCol_ButtonActive] = col(80, 80, 90);
-	c[ImGuiCol_Header] = col(44, 44, 50);
-	c[ImGuiCol_HeaderHovered] = col(56, 56, 64);
-	c[ImGuiCol_HeaderActive] = col(66, 66, 74);
-	c[ImGuiCol_Separator] = col(58, 58, 64);
-	c[ImGuiCol_SeparatorHovered] = col(80, 80, 90);
-	c[ImGuiCol_SeparatorActive] = col(100, 100, 112);
-	c[ImGuiCol_ResizeGrip] = col(58, 58, 64);
-	c[ImGuiCol_ResizeGripHovered] = col(80, 80, 90);
-	c[ImGuiCol_ResizeGripActive] = col(100, 100, 112);
-	c[ImGuiCol_Tab] = col(36, 36, 40);
-	c[ImGuiCol_TabHovered] = col(56, 56, 64);
-	c[ImGuiCol_TabSelected] = col(46, 46, 52);
-	c[ImGuiCol_TabDimmed] = col(30, 30, 34);
-	c[ImGuiCol_TabDimmedSelected] = col(40, 40, 45);
-	c[ImGuiCol_TabSelectedOverline] = col(120, 190, 240);
-	c[ImGuiCol_TextSelectedBg] = col(60, 90, 120);
-	c[ImGuiCol_NavHighlight] = col(120, 190, 240);
-	c[ImGuiCol_NavWindowingHighlight] = col(200, 200, 220);
 }
 
 static ImU32 flameColor(const std::string& name) {
@@ -152,11 +88,11 @@ bool App::init(int pid) {
 	ImGui::CreateContext();
 	ImGuiIO& io = ImGui::GetIO();
 	io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
-	if (!prefs.homeDir.empty()) {
-		io.IniFilename = _strdup((prefs.homeDir + "/cfg/imgui_debugger.ini").c_str());
+	if (!prefs.configDir.empty()) {
+		io.IniFilename = _strdup((prefs.configDir + "/imgui_debugger.ini").c_str());
 	}
 
-	applyDarkStyle();
+	themeApplyStyle(prefs.theme, 0.0f, 1.0f);
 	ImGui_ImplGlfw_InitForOpenGL(window, true);
 	ImGui_ImplOpenGL3_Init("#version 130");
 
@@ -353,7 +289,8 @@ void App::frame() {
 	int fbw = 0, fbh = 0;
 	glfwGetFramebufferSize(window, &fbw, &fbh);
 	glViewport(0, 0, fbw, fbh);
-	glClearColor(0.11f, 0.11f, 0.13f, 1.0f);
+	const ImVec4& bgc = ImGui::GetStyle().Colors[ImGuiCol_WindowBg];
+	glClearColor(bgc.x, bgc.y, bgc.z, 1.0f);
 	glClear(GL_COLOR_BUFFER_BIT);
 	ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
 	glfwSwapBuffers(window);

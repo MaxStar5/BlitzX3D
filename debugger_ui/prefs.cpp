@@ -1,5 +1,6 @@
 #include "prefs.h"
 
+#include "../theme.h"
 #include "../inipp/inipp.h"
 
 #include <cstdio>
@@ -30,6 +31,34 @@ static std::string resolveHomeDir() {
 	return home.string();
 }
 
+static std::string resolveConfigDir() {
+	const char* ad = std::getenv("APPDATA");
+	if (ad && *ad) {
+		std::string dir = std::string(ad) + "/BlitzX3D";
+		std::filesystem::create_directories(dir);
+		return dir;
+	}
+	const char* ud = std::getenv("USERPROFILE");
+	if (ud && *ud) {
+		std::string dir = std::string(ud) + "/AppData/Roaming/BlitzX3D";
+		std::filesystem::create_directories(dir);
+		return dir;
+	}
+	return prefs.homeDir + "/cfg";
+}
+
+static void migrateLegacyConfig() {
+	if (prefs.homeDir.empty() || prefs.configDir == prefs.homeDir + "/cfg") return;
+	for (const char* name : { "blitzide.ini", "imgui.ini", "themes.ini" }) {
+		std::filesystem::path src = std::filesystem::path(prefs.homeDir) / "cfg" / name;
+		std::filesystem::path dst = std::filesystem::path(prefs.configDir) / name;
+		if (!std::filesystem::exists(src)) continue;
+		if (std::filesystem::exists(dst)) continue;
+		std::error_code ec;
+		std::filesystem::copy_file(src, dst, std::filesystem::copy_options::none, ec);
+	}
+}
+
 static void parseColor(const std::string& s, int* rgb) {
 	rgb[0] = rgb[1] = rgb[2] = 0;
 	sscanf(s.c_str(), "%d %d %d", &rgb[0], &rgb[1], &rgb[2]);
@@ -37,9 +66,13 @@ static void parseColor(const std::string& s, int* rgb) {
 
 void Prefs::open() {
 	homeDir = resolveHomeDir();
+	configDir = resolveConfigDir();
+
+	migrateLegacyConfig();
+
 	if (homeDir.empty()) return;
 
-	std::ifstream in((homeDir + "/cfg/blitzide.ini").c_str(), std::ios::in);
+	std::ifstream in((configDir + "/blitzide.ini").c_str(), std::ios::in);
 	if (!in.good()) return;
 	in.seekg(0, std::ios::end);
 	if (in.tellg() == 0) { in.close(); return; }
@@ -52,6 +85,8 @@ void Prefs::open() {
 	inipp::get_value(ini.sections["FONTS"], "DebugFont", font_debug);
 	inipp::get_value(ini.sections["FONTS"], "DebugFontSize", font_debug_height);
 
+	inipp::get_value(ini.sections["UI"], "Theme", theme);
+
 	std::string c;
 	inipp::get_value(ini.sections["COLORS"], "Background", c); parseColor(c, rgb_bkgrnd);
 	inipp::get_value(ini.sections["COLORS"], "String", c); parseColor(c, rgb_string);
@@ -60,4 +95,6 @@ void Prefs::open() {
 	inipp::get_value(ini.sections["COLORS"], "Comment", c); parseColor(c, rgb_comment);
 	inipp::get_value(ini.sections["COLORS"], "Digit", c); parseColor(c, rgb_digit);
 	inipp::get_value(ini.sections["COLORS"], "Default", c); parseColor(c, rgb_default);
+
+	themeLoadUserThemes(configDir + "/themes.ini");
 }

@@ -1,5 +1,6 @@
 #include "app.h"
 
+#include "../theme.h"
 #include "blitzlang.h"
 #include "filedialog.h"
 #include "publish.h"
@@ -192,69 +193,38 @@ static void glfw_error_callback(int error, const char* description) {
 	fprintf(stderr, "GLFW Error %d: %s\n", error, description);
 }
 
-static void applyDarkStyle() {
-	ImGuiStyle& s = ImGui::GetStyle();
-	s.WindowRounding = 0.0f;
-	s.FrameRounding = 0.0f;
-	s.ChildRounding = 0.0f;
-	s.PopupRounding = 0.0f;
-	s.ScrollbarRounding = 0.0f;
-	s.TabRounding = 0.0f;
-	s.GrabRounding = 0.0f;
-	s.WindowBorderSize = 1.0f;
-	s.FrameBorderSize = 0.0f;
-	s.TabBorderSize = 0.0f;
-	s.WindowPadding = ImVec2(6, 6);
-	s.FramePadding = ImVec2(6, 4);
-	s.ItemSpacing = ImVec2(6, 5);
-	s.ItemInnerSpacing = ImVec2(6, 5);
-	s.IndentSpacing = 20.0f;
-	s.ScrollbarSize = 14.0f;
+static ImU32 themeColU32(const ImVec4& c) {
+	return IM_COL32((int)(c.x * 255.0f + 0.5f), (int)(c.y * 255.0f + 0.5f), (int)(c.z * 255.0f + 0.5f), (int)(c.w * 255.0f + 0.5f));
+}
 
-	ImVec4* c = s.Colors;
-	auto col = [](float r, float g, float b, float a = 1.0f) { return ImVec4(r / 255.0f, g / 255.0f, b / 255.0f, a); };
-	c[ImGuiCol_Text] = col(220, 220, 220);
-	c[ImGuiCol_TextDisabled] = col(120, 120, 120);
-	c[ImGuiCol_WindowBg] = col(32, 32, 36);
-	c[ImGuiCol_ChildBg] = col(28, 28, 31);
-	c[ImGuiCol_PopupBg] = col(32, 32, 36);
-	c[ImGuiCol_Border] = col(58, 58, 64);
-	c[ImGuiCol_BorderShadow] = col(0, 0, 0, 0);
-	c[ImGuiCol_FrameBg] = col(24, 24, 27);
-	c[ImGuiCol_FrameBgHovered] = col(44, 44, 50);
-	c[ImGuiCol_FrameBgActive] = col(54, 54, 60);
-	c[ImGuiCol_TitleBg] = col(24, 24, 27);
-	c[ImGuiCol_TitleBgActive] = col(38, 38, 43);
-	c[ImGuiCol_TitleBgCollapsed] = col(24, 24, 27);
-	c[ImGuiCol_MenuBarBg] = col(28, 28, 31);
-	c[ImGuiCol_ScrollbarBg] = col(24, 24, 27);
-	c[ImGuiCol_ScrollbarGrab] = col(64, 64, 70);
-	c[ImGuiCol_ScrollbarGrabHovered] = col(80, 80, 88);
-	c[ImGuiCol_ScrollbarGrabActive] = col(95, 95, 104);
-	c[ImGuiCol_CheckMark] = col(120, 190, 240);
-	c[ImGuiCol_SliderGrab] = col(100, 100, 108);
-	c[ImGuiCol_SliderGrabActive] = col(120, 120, 130);
-	c[ImGuiCol_Button] = col(46, 46, 52);
-	c[ImGuiCol_ButtonHovered] = col(66, 66, 74);
-	c[ImGuiCol_ButtonActive] = col(80, 80, 90);
-	c[ImGuiCol_Header] = col(44, 44, 50);
-	c[ImGuiCol_HeaderHovered] = col(56, 56, 64);
-	c[ImGuiCol_HeaderActive] = col(66, 66, 74);
-	c[ImGuiCol_Separator] = col(58, 58, 64);
-	c[ImGuiCol_SeparatorHovered] = col(80, 80, 90);
-	c[ImGuiCol_SeparatorActive] = col(100, 100, 112);
-	c[ImGuiCol_ResizeGrip] = col(58, 58, 64);
-	c[ImGuiCol_ResizeGripHovered] = col(80, 80, 90);
-	c[ImGuiCol_ResizeGripActive] = col(100, 100, 112);
-	c[ImGuiCol_Tab] = col(36, 36, 40);
-	c[ImGuiCol_TabHovered] = col(56, 56, 64);
-	c[ImGuiCol_TabSelected] = col(46, 46, 52);
-	c[ImGuiCol_TabDimmed] = col(30, 30, 34);
-	c[ImGuiCol_TabDimmedSelected] = col(40, 40, 45);
-	c[ImGuiCol_TabSelectedOverline] = col(120, 190, 240);
-	c[ImGuiCol_TextSelectedBg] = col(60, 90, 120);
-	c[ImGuiCol_NavHighlight] = col(120, 190, 240);
-	c[ImGuiCol_NavWindowingHighlight] = col(200, 200, 220);
+static ImVec4 themeCol3(const int* rgb) {
+	return ImVec4(rgb[0] / 255.0f, rgb[1] / 255.0f, rgb[2] / 255.0f, 1.0f);
+}
+
+static void applyEditorColorsToPrefs(const std::string& name) {
+	int cols[7][3];
+	if (!themeEditorColors(name, cols)) return;
+	memcpy(prefs.rgb_bkgrnd, cols[0], sizeof(prefs.rgb_bkgrnd));
+	memcpy(prefs.rgb_string, cols[1], sizeof(prefs.rgb_string));
+	memcpy(prefs.rgb_ident, cols[2], sizeof(prefs.rgb_ident));
+	memcpy(prefs.rgb_keyword, cols[3], sizeof(prefs.rgb_keyword));
+	memcpy(prefs.rgb_comment, cols[4], sizeof(prefs.rgb_comment));
+	memcpy(prefs.rgb_digit, cols[5], sizeof(prefs.rgb_digit));
+	memcpy(prefs.rgb_default, cols[6], sizeof(prefs.rgb_default));
+}
+
+static void currentEditorColors(int out[7][3]) {
+	memcpy(out[0], prefs.rgb_bkgrnd, sizeof(prefs.rgb_bkgrnd));
+	memcpy(out[1], prefs.rgb_string, sizeof(prefs.rgb_string));
+	memcpy(out[2], prefs.rgb_ident, sizeof(prefs.rgb_ident));
+	memcpy(out[3], prefs.rgb_keyword, sizeof(prefs.rgb_keyword));
+	memcpy(out[4], prefs.rgb_comment, sizeof(prefs.rgb_comment));
+	memcpy(out[5], prefs.rgb_digit, sizeof(prefs.rgb_digit));
+	memcpy(out[6], prefs.rgb_default, sizeof(prefs.rgb_default));
+}
+
+static void applyCurrentTheme() {
+	themeApplyStyle(prefs.theme, (float)prefs.ui_rounding, prefs.ui_alpha);
 }
 
 App::App() {}
@@ -315,11 +285,11 @@ bool App::init(int argc, char* argv[]) {
 	ImGuiIO& io = ImGui::GetIO();
 	io.ConfigFlags |= ImGuiConfigFlags_ViewportsEnable;
 	io.Fonts->AddFontDefaultBitmap();
-	if (!prefs.homeDir.empty()) {
-		io.IniFilename = strdup((prefs.homeDir + "/cfg/imgui.ini").c_str());
+	if (!prefs.configDir.empty()) {
+		io.IniFilename = strdup((prefs.configDir + "/imgui.ini").c_str());
 	}
 
-	applyDarkStyle();
+	applyCurrentTheme();
 	ImGui_ImplGlfw_InitForOpenGL(window, true);
 	ImGui_ImplOpenGL3_Init("#version 130");
 
@@ -422,6 +392,8 @@ void App::frame() {
 
 	menuBar();
 
+	drawPaneBackground();
+
 	drawEditorPane();
 
 	if (showFuncList) drawFuncList();
@@ -431,6 +403,8 @@ void App::frame() {
 	drawFindReplace();
 
 	drawCommandLine();
+
+	drawStylize();
 
 	drawUpdate();
 	drawUpdateDialog();
@@ -450,7 +424,8 @@ void App::frame() {
 	int fbw = 0, fbh = 0;
 	glfwGetFramebufferSize(window, &fbw, &fbh);
 	glViewport(0, 0, fbw, fbh);
-	glClearColor(0.11f, 0.11f, 0.13f, 1.0f);
+	const ImVec4& bgc = ImGui::GetStyle().Colors[ImGuiCol_WindowBg];
+	glClearColor(bgc.x, bgc.y, bgc.z, 1.0f);
 	glClear(GL_COLOR_BUFFER_BIT);
 
 	ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
@@ -504,6 +479,14 @@ void App::menuBar() {
 		ImGui::Separator();
 		if (ImGui::MenuItem("Find / Replace...", "Ctrl+F")) editFind();
 		if (ImGui::MenuItem("Find Next", "F3")) editFindNext();
+		ImGui::EndMenu();
+	}
+
+	if (ImGui::BeginMenu("View")) {
+		if (ImGui::MenuItem("Functions Panel", nullptr, &showFuncList)) {}
+		if (ImGui::MenuItem("Output Panel", nullptr, &showOutput)) {}
+		ImGui::Separator();
+		if (ImGui::MenuItem("Stylization...")) showStylize = true;
 		ImGui::EndMenu();
 	}
 
@@ -1042,6 +1025,151 @@ void App::drawCommandLine() {
 		if (ImGui::Button("Cancel")) showCommandLine = false;
 	}
 	ImGui::End();
+}
+
+void App::drawStylize() {
+	if (!showStylize) return;
+	int flags = ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_AlwaysAutoResize;
+	ImGui::SetNextWindowPos(ImVec2(windowW / 2.0f - 260, 60), ImGuiCond_Appearing);
+	if (ImGui::Begin("Stylization", &showStylize, flags)) {
+		ImGui::BringWindowToDisplayFront(ImGui::GetCurrentWindow());
+		if (ImGui::BeginTabBar("##stylize_tabs")) {
+
+			if (ImGui::BeginTabItem("Themes")) {
+				ImGui::TextUnformatted("Premade themes");
+				ImGui::Separator();
+				auto themeRow = [&](const char* name, const ImVec4& bg, const ImVec4& accent, bool deletable) {
+					ImGui::PushID(name);
+					ImVec2 p = ImGui::GetCursorScreenPos();
+					ImVec2 sw = ImVec2(22, 14);
+					ImDrawList* dl = ImGui::GetWindowDrawList();
+					dl->AddRectFilled(p, ImVec2(p.x + sw.x, p.y + sw.y), themeColU32(bg));
+					dl->AddRectFilled(ImVec2(p.x + sw.x * 0.6f, p.y), ImVec2(p.x + sw.x, p.y + sw.y * 0.5f), themeColU32(accent));
+					dl->AddRect(ImVec2(p.x - 1, p.y - 1), ImVec2(p.x + sw.x + 1, p.y + sw.y + 1), IM_COL32(255, 255, 255, 40));
+					ImGui::Dummy(sw);
+					ImGui::SameLine();
+					bool clicked = ImGui::Selectable(name, prefs.theme == name);
+					if (deletable) {
+						ImGui::SameLine();
+						if (ImGui::SmallButton("-")) {
+							themeRemoveUserTheme(name);
+							if (prefs.theme == name) {
+								prefs.theme = themeBuiltin(0)->name;
+								applyCurrentTheme();
+							}
+						}
+					}
+					ImGui::PopID();
+					return clicked;
+				};
+
+				for (int i = 0; i < themeBuiltinCount(); ++i) {
+					const ThemeSpec& t = *themeBuiltin(i);
+					if (themeRow(t.name.c_str(), t.bg, t.accent, false)) {
+						prefs.theme = t.name;
+						applyEditorColorsToPrefs(t.name);
+						applyCurrentTheme();
+						prefs.close();
+					}
+				}
+				ImGui::Separator();
+				ImGui::TextUnformatted("User themes");
+				for (int i = 0; i < themeUserCount(); ++i) {
+					const UserTheme& t = *themeUser(i);
+					if (themeRow(t.name.c_str(), themeCol3(t.bg), themeCol3(t.accent), true)) {
+						prefs.theme = t.name;
+						applyEditorColorsToPrefs(t.name);
+						applyCurrentTheme();
+						prefs.close();
+					}
+				}
+				if (themeUserCount() == 0) ImGui::TextDisabled("(none)");
+				ImGui::Separator();
+				static char themeNameBuf[128] = "";
+				ImGui::SetNextItemWidth(280);
+				ImGui::InputText("Name", themeNameBuf, sizeof(themeNameBuf));
+				ImGui::SameLine();
+				if (ImGui::Button("Save current as theme")) {
+					std::string name = themeNameBuf;
+					if (!name.empty()) {
+						int cols[7][3];
+						currentEditorColors(cols);
+						UserTheme t;
+						t.name = name;
+						themeCapture(t, cols);
+						themeAddUserTheme(t);
+						prefs.theme = name;
+						applyEditorColorsToPrefs(name);
+						applyCurrentTheme();
+						prefs.close();
+						themeNameBuf[0] = 0;
+					}
+				}
+				ImGui::EndTabItem();
+			}
+
+			if (ImGui::BeginTabItem("Syntax Colors")) {
+				bool deactivated = false;
+				auto pick = [&](const char* label, int rgb[3]) {
+					float f[3] = { rgb[0] / 255.0f, rgb[1] / 255.0f, rgb[2] / 255.0f };
+					if (ImGui::ColorEdit3(label, f)) {
+						rgb[0] = (int)(f[0] * 255.0f + 0.5f);
+						rgb[1] = (int)(f[1] * 255.0f + 0.5f);
+						rgb[2] = (int)(f[2] * 255.0f + 0.5f);
+						if (ImGui::IsItemDeactivatedAfterEdit()) deactivated = true;
+					}
+				};
+				pick("Background", prefs.rgb_bkgrnd);
+				pick("String", prefs.rgb_string);
+				pick("Identifier", prefs.rgb_ident);
+				pick("Keyword", prefs.rgb_keyword);
+				pick("Comment", prefs.rgb_comment);
+				pick("Number", prefs.rgb_digit);
+				pick("Default", prefs.rgb_default);
+				if (deactivated) prefs.close();
+				ImGui::EndTabItem();
+			}
+
+			if (ImGui::BeginTabItem("Interface")) {
+				bool changed = false;
+				changed |= ImGui::SliderInt("Corner rounding", &prefs.ui_rounding, 0, 12);
+				bool roundingDone = ImGui::IsItemDeactivatedAfterEdit();
+				changed |= ImGui::SliderFloat("Opacity", &prefs.ui_alpha, 0.40f, 1.00f, "%.2f");
+				bool alphaDone = ImGui::IsItemDeactivatedAfterEdit();
+				if (changed) {
+					applyCurrentTheme();
+				}
+				if (roundingDone || alphaDone) prefs.close();
+				ImGui::Separator();
+				if (ImGui::Button("Reset to defaults")) {
+					prefs.ui_rounding = 0;
+					prefs.ui_alpha = 1.0f;
+					applyCurrentTheme();
+					prefs.close();
+				}
+				ImGui::EndTabItem();
+			}
+
+			ImGui::EndTabBar();
+		}
+	}
+	ImGui::End();
+}
+
+void App::drawPaneBackground() {
+	ImGuiViewport* vp = ImGui::GetMainViewport();
+	float menuH = ImGui::GetFrameHeight();
+	ImGui::PushStyleColor(ImGuiCol_WindowBg, ImGui::GetStyle().Colors[ImGuiCol_WindowBg]);
+	ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
+	ImGui::SetNextWindowPos(ImVec2(vp->WorkPos.x, vp->WorkPos.y + menuH), ImGuiCond_Always);
+	ImGui::SetNextWindowSize(ImVec2(vp->WorkSize.x, vp->WorkSize.y - menuH), ImGuiCond_Always);
+	ImGui::Begin("##panebackground", nullptr,
+		ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoInputs | ImGuiWindowFlags_NoMove |
+		ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse |
+		ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoBringToFrontOnFocus | ImGuiWindowFlags_NoFocusOnAppearing);
+	ImGui::End();
+	ImGui::PopStyleVar();
+	ImGui::PopStyleColor();
 }
 
 void App::build(bool exec, bool publish) {

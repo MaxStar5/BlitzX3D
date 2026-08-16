@@ -43,6 +43,7 @@ add_executable(blitzide_imgui
   update.cpp
   blitzlang.cpp
   filedialog.cpp
+  ../theme.cpp
 )
 
 target_include_directories(blitzide_imgui PRIVATE
@@ -60,7 +61,7 @@ target_link_libraries(blitzide_imgui PRIVATE
 )
 
 if(WIN32)
-  target_link_libraries(blitzide_imgui PRIVATE opengl32 comdlg32)
+  target_link_libraries(blitzide_imgui PRIVATE opengl32 comdlg32 wininet)
   target_compile_definitions(blitzide_imgui PRIVATE _CRT_SECURE_NO_WARNINGS)
 else()
   find_package(OpenGL REQUIRED)

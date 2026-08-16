@@ -35,6 +35,12 @@ struct Prefs {
 	bool noBackup = false;
 	std::string img_toolbar = "toolbar.bmp";
 
+	std::string theme = "Classic Dark";
+	int ui_rounding = 0;
+	float ui_alpha = 1.0f;
+
+	std::string configDir;
+
 	std::vector<std::string> recentFiles;
 	std::string ignore_version_update;
 
