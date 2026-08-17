@@ -23,6 +23,7 @@
 #include "../blitz3d/cachedtexture.h"
 #include "../MultiLang/MultiLang.h"
 #include "../gxruntime/gxeffect.h"
+#include "../gxruntime/gxsound.h"
 #include "../blitz3d/scene.h"
 
 //Why is everything static?
@@ -279,8 +280,10 @@ void bbHWMultiTex(int enable) {
 
 void bbGpuSkinning(int enable) {
 	debug3d("GpuSkinning");
+	/*
 	MeshModel::setGpuSkinningEnabled(!!enable);
 	if (enable && gx_graphics) gx_graphics->ensureSkinningShader();
+	*/
 }
 
 void bbWBuffer(int enable) {
@@ -338,14 +341,11 @@ void bbCaptureWorld() {
 	world->capture();
 }
 
-void blitz3d_markFrameEnd() {
-	if (world) world->markFrameEnd();
-}
-
 void bbRenderWorld(float tween) {
 	debug3d("RenderWorld");
 
 	CachedTexture::flushAll();
+	gxSound::flushAll();
 
 	//Should we remove this stuff?
 #ifdef BETA
@@ -395,18 +395,6 @@ void bbRenderWorld(float tween) {
 #endif
 }
 
-static void collectEntities(Entity* e, std::vector<Entity*>& out) {
-	out.push_back(e);
-	for (Entity* child = e->children(); child; child = child->successor())
-		collectEntities(child, out);
-}
-
-static void setVisibleRecursive(Entity* e, bool vis) {
-	e->setVisible(vis);
-	for (Entity* child = e->children(); child; child = child->successor())
-		setVisibleRecursive(child, vis);
-}
-
 void bbRenderEntity(Entity* e, Camera* cam, float tween) {
 	if (!gx_scene) {
 		ErrorLog("RenderEntity", MultiLang::graphics_not_set);
@@ -421,27 +409,9 @@ void bbRenderEntity(Entity* e, Camera* cam, float tween) {
 		return;
 	}
 
-	std::vector<Entity*> allEntities;
-	for (Entity* root = Entity::orphans(); root; root = root->successor()) {
-		collectEntities(root, allEntities);
-	}
-
-	std::vector<bool> visibility(allEntities.size());
-	for (size_t i = 0; i < allEntities.size(); ++i) {
-		visibility[i] = allEntities[i]->visible();
-		allEntities[i]->setVisible(false);
-	}
-
-	setVisibleRecursive(e, true);
-
 	extern World* world;
 	if (world) {
-		world->capture();
-		world->renderEntity(cam, tween);
-	}
-
-	for (size_t i = 0; i < allEntities.size(); ++i) {
-		allEntities[i]->setVisible(visibility[i]);
+		world->renderEntity(cam, e, tween);
 	}
 }
 

@@ -1,0 +1,132 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <Filter Include="ThirdParty">
+      <UniqueIdentifier>{1B3D5F7A-9C2E-4D4F-8E1B-2A3C4D5E6F70}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="ThirdParty\imgui">
+      <UniqueIdentifier>{2C4E6F8B-A3D4-4E5F-9F2C-3B4D5E6F7081}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="ThirdParty\glfw">
+      <UniqueIdentifier>{3D5F7F9C-B4E5-4F60-A03D-4C5E6F708192}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="ThirdParty\texteditor">
+      <UniqueIdentifier>{4E608A0D-C5F6-4A71-B14E-5D6F708192A3}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="ThirdParty\blitzlang">
+      <UniqueIdentifier>{5F719B1E-D6A7-4B82-C25F-6E708192A3B4}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="TextEditor.cpp">
+      <Filter>ThirdParty\texteditor</Filter>
+    </ClCompile>
+    <ClCompile Include="blitzlang.cpp">
+      <Filter>ThirdParty\blitzlang</Filter>
+    </ClCompile>
+    <ClCompile Include="..\imgui\imgui.cpp">
+      <Filter>ThirdParty\imgui</Filter>
+    </ClCompile>
+    <ClCompile Include="..\imgui\imgui_draw.cpp">
+      <Filter>ThirdParty\imgui</Filter>
+    </ClCompile>
+    <ClCompile Include="..\imgui\imgui_tables.cpp">
+      <Filter>ThirdParty\imgui</Filter>
+    </ClCompile>
+    <ClCompile Include="..\imgui\imgui_widgets.cpp">
+      <Filter>ThirdParty\imgui</Filter>
+    </ClCompile>
+    <ClCompile Include="..\imgui\backends\imgui_impl_glfw.cpp">
+      <Filter>ThirdParty\imgui</Filter>
+    </ClCompile>
+    <ClCompile Include="..\imgui\backends\imgui_impl_opengl3.cpp">
+      <Filter>ThirdParty\imgui</Filter>
+    </ClCompile>
+    <ClCompile Include="..\vendor\glfw\src\context.c">
+      <Filter>ThirdParty\glfw</Filter>
+    </ClCompile>
+    <ClCompile Include="..\vendor\glfw\src\init.c">
+      <Filter>ThirdParty\glfw</Filter>
+    </ClCompile>
+    <ClCompile Include="..\vendor\glfw\src\input.c">
+      <Filter>ThirdParty\glfw</Filter>
+    </ClCompile>
+    <ClCompile Include="..\vendor\glfw\src\monitor.c">
+      <Filter>ThirdParty\glfw</Filter>
+    </ClCompile>
+    <ClCompile Include="..\vendor\glfw\src\platform.c">
+      <Filter>ThirdParty\glfw</Filter>
+    </ClCompile>
+    <ClCompile Include="..\vendor\glfw\src\vulkan.c">
+      <Filter>ThirdParty\glfw</Filter>
+    </ClCompile>
+    <ClCompile Include="..\vendor\glfw\src\window.c">
+      <Filter>ThirdParty\glfw</Filter>
+    </ClCompile>
+    <ClCompile Include="..\vendor\glfw\src\egl_context.c">
+      <Filter>ThirdParty\glfw</Filter>
+    </ClCompile>
+    <ClCompile Include="..\vendor\glfw\src\osmesa_context.c">
+      <Filter>ThirdParty\glfw</Filter>
+    </ClCompile>
+    <ClCompile Include="..\vendor\glfw\src\null_init.c">
+      <Filter>ThirdParty\glfw</Filter>
+    </ClCompile>
+    <ClCompile Include="..\vendor\glfw\src\null_monitor.c">
+      <Filter>ThirdParty\glfw</Filter>
+    </ClCompile>
+    <ClCompile Include="..\vendor\glfw\src\null_window.c">
+      <Filter>ThirdParty\glfw</Filter>
+    </ClCompile>
+    <ClCompile Include="..\vendor\glfw\src\null_joystick.c">
+      <Filter>ThirdParty\glfw</Filter>
+    </ClCompile>
+    <ClCompile Include="..\vendor\glfw\src\win32_module.c">
+      <Filter>ThirdParty\glfw</Filter>
+    </ClCompile>
+    <ClCompile Include="..\vendor\glfw\src\win32_time.c">
+      <Filter>ThirdParty\glfw</Filter>
+    </ClCompile>
+    <ClCompile Include="..\vendor\glfw\src\win32_thread.c">
+      <Filter>ThirdParty\glfw</Filter>
+    </ClCompile>
+    <ClCompile Include="..\vendor\glfw\src\win32_init.c">
+      <Filter>ThirdParty\glfw</Filter>
+    </ClCompile>
+    <ClCompile Include="..\vendor\glfw\src\win32_joystick.c">
+      <Filter>ThirdParty\glfw</Filter>
+    </ClCompile>
+    <ClCompile Include="..\vendor\glfw\src\win32_monitor.c">
+      <Filter>ThirdParty\glfw</Filter>
+    </ClCompile>
+    <ClCompile Include="..\vendor\glfw\src\win32_window.c">
+      <Filter>ThirdParty\glfw</Filter>
+    </ClCompile>
+    <ClCompile Include="..\vendor\glfw\src\wgl_context.c">
+      <Filter>ThirdParty\glfw</Filter>
+    </ClCompile>
+    <ClCompile Include="app.cpp" />
+    <ClCompile Include="main.cpp" />
+    <ClCompile Include="prefs.cpp" />
+    <ClCompile Include="sourcefile.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="TextEditor.h">
+      <Filter>ThirdParty\texteditor</Filter>
+    </ClInclude>
+    <ClInclude Include="blitzlang.h">
+      <Filter>ThirdParty\blitzlang</Filter>
+    </ClInclude>
+    <ClInclude Include="app.h" />
+    <ClInclude Include="dbgipc.h" />
+    <ClInclude Include="prefs.h" />
+    <ClInclude Include="sourcefile.h" />
+    <ClInclude Include="stdafx.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <Image Include="x.ico" />
+  </ItemGroup>
+  <ItemGroup>
+    <ResourceCompile Include="debugger_ui.rc" />
+  </ItemGroup>
+</Project>

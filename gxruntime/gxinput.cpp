@@ -217,7 +217,7 @@ static Mouse* createMouse(gxInput* input) {
         }
         dev->Release();
     }
-    return 0;
+    return new Mouse(input, 0);
 }
 
 static Joystick* createJoystick(gxInput* input, LPCDIDEVICEINSTANCE devinst) {
@@ -319,12 +319,11 @@ void gxInput::reset() {
 }
 
 bool gxInput::acquire() {
-    bool m_ok = true, k_ok = true;
-    if (mouse) m_ok = mouse->acquire();
-    if (keyboard) k_ok = keyboard->acquire();
+    bool m_ok = mouse ? mouse->acquire() : false;
+    bool k_ok = keyboard ? keyboard->acquire() : false;
     if (m_ok && k_ok) return true;
-    if (k_ok) keyboard->unacquire();
-    if (m_ok) mouse->unacquire();
+    if (k_ok && keyboard) keyboard->unacquire();
+    if (m_ok && mouse) mouse->unacquire();
     return false;
 }
 

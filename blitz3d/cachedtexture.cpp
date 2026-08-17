@@ -19,7 +19,8 @@ void CachedTexture::setPathMutator(PathMutator m) {
 }
 
 static bool fileExists(const std::string& f) {
-	return GetFileAttributesA(f.c_str()) != INVALID_FILE_ATTRIBUTES;
+	DWORD attrs = GetFileAttributesA(f.c_str());
+	return attrs != INVALID_FILE_ATTRIBUTES && !(attrs & FILE_ATTRIBUTE_DIRECTORY);
 }
 
 struct CachedTexture::Rep {
@@ -105,11 +106,23 @@ struct CachedTexture::Rep {
 		int iw = job ? job->w : 0;
 		int ih = job ? job->h : 0;
 
+		if (!fib32) {
+			failed = true;
+			cancelJob();
+			materialized = true;
+			return;
+		}
+
 		int t_flags = (flags & (
 			gxCanvas::CANVAS_TEX_RGB |
 			gxCanvas::CANVAS_TEX_ALPHA |
 			gxCanvas::CANVAS_TEX_MASK |
 			gxCanvas::CANVAS_TEX_HICOLOR)) | gxCanvas::CANVAS_NONDISPLAY | gxCanvas::CANVAS_TEXTURE;
+
+		int frame_flags = flags;
+		if ((flags & gxCanvas::CANVAS_TEX_MASK) && !(flags & gxCanvas::CANVAS_TEX_ALPHA)) {
+			frame_flags |= gxCanvas::CANVAS_TEX_ALPHA;
+		}
 
 		if (!(flags & gxCanvas::CANVAS_TEX_CUBE)) {
 			if (w <= 0 || h <= 0 || first < 0 || requested_cnt <= 0) {
@@ -118,17 +131,11 @@ struct CachedTexture::Rep {
 						frames.push_back(t);
 					}
 				}
+				if (frames.empty()) failed = true;
 				cancelJob();
 				materialized = true;
 				return;
 			}
-		}
-
-		if (!fib32) {
-			failed = true;
-			cancelJob();
-			materialized = true;
-			return;
 		}
 
 		gxCanvas* t = gx_graphics->createCanvasFromImage(fib32, iw, ih, t_flags);
@@ -157,7 +164,7 @@ struct CachedTexture::Rep {
 			}
 			int ch = t->getHeight();
 
-			gxCanvas* tex = gx_graphics->createCanvas(cw, ch, flags);
+			gxCanvas* tex = gx_graphics->createCanvas(cw, ch, frame_flags);
 			if (tex) {
 				frames.push_back(tex);
 
@@ -182,7 +189,7 @@ struct CachedTexture::Rep {
 			int y = (first / x_tiles) * h;
 			int cnt = requested_cnt;
 			while (cnt--) {
-				gxCanvas* p = gx_graphics->createCanvas(w, h, flags);
+				gxCanvas* p = gx_graphics->createCanvas(w, h, frame_flags);
 				gx_graphics->copy(p, 0, 0, p->getWidth(), p->getHeight(), t, x, y, w, h);
 				frames.push_back(p);
 				x = x + w; if (x + w > t->getWidth()) { x = 0; y = y + h; }
@@ -275,12 +282,10 @@ bool CachedTexture::valid()const {
 }
 
 void CachedTexture::flushAll() {
-	int budget = 16;
-	for (size_t idx = 0; idx < pending_reps.size() && budget > 0; ) {
+	for (size_t idx = 0; idx < pending_reps.size(); ) {
 		Rep* r = pending_reps[idx];
 		r->materialize(false);
 		if (r->materialized) {
-			--budget;
 		}
 		else {
 			++idx;

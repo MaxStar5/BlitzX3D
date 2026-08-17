@@ -4,6 +4,7 @@
 #include "gxcanvas.h"
 #include "gxgraphics.h"
 #include "gxruntime.h"
+#include "asyncimage.h"
 
 extern gxRuntime* gx_runtime;
 
@@ -18,6 +19,7 @@ const std::string& ddUtil::getLastImageError() {
 }
 
 bool ddUtil::hasAlphaChannel(const std::string& file) {
+    std::lock_guard<std::mutex> lock(g_freeimage_mutex);
     FREE_IMAGE_FORMAT fif = FreeImage_GetFileType(file.c_str(), 0);
     if (fif == FIF_UNKNOWN) fif = FreeImage_GetFIFFromFilename(file.c_str());
     if (fif == FIF_UNKNOWN) return false;
@@ -31,6 +33,7 @@ bool ddUtil::hasAlphaChannel(const std::string& file) {
 }
 
 bool ddUtil::hasActualAlpha(const std::string& file) {
+    std::lock_guard<std::mutex> lock(g_freeimage_mutex);
     FREE_IMAGE_FORMAT fif = FreeImage_GetFileType(file.c_str(), 0);
     if (fif == FIF_UNKNOWN) fif = FreeImage_GetFIFFromFilename(file.c_str());
     if (fif == FIF_UNKNOWN) return false;
@@ -181,12 +184,21 @@ void ddUtil::buildMipMaps(IDirect3DTexture9* tex) {
                 unsigned char* p3 = p2 + src_fmt.getPitch();
                 unsigned c0 = src_fmt.getPixel(p0), c1 = src_fmt.getPixel(p1);
                 unsigned c2 = src_fmt.getPixel(p2), c3 = src_fmt.getPixel(p3);
-                unsigned argb =
-                    ((c0 & 0xfcfcfcfc) >> 2) + ((c1 & 0xfcfcfcfc) >> 2) +
-                    ((c2 & 0xfcfcfcfc) >> 2) + ((c3 & 0xfcfcfcfc) >> 2);
-                argb += (((c0 & 0x03030303) + (c1 & 0x03030303) +
-                    (c2 & 0x03030303) + (c3 & 0x03030303)) >> 2) & 0x03030303;
-                dst_fmt.setPixel(dst_t + x * dst_fmt.getPitch(), argb);
+                unsigned a0 = (c0 >> 24) & 0xFF, a1 = (c1 >> 24) & 0xFF;
+                unsigned a2 = (c2 >> 24) & 0xFF, a3 = (c3 >> 24) & 0xFF;
+                unsigned sum_a = a0 + a1 + a2 + a3;
+                unsigned sum_r = ((c0 >> 16) & 0xFF) * a0 + ((c1 >> 16) & 0xFF) * a1 +
+                    ((c2 >> 16) & 0xFF) * a2 + ((c3 >> 16) & 0xFF) * a3;
+                unsigned sum_g = ((c0 >> 8) & 0xFF) * a0 + ((c1 >> 8) & 0xFF) * a1 +
+                    ((c2 >> 8) & 0xFF) * a2 + ((c3 >> 8) & 0xFF) * a3;
+                unsigned sum_b = (c0 & 0xFF) * a0 + (c1 & 0xFF) * a1 +
+                    (c2 & 0xFF) * a2 + (c3 & 0xFF) * a3;
+                unsigned a = sum_a >> 2;
+                unsigned r = sum_a ? sum_r / sum_a : 0;
+                unsigned g = sum_a ? sum_g / sum_a : 0;
+                unsigned b = sum_a ? sum_b / sum_a : 0;
+                dst_fmt.setPixel(dst_t + x * dst_fmt.getPitch(),
+                    (a << 24) | (r << 16) | (g << 8) | b);
             }
         }
         tex->UnlockRect(mip + 1);
@@ -374,6 +386,7 @@ static void buildAlpha(FIBITMAP* fib, BYTE* bits, int pitch, int w, int h, bool 
 }
 
 IDirect3DSurface9* ddUtil::loadDisplaySurface(const std::string& file, int flags, gxGraphics* gfx) {
+    std::lock_guard<std::mutex> lock(g_freeimage_mutex);
     g_lastImageError.clear();
 
     FREE_IMAGE_FORMAT fif = FreeImage_GetFileType(file.c_str(), 0);
@@ -477,7 +490,7 @@ bool ddUtil::decodeImageFile(const std::string& file, void** out32, int* outW, i
 	return true;
 }
 
-IDirect3DTexture9* ddUtil::textureFromDecoded(void* vfib32, int w, int h, int flags, gxGraphics* gfx, bool renderTarget, int* outW, int* outH) {
+static IDirect3DTexture9* textureFromDecodedUnlocked(void* vfib32, int w, int h, int flags, gxGraphics* gfx, bool renderTarget, int* outW, int* outH) {
 	FIBITMAP* fib32 = (FIBITMAP*)vfib32;
 	int adjW = w, adjH = h;
 	adjustTexSize(&adjW, &adjH, gfx->dir3dDev);
@@ -662,6 +675,11 @@ IDirect3DTexture9* ddUtil::textureFromDecoded(void* vfib32, int w, int h, int fl
 	return tex;
 }
 
+IDirect3DTexture9* ddUtil::textureFromDecoded(void* vfib32, int w, int h, int flags, gxGraphics* gfx, bool renderTarget, int* outW, int* outH) {
+	std::lock_guard<std::mutex> lock(g_freeimage_mutex);
+	return textureFromDecodedUnlocked(vfib32, w, h, flags, gfx, renderTarget, outW, outH);
+}
+
 IDirect3DTexture9* ddUtil::loadTextureSurface(const std::string& file, int flags, gxGraphics* gfx) {
     return loadTextureSurface(file, flags, gfx, false, nullptr, nullptr);
 }
@@ -671,6 +689,7 @@ IDirect3DTexture9* ddUtil::loadTextureSurface(const std::string& file, int flags
 }
 
 IDirect3DTexture9* ddUtil::loadTextureSurface(const std::string& file, int flags, gxGraphics* gfx, bool renderTarget, int* outW, int* outH) {
+	std::lock_guard<std::mutex> lock(g_freeimage_mutex);
 	g_lastImageError.clear();
 
 	void* fib32 = nullptr;
@@ -680,7 +699,7 @@ IDirect3DTexture9* ddUtil::loadTextureSurface(const std::string& file, int flags
 		return nullptr;
 	}
 
-	IDirect3DTexture9* tex = textureFromDecoded(fib32, w, h, flags, gfx, renderTarget, outW, outH);
+	IDirect3DTexture9* tex = textureFromDecodedUnlocked(fib32, w, h, flags, gfx, renderTarget, outW, outH);
 	FreeImage_Unload((FIBITMAP*)fib32);
 	return tex;
 }

@@ -5,6 +5,7 @@
 #include "htmlhelp.h"
 #include "tabber.h"
 #include "update.h"
+#include <vector>
 #include <filesystem>
 
 class MainFrame : public CFrameWnd,public HelpListener,EditorListener,TabberListener{
@@ -91,7 +92,7 @@ private:
 	bool close( int n );
 	bool save( int n );
 
-	void compile( const std::string &cmd );
+	void compile( const std::vector<std::string> &args );
 	void build( bool exec,bool publish );
 
 	//does the dir exist? If not, create it.

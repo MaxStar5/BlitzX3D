@@ -1,6 +1,8 @@
 #include <string>
+#include <vector>
 #include <Windows.h>
 #include "../MultiLang/MultiLang.h"
+#include "../procutil.h"
 
 static std::string getAppDir() {
 	char buffer[MAX_PATH];
@@ -17,11 +19,17 @@ static void fail(const char* p) {
 
 int WINAPI WinMain(_In_ HINSTANCE inst, _In_opt_ HINSTANCE prev, _In_ char* cmd, _In_ int show) {
 	std::string basedir = getAppDir();
-	std::string idePath = "\\bin\\ide.exe ";
 
 	_putenv_s("blitzpath", basedir.c_str());
 	SetCurrentDirectory(basedir.c_str());
-	basedir += idePath + cmd;
+
+	std::vector<std::string> args;
+	args.push_back(basedir + "\\bin\\blitzide_imgui.exe");
+	std::vector<std::string> extra = splitCommandLine(cmd);
+	args.insert(args.end(), extra.begin(), extra.end());
+	std::string cmdline = buildWindowsCommandLine(args);
+	std::vector<char> mutableCmd(cmdline.begin(), cmdline.end());
+	mutableCmd.push_back('\0');
 
 	STARTUPINFO startupInfo;
 	PROCESS_INFORMATION processInfo;
@@ -30,7 +38,7 @@ int WINAPI WinMain(_In_ HINSTANCE inst, _In_opt_ HINSTANCE prev, _In_ char* cmd,
 	startupInfo.cb = sizeof(startupInfo);
 	ZeroMemory(&processInfo, sizeof(processInfo));
 
-	if(!CreateProcess(NULL, (char*)basedir.c_str(), NULL, NULL, FALSE, 0, NULL, NULL, &startupInfo, &processInfo)) {
+	if(!CreateProcess(NULL, mutableCmd.data(), NULL, NULL, FALSE, 0, NULL, NULL, &startupInfo, &processInfo)) {
 		fail(MultiLang::init_err);
 	}
 

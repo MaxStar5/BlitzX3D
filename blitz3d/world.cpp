@@ -354,6 +354,8 @@ void World::render(float tween) {
 	ord_mods.clear();
 	unord_mods.clear();
 
+	_visible.clear();
+
 	Scene* curr = g_sceneManager.get(g_sceneManager.currentSceneId);
 	if (!curr) curr = g_sceneManager.get(0);
 	if (!curr) return; // should never happen
@@ -361,16 +363,10 @@ void World::render(float tween) {
 	curr->mirrors.clear();
 	curr->listeners.clear();
 
-	static unsigned last_gen = ~0u;
-	bool reuse = !frame_first_render && Entity::generation() == last_gen;
-	if (!reuse) {
-		_visible.clear();
-		enumVisible();
-		last_gen = Entity::generation();
-	}
+	enumVisible();
 
 	for (Object* o : _visible) {
-		if (!reuse && !o->beginRender(tween)) continue;
+		if (!o->beginRender(tween)) continue;
 
 		if (Light* t = o->getLight())    curr->lights.push_back(t->getGxLight());
 		else if (Camera* t = o->getCamera())   cam_que.push(t);
@@ -480,6 +476,39 @@ void World::renderEntity(Camera* cam, float tween) {
 	_listeners.clear();
 
 	enumVisible();
+
+	for (Object* o : _visible) {
+		if (!o->beginRender(tween)) continue;
+		if (Light* t = o->getLight())    _lights.push_back(t->getGxLight());
+		else if (Mirror* t = o->getMirror())   _mirrors.push_back(t);
+		else if (Model* t = o->getModel()) {
+			if (t->getOrder()) ord_que.push(t);
+			else               unord_mods.push_back(t);
+		}
+	}
+
+	while (!ord_que.empty()) { ord_mods.push_back(ord_que.top()); ord_que.pop(); }
+
+	if (!gx_scene->begin(_lights)) return;
+
+	if (cam->beginRenderFrame()) {
+		for (Mirror* mir : _mirrors) render(cam, mir);
+		render(cam, nullptr);
+	}
+
+	gx_scene->end();
+}
+
+void World::renderEntity(Camera* cam, Entity* target, float tween) {
+	ord_mods.clear();
+	unord_mods.clear();
+
+	_visible.clear();
+	_lights.clear();
+	_mirrors.clear();
+	_listeners.clear();
+
+	if (target) target->enumVisible(_visible);
 
 	for (Object* o : _visible) {
 		if (!o->beginRender(tween)) continue;

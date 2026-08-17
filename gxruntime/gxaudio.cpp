@@ -1,5 +1,6 @@
 #include "std.h"
 #include "gxaudio.h"
+#include "asyncsound.h"
 
 struct StaticChannel : public gxChannel {
 	virtual void play() = 0;
@@ -212,14 +213,16 @@ void gxAudio::pause() {
 void gxAudio::resume() {
 }
 
+static bool soundFileExists(const std::string& f) {
+	DWORD attrs = GetFileAttributesA(f.c_str());
+	return attrs != INVALID_FILE_ATTRIBUTES && !(attrs & FILE_ATTRIBUTE_DIRECTORY);
+}
+
 gxSound* gxAudio::loadSound(const std::string& f, bool use3d) {
+	if (!soundFileExists(f)) return 0;
 
-	int flags = FSOUND_NORMAL | (use3d ? FSOUND_FORCEMONO : FSOUND_2D);
-
-	FSOUND_SAMPLE* sample = FSOUND_Sample_Load(FSOUND_FREE, f.c_str(), flags, 0, 0);
-	if (!sample) return 0;
-
-	gxSound* sound = new gxSound(this, sample);
+	std::shared_ptr<AsyncSoundLoader::Job> job = AsyncSoundLoader::instance().load(f);
+	gxSound* sound = new gxSound(this, job, use3d);
 	sound_set.insert(sound);
 	return sound;
 }

@@ -2,13 +2,14 @@
 #include "gxgraphics.h"
 #include "gxeffect.h"
 #include "gxruntime.h"
+#include "gxshadercompat.h"
 #include "../gxruntime/gxutf8.h"
 #include <cstring>
 
 extern gxRuntime* gx_runtime;
 static Debugger* debugger;
 
-gxGraphics::gxGraphics(gxRuntime* rt, IDirect3DDevice9Ex* dev, IDirect3DSurface9* front, IDirect3DSurface9* back, bool d3d) : runtime(rt), dir3dDev(dev), frontBuffer(front), backBuffer(back), gfx_lost(false), dummy_mesh(0), skin_vshader(nullptr), skin_decl(nullptr), skin_shader_load_failed(false), skin_caps_checked(-1), d3d_stream0(nullptr), d3d_stream0_stride(0), d3d_fvf(0), d3d_indices(nullptr) {
+gxGraphics::gxGraphics(gxRuntime* rt, IDirect3DDevice9Ex* dev, IDirect3DSurface9* front, IDirect3DSurface9* back, bool d3d) : runtime(rt), dir3dDev(dev), frontBuffer(front), backBuffer(back), gfx_lost(false), dummy_mesh(0), skin_vshader(nullptr), skin_decl(nullptr), skin_shader_load_failed(false), skin_caps_checked(-1) {
 
 	if (dir3dDev) dir3dDev->AddRef();
 	if (frontBuffer) frontBuffer->AddRef();
@@ -96,6 +97,21 @@ gxGraphics::~gxGraphics() {
 gxEffect* gxGraphics::createEffect(const std::string& filename) {
 	ID3DXEffect* effect = nullptr;
 	ID3DXBuffer* errors = nullptr;
+
+	// BlitzPro shader support
+	/*
+	std::string converted;
+	HRESULT hr = E_FAIL;
+	if (convertShaderSource(dir3dDev, filename, converted)) {
+		hr = D3DXCreateEffect(dir3dDev, converted.data(), (UINT)converted.size(),
+			nullptr, nullptr, 0, nullptr, &effect, &errors);
+	}
+	if (FAILED(hr)) {
+		if (errors) { errors->Release(); errors = nullptr; }
+		hr = D3DXCreateEffectFromFile(dir3dDev, filename.c_str(), nullptr, nullptr, 0, nullptr, &effect, &errors);
+	}
+	*/
+
 	HRESULT hr = D3DXCreateEffectFromFile(dir3dDev, filename.c_str(), nullptr, nullptr, 0, nullptr, &effect, &errors);
 	if (FAILED(hr)) {
 		if (errors) {
@@ -417,6 +433,9 @@ gxCanvas* gxGraphics::loadCanvas(const std::string& f, int flags) {
 }
 
 gxCanvas* gxGraphics::createCanvasFromImage(void* fib32, int w, int h, int flags) {
+	if ((flags & gxCanvas::CANVAS_TEX_MASK) && !(flags & gxCanvas::CANVAS_TEX_ALPHA)) {
+		flags |= gxCanvas::CANVAS_TEX_ALPHA;
+	}
 	IDirect3DTexture9* tex = ddUtil::textureFromDecoded(fib32, w, h, flags, this, true, &w, &h);
 	if (!tex) return nullptr;
 	gxCanvas* c = new gxCanvas(this, tex, flags);
@@ -560,32 +579,6 @@ gxMesh* gxGraphics::verifyMesh(gxMesh* m) {
 
 void gxGraphics::freeMesh(gxMesh* mesh) {
 	if (mesh_set.erase(mesh)) delete mesh;
-}
-
-void gxGraphics::resetStreamState() {
-	d3d_stream0 = (IDirect3DVertexBuffer9*)(uintptr_t)0x55555555;
-	d3d_stream0_stride = 0x55555555;
-	d3d_fvf = 0x55555555;
-	d3d_indices = (IDirect3DIndexBuffer9*)(uintptr_t)0x55555555;
-}
-
-void gxGraphics::setStreamSource0(IDirect3DVertexBuffer9* vb, UINT stride) {
-	if (d3d_stream0 == vb && d3d_stream0_stride == stride) return;
-	dir3dDev->SetStreamSource(0, vb, 0, stride);
-	d3d_stream0 = vb;
-	d3d_stream0_stride = stride;
-}
-
-void gxGraphics::setFVF(DWORD fvf) {
-	if (d3d_fvf == fvf) return;
-	dir3dDev->SetFVF(fvf);
-	d3d_fvf = fvf;
-}
-
-void gxGraphics::setIndices(IDirect3DIndexBuffer9* ib) {
-	if (d3d_indices == ib) return;
-	dir3dDev->SetIndices(ib);
-	d3d_indices = ib;
 }
 
 // GPU SKINNING

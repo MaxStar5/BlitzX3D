@@ -13,18 +13,14 @@ static const float JHT = 1.0f / 3.0f;
 
 bool input_create() {
 	if (gx_input = gx_runtime->openInput(0)) {
-		if (gx_keyboard = gx_input->getKeyboard()) {
-			if (gx_mouse = gx_input->getMouse()) {
-				gx_joysticks.clear();
-				for (int k = 0; k < gx_input->numJoysticks(); ++k) {
-					gx_joysticks.push_back(gx_input->getJoystick(k));
-				}
-				mouse_x = mouse_y = mouse_z = 0;
-				return true;
-			}
+		gx_keyboard = gx_input->getKeyboard();
+		gx_mouse = gx_input->getMouse();
+		gx_joysticks.clear();
+		for (int k = 0; k < gx_input->numJoysticks(); ++k) {
+			gx_joysticks.push_back(gx_input->getJoystick(k));
 		}
-		gx_runtime->closeInput(gx_input);
-		gx_input = 0;
+		mouse_x = mouse_y = mouse_z = 0;
+		return true;
 	}
 	return false;
 }
@@ -37,14 +33,17 @@ bool input_destroy() {
 }
 
 int bbKeyDown(int n) {
+	if (!gx_keyboard) return 0;
 	return gx_keyboard->keyDown(n);
 }
 
 int bbKeyHit(int n) {
+	if (!gx_keyboard) return 0;
 	return gx_keyboard->keyHit(n);
 }
 
 int bbGetKey() {
+	if (!gx_input || !gx_keyboard) return 0;
 	return gx_input->toAscii(gx_keyboard->getKey());
 }
 
@@ -72,8 +71,10 @@ BBStr* bbTextInput(BBStr* s) {
 int bbWaitKey() {
 	for (;;) {
 		if (!gx_runtime->idle()) RTEX(0);
-		if (int key = gx_keyboard->getKey()) {
-			if (key = gx_input->toAscii(key)) return key;
+		if (gx_keyboard) {
+			if (int key = gx_keyboard->getKey()) {
+				if (key = gx_input->toAscii(key)) return key;
+			}
 		}
 		gx_runtime->delay(20);
 	}
@@ -81,25 +82,30 @@ int bbWaitKey() {
 
 void bbFlushKeys() {
 	gx_input->getChars();
-	gx_keyboard->flush();
+	if (gx_keyboard) gx_keyboard->flush();
 }
 
 int bbMouseDown(int n) {
+	if (!gx_mouse) return 0;
 	return gx_mouse->keyDown(n);
 }
 
 int bbMouseHit(int n) {
+	if (!gx_mouse) return 0;
 	return gx_mouse->keyHit(n);
 }
 
 int bbGetMouse() {
+	if (!gx_mouse) return 0;
 	return gx_mouse->getKey();
 }
 
 int bbWaitMouse() {
 	for (;;) {
 		if (!gx_runtime->idle()) RTEX(0);
-		if (int key = gx_mouse->getKey()) return key;
+		if (gx_mouse) {
+			if (int key = gx_mouse->getKey()) return key;
+		}
 		gx_runtime->delay(20);
 	}
 }
@@ -109,15 +115,15 @@ int bbMouseWait() {
 }
 
 int bbMouseX() {
-	return gx_mouse->getAxisState(0);
+	return gx_mouse ? gx_mouse->getAxisState(0) : 0;
 }
 
 int bbMouseY() {
-	return gx_mouse->getAxisState(1);
+	return gx_mouse ? gx_mouse->getAxisState(1) : 0;
 }
 
 int bbMouseZ() {
-	return gx_mouse->getAxisState(2) / 120;
+	return gx_mouse ? gx_mouse->getAxisState(2) / 120 : 0;
 }
 
 int bbMouseXSpeed() {
@@ -139,7 +145,7 @@ int bbMouseZSpeed() {
 }
 
 void bbFlushMouse() {
-	gx_mouse->flush();
+	if (gx_mouse) gx_mouse->flush();
 }
 
 void bbMoveMouse(int x, int y) {
