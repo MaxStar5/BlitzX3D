@@ -10,18 +10,13 @@
 
 #include "../imgui/imgui.h"
 #include "../imgui/imgui_internal.h"
-#include "../imgui/backends/imgui_impl_glfw.h"
+#include "../imgui/backends/imgui_impl_sdl3.h"
 #include "../imgui/backends/imgui_impl_opengl3.h"
 #include "../imgui/backends/imgui_impl_opengl3_loader.h"
 
-#include <GLFW/glfw3.h>
+#include <SDL3/SDL.h>
 
-#if defined(_WIN32)
-#include <windows.h>
-#include <shellapi.h>
-#define GLFW_EXPOSE_NATIVE_WIN32
-#include <GLFW/glfw3native.h>
-#else
+#if !defined(_WIN32)
 #include <unistd.h>
 #include <sys/wait.h>
 #endif
@@ -174,24 +169,10 @@ static std::string findFunctionInIncludes(const std::string& startFile, const st
 }
 
 static void openUrlImpl(const std::string& url) {
-#if defined(_WIN32)
-	ShellExecuteA(nullptr, "open", url.c_str(), nullptr, nullptr, SW_SHOWNORMAL);
-#else
-	pid_t pid = fork();
-	if (pid == 0) {
-		setsid();
-		execl("/usr/bin/xdg-open", "xdg-open", url.c_str(), (char*)nullptr);
-		execl("/usr/bin/open", "open", url.c_str(), (char*)nullptr);
-		_exit(1);
-	}
-#endif
+	SDL_OpenURL(url.c_str());
 }
 
 void App::openUrl(const std::string& url) { openUrlImpl(url); }
-
-static void glfw_error_callback(int error, const char* description) {
-	fprintf(stderr, "GLFW Error %d: %s\n", error, description);
-}
 
 static ImU32 themeColU32(const ImVec4& c) {
 	return IM_COL32((int)(c.x * 255.0f + 0.5f), (int)(c.y * 255.0f + 0.5f), (int)(c.z * 255.0f + 0.5f), (int)(c.w * 255.0f + 0.5f));
@@ -242,40 +223,32 @@ int App::run(int argc, char* argv[], bool skipPicker) {
 }
 
 bool App::init(int argc, char* argv[]) {
-	glfwSetErrorCallback(glfw_error_callback);
-	if (!glfwInit()) return false;
+	if (!SDL_Init(SDL_INIT_VIDEO | SDL_INIT_GAMEPAD)) return false;
 
 	prefs.open();
 
 	windowW = prefs.win_w; windowH = prefs.win_h;
 	if (!skipPicker) { windowW = 320; windowH = 140; }
 
-	glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
-	glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 0);
-	window = glfwCreateWindow(windowW, windowH, "BlitzX3D IDE", nullptr, nullptr);
-	if (!window) { glfwTerminate(); return false; }
-	glfwMakeContextCurrent(window);
-	glfwSwapInterval(1);
-
-#if defined(_WIN32)
-	{
-		HICON hBig = (HICON)LoadImageA(GetModuleHandleA(NULL), MAKEINTRESOURCEA(1), IMAGE_ICON, 32, 32, LR_SHARED);
-		HICON hSmall = (HICON)LoadImageA(GetModuleHandleA(NULL), MAKEINTRESOURCEA(1), IMAGE_ICON, 16, 16, LR_SHARED);
-		HWND hwnd = glfwGetWin32Window(window);
-		if (hBig) SendMessageA(hwnd, WM_SETICON, ICON_BIG, (LPARAM)hBig);
-		if (hSmall) SendMessageA(hwnd, WM_SETICON, ICON_SMALL, (LPARAM)hSmall);
+	SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
+	SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 0);
+	SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_COMPATIBILITY);
+	window = SDL_CreateWindow("BlitzX3D IDE", windowW, windowH, SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE);
+	if (!window) { SDL_Quit(); return false; }
+	if (!SDL_GL_CreateContext(window) || !SDL_GL_SetSwapInterval(1)) {
+		SDL_DestroyWindow(window);
+		SDL_Quit();
+		return false;
 	}
-#endif
 
 	{
-		GLFWmonitor* mon = glfwGetPrimaryMonitor();
-		const GLFWvidmode* mode = mon ? glfwGetVideoMode(mon) : nullptr;
-		if (mode) {
-			int x = (mode->width - windowW) / 2;
-			int y = (mode->height - windowH) / 2;
-			glfwSetWindowPos(window, x, y);
+		SDL_Rect bounds;
+		if (SDL_GetDisplayBounds(SDL_GetPrimaryDisplay(), &bounds)) {
+			int x = bounds.x + (bounds.w - windowW) / 2;
+			int y = bounds.y + (bounds.h - windowH) / 2;
+			SDL_SetWindowPosition(window, x, y);
 			if (skipPicker) {
-				glfwMaximizeWindow(window);
+				SDL_MaximizeWindow(window);
 			}
 		}
 	}
@@ -290,16 +263,8 @@ bool App::init(int argc, char* argv[]) {
 	}
 
 	applyCurrentTheme();
-	ImGui_ImplGlfw_InitForOpenGL(window, true);
+	ImGui_ImplSDL3_InitForOpenGL(window, SDL_GL_GetCurrentContext());
 	ImGui_ImplOpenGL3_Init("#version 130");
-
-	glfwSetDropCallback(window, [](GLFWwindow*, int count, const char** paths) {
-		if (g_app) {
-			for (int k = 0; k < count; ++k) {
-				g_app->openPath(paths[k]);
-			}
-		}
-	});
 
 	initKeywords();
 	startUpdateCheck(this);
@@ -320,29 +285,36 @@ void App::shutdown() {
 	if (keywordThread.joinable()) keywordThread.join();
 
 	if (currentIndex >= 0 && pickerDone) {
-		glfwGetWindowSize(window, &windowW, &windowH);
+		SDL_GetWindowSize(window, &windowW, &windowH);
 		prefs.win_w = windowW;
 		prefs.win_h = windowH;
 	}
 	prefs.close();
 
 	ImGui_ImplOpenGL3_Shutdown();
-	ImGui_ImplGlfw_Shutdown();
+	ImGui_ImplSDL3_Shutdown();
 	ImGui::DestroyContext();
-	glfwDestroyWindow(window);
-	glfwTerminate();
+	SDL_GL_DestroyContext(SDL_GL_GetCurrentContext());
+	SDL_DestroyWindow(window);
+	SDL_Quit();
 }
 
 void App::mainloop() {
-	while (!glfwWindowShouldClose(window) && !quitting) {
-		glfwPollEvents();
+	while (!quitting) {
+		SDL_Event event;
+		while (SDL_PollEvent(&event)) {
+			ImGui_ImplSDL3_ProcessEvent(&event);
+			if (event.type == SDL_EVENT_QUIT ||
+				(event.type == SDL_EVENT_WINDOW_CLOSE_REQUESTED && event.window.windowID == SDL_GetWindowID(window))) quitting = true;
+			if (event.type == SDL_EVENT_DROP_FILE && event.drop.data) openPath(event.drop.data);
+		}
 		frame();
 	}
 }
 
 void App::frame() {
 	ImGui_ImplOpenGL3_NewFrame();
-	ImGui_ImplGlfw_NewFrame();
+	ImGui_ImplSDL3_NewFrame();
 	ImGui::NewFrame();
 
 	if (skipPicker || pickerDone) {
@@ -366,12 +338,12 @@ void App::frame() {
 		ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
 		ImGuiIO& pio = ImGui::GetIO();
 		if (pio.ConfigFlags & ImGuiConfigFlags_ViewportsEnable) {
-			GLFWwindow* pbackup = glfwGetCurrentContext();
+			SDL_GLContext pbackup = SDL_GL_GetCurrentContext();
 			ImGui::UpdatePlatformWindows();
 			ImGui::RenderPlatformWindowsDefault();
-			glfwMakeContextCurrent(pbackup);
+			SDL_GL_MakeCurrent(window, pbackup);
 		}
-		glfwSwapBuffers(window);
+		SDL_GL_SwapWindow(window);
 		return;
 	}
 
@@ -418,7 +390,7 @@ void App::frame() {
 	ImGui::Render();
 
 	int fbw = 0, fbh = 0;
-	glfwGetFramebufferSize(window, &fbw, &fbh);
+	SDL_GetWindowSizeInPixels(window, &fbw, &fbh);
 	glViewport(0, 0, fbw, fbh);
 	const ImVec4& bgc = ImGui::GetStyle().Colors[ImGuiCol_WindowBg];
 	glClearColor(bgc.x, bgc.y, bgc.z, 1.0f);
@@ -428,12 +400,12 @@ void App::frame() {
 
 	ImGuiIO& io = ImGui::GetIO();
 	if (io.ConfigFlags & ImGuiConfigFlags_ViewportsEnable) {
-		GLFWwindow* backup = glfwGetCurrentContext();
+		SDL_GLContext backup = SDL_GL_GetCurrentContext();
 		ImGui::UpdatePlatformWindows();
 		ImGui::RenderPlatformWindowsDefault();
-		glfwMakeContextCurrent(backup);
+		SDL_GL_MakeCurrent(window, backup);
 	}
-	glfwSwapBuffers(window);
+	SDL_GL_SwapWindow(window);
 }
 
 void App::menuBar() {
@@ -1038,7 +1010,7 @@ void App::drawPicker() {
 		ImGui::Spacing();
 		ImGui::Spacing();
 		if (ImGui::Button("New BlitzX3D IDE", ImVec2(-1, 0))) {
-			glfwMaximizeWindow(window);
+			SDL_MaximizeWindow(window);
 			windowW = prefs.win_w; windowH = prefs.win_h;
 			if (docs.empty()) fileNew();
 			pickerDone = true;

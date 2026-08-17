@@ -10,9 +10,8 @@
 #include <sstream>
 #include <filesystem>
 
-#if defined(_WIN32)
-#include <windows.h>
-#else
+#include <SDL3/SDL.h>
+#if !defined(_WIN32)
 #include <unistd.h>
 #include <climits>
 #endif
@@ -20,18 +19,10 @@
 Prefs prefs;
 
 static std::string getExeDir() {
-#if defined(_WIN32)
-	char buf[MAX_PATH];
-	DWORD n = GetModuleFileNameA(NULL, buf, MAX_PATH);
-	if (!n) return "";
-	return std::string(buf, n);
-#else
-	char buf[PATH_MAX];
-	ssize_t n = readlink("/proc/self/exe", buf, sizeof(buf) - 1);
-	if (n <= 0) return "";
-	buf[n] = 0;
-	return std::string(buf);
-#endif
+	const char* base = SDL_GetBasePath();
+	if (!base) return "";
+	std::string result(base);
+	return result + "blitzide_imgui.exe";
 }
 
 static std::string resolveHomeDir() {

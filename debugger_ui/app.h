@@ -7,7 +7,7 @@
 #include "dbgipc.h"
 #include "sourcefile.h"
 
-struct GLFWwindow;
+struct SDL_Window;
 
 enum ELogSeverity
 {
@@ -22,7 +22,7 @@ struct LogEntry {
 };
 
 class App {
-	GLFWwindow* window;
+	SDL_Window* window;
 	int windowW, windowH;
 	bool initialized;
 	bool quitting;

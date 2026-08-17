@@ -9,15 +9,15 @@
 #include <sstream>
 #include <filesystem>
 
-#include <windows.h>
+#include <SDL3/SDL.h>
 
 Prefs prefs;
 
 static std::string getExeDir() {
-	char buf[MAX_PATH];
-	DWORD n = GetModuleFileNameA(NULL, buf, MAX_PATH);
-	if (!n) return "";
-	return std::string(buf, n);
+	const char* base = SDL_GetBasePath();
+	if (!base) return "";
+	std::string result(base);
+	return result + "blitz_debugger.exe";
 }
 
 static std::string resolveHomeDir() {

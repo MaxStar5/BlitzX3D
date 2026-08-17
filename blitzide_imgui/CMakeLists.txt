@@ -9,7 +9,8 @@ if(NOT CMAKE_BUILD_TYPE)
 endif()
 
 set(IMGUI_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../imgui)
-set(GLFW_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../vendor/glfw)
+set(SDL3_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../vendor/SDL3/cmake)
+find_package(SDL3 CONFIG REQUIRED)
 
 # ---- Dear ImGui ----
 add_library(imgui STATIC
@@ -17,17 +18,11 @@ add_library(imgui STATIC
   ${IMGUI_DIR}/imgui_draw.cpp
   ${IMGUI_DIR}/imgui_tables.cpp
   ${IMGUI_DIR}/imgui_widgets.cpp
-  ${IMGUI_DIR}/backends/imgui_impl_glfw.cpp
+  ${IMGUI_DIR}/backends/imgui_impl_sdl3.cpp
   ${IMGUI_DIR}/backends/imgui_impl_opengl3.cpp
 )
-target_include_directories(imgui PUBLIC ${IMGUI_DIR} ${IMGUI_DIR}/backends ${GLFW_DIR}/include)
-
-# ---- GLFW (vendored) ----
-set(GLFW_BUILD_DOCS OFF CACHE BOOL "" FORCE)
-set(GLFW_BUILD_TESTS OFF CACHE BOOL "" FORCE)
-set(GLFW_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
-set(GLFW_INSTALL OFF CACHE BOOL "" FORCE)
-add_subdirectory(${GLFW_DIR} glfw_build)
+target_include_directories(imgui PUBLIC ${IMGUI_DIR} ${IMGUI_DIR}/backends ${CMAKE_CURRENT_SOURCE_DIR}/../vendor/SDL3/include)
+target_link_libraries(imgui PUBLIC SDL3::SDL3)
 
 # ---- TextEditor widget ----
 add_library(texteditor STATIC TextEditor.cpp)
@@ -51,13 +46,18 @@ target_include_directories(blitzide_imgui PRIVATE
   ${CMAKE_CURRENT_SOURCE_DIR}/..
   ${IMGUI_DIR}
   ${IMGUI_DIR}/backends
-  ${GLFW_DIR}/include
 )
 
 target_link_libraries(blitzide_imgui PRIVATE
   imgui
   texteditor
-  glfw
+  SDL3::SDL3
+)
+
+add_custom_command(TARGET blitzide_imgui POST_BUILD
+  COMMAND ${CMAKE_COMMAND} -E copy_if_different
+    ${CMAKE_CURRENT_SOURCE_DIR}/../vendor/SDL3/lib/$<IF:$<EQUAL:${CMAKE_SIZEOF_VOID_P},8>,x64,x86>/SDL3.dll
+    $<TARGET_FILE_DIR:blitzide_imgui>/SDL3.dll
 )
 
 if(WIN32)
@@ -66,7 +66,5 @@ if(WIN32)
 else()
   find_package(OpenGL REQUIRED)
   target_link_libraries(blitzide_imgui PRIVATE OpenGL::GL)
-  # X11 deps for GLFW
-  find_package(X11 REQUIRED)
-  target_link_libraries(blitzide_imgui PRIVATE ${X11_LIBRARIES} dl m pthread)
+  target_link_libraries(blitzide_imgui PRIVATE dl m pthread)
 endif()

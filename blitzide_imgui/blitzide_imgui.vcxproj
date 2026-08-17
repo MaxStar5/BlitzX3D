@@ -23,6 +23,9 @@
     <RootNamespace>blitzide_imgui</RootNamespace>
     <Keyword>Win32Proj</Keyword>
     <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
+    <SDL3Root>$(ProjectDir)..\vendor\SDL3</SDL3Root>
+    <SDL3Arch Condition="'$(Platform)'=='Win32'">x86</SDL3Arch>
+    <SDL3Arch Condition="'$(Platform)'=='x64'">x64</SDL3Arch>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="Configuration">
@@ -83,15 +86,15 @@
       <LanguageStandard>stdcpp20</LanguageStandard>
       <WarningLevel>Level3</WarningLevel>
       <Optimization>Disabled</Optimization>
-      <PreprocessorDefinitions>WIN32;_DEBUG;_WINDOWS;_CRT_SECURE_NO_WARNINGS;_GLFW_WIN32;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <AdditionalIncludeDirectories>.;..;..\imgui;..\imgui\backends;..\vendor\glfw\include;..\vendor\glfw\src;..\inipp;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>WIN32;_DEBUG;_WINDOWS;_CRT_SECURE_NO_WARNINGS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <AdditionalIncludeDirectories>.;..;..\imgui;..\imgui\backends;..\inipp;$(SDL3Root)\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
       <RuntimeLibrary>MultiThreadedDebug</RuntimeLibrary>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <AdditionalDependencies>opengl32.lib;comdlg32.lib;wininet.lib;%(AdditionalDependencies)</AdditionalDependencies><AdditionalOptions>/ENTRY:mainCRTStartup %(AdditionalOptions)</AdditionalOptions>
+      <AdditionalDependencies>opengl32.lib;comdlg32.lib;wininet.lib;$(SDL3Root)\lib\$(SDL3Arch)\SDL3.lib;%(AdditionalDependencies)</AdditionalDependencies><AdditionalOptions>/ENTRY:mainCRTStartup %(AdditionalOptions)</AdditionalOptions>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
@@ -101,8 +104,8 @@
       <Optimization>MaxSpeed</Optimization>
       <FunctionLevelLinking>true</FunctionLevelLinking>
       <IntrinsicFunctions>true</IntrinsicFunctions>
-      <PreprocessorDefinitions>WIN32;NDEBUG;_WINDOWS;_CRT_SECURE_NO_WARNINGS;_GLFW_WIN32;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <AdditionalIncludeDirectories>.;..;..\imgui;..\imgui\backends;..\vendor\glfw\include;..\vendor\glfw\src;..\inipp;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>WIN32;NDEBUG;_WINDOWS;_CRT_SECURE_NO_WARNINGS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <AdditionalIncludeDirectories>.;..;..\imgui;..\imgui\backends;..\inipp;$(SDL3Root)\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
       <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
     </ClCompile>
@@ -111,7 +114,7 @@
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
       <OptimizeReferences>true</OptimizeReferences>
       <GenerateDebugInformation>false</GenerateDebugInformation>
-      <AdditionalDependencies>opengl32.lib;comdlg32.lib;wininet.lib;%(AdditionalDependencies)</AdditionalDependencies><AdditionalOptions>/ENTRY:mainCRTStartup %(AdditionalOptions)</AdditionalOptions>
+      <AdditionalDependencies>opengl32.lib;comdlg32.lib;wininet.lib;$(SDL3Root)\lib\$(SDL3Arch)\SDL3.lib;%(AdditionalDependencies)</AdditionalDependencies><AdditionalOptions>/ENTRY:mainCRTStartup %(AdditionalOptions)</AdditionalOptions>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
@@ -119,15 +122,15 @@
       <LanguageStandard>stdcpp20</LanguageStandard>
       <WarningLevel>Level3</WarningLevel>
       <Optimization>Disabled</Optimization>
-      <PreprocessorDefinitions>WIN32;_DEBUG;_WINDOWS;_CRT_SECURE_NO_WARNINGS;_GLFW_WIN32;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <AdditionalIncludeDirectories>.;..;..\imgui;..\imgui\backends;..\vendor\glfw\include;..\vendor\glfw\src;..\inipp;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>WIN32;_DEBUG;_WINDOWS;_CRT_SECURE_NO_WARNINGS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <AdditionalIncludeDirectories>.;..;..\imgui;..\imgui\backends;..\inipp;$(SDL3Root)\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
       <RuntimeLibrary>MultiThreadedDebug</RuntimeLibrary>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <AdditionalDependencies>opengl32.lib;comdlg32.lib;wininet.lib;%(AdditionalDependencies)</AdditionalDependencies><AdditionalOptions>/ENTRY:mainCRTStartup %(AdditionalOptions)</AdditionalOptions>
+      <AdditionalDependencies>opengl32.lib;comdlg32.lib;wininet.lib;$(SDL3Root)\lib\$(SDL3Arch)\SDL3.lib;%(AdditionalDependencies)</AdditionalDependencies><AdditionalOptions>/ENTRY:mainCRTStartup %(AdditionalOptions)</AdditionalOptions>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
@@ -137,8 +140,8 @@
       <Optimization>MaxSpeed</Optimization>
       <FunctionLevelLinking>true</FunctionLevelLinking>
       <IntrinsicFunctions>true</IntrinsicFunctions>
-      <PreprocessorDefinitions>WIN32;NDEBUG;_WINDOWS;_CRT_SECURE_NO_WARNINGS;_GLFW_WIN32;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <AdditionalIncludeDirectories>.;..;..\imgui;..\imgui\backends;..\vendor\glfw\include;..\vendor\glfw\src;..\inipp;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>WIN32;NDEBUG;_WINDOWS;_CRT_SECURE_NO_WARNINGS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <AdditionalIncludeDirectories>.;..;..\imgui;..\imgui\backends;..\inipp;$(SDL3Root)\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
       <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
     </ClCompile>
@@ -147,7 +150,7 @@
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
       <OptimizeReferences>true</OptimizeReferences>
       <GenerateDebugInformation>false</GenerateDebugInformation>
-      <AdditionalDependencies>opengl32.lib;comdlg32.lib;wininet.lib;%(AdditionalDependencies)</AdditionalDependencies><AdditionalOptions>/ENTRY:mainCRTStartup %(AdditionalOptions)</AdditionalOptions>
+      <AdditionalDependencies>opengl32.lib;comdlg32.lib;wininet.lib;$(SDL3Root)\lib\$(SDL3Arch)\SDL3.lib;%(AdditionalDependencies)</AdditionalDependencies><AdditionalOptions>/ENTRY:mainCRTStartup %(AdditionalOptions)</AdditionalOptions>
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
@@ -165,30 +168,8 @@
     <ClCompile Include="..\imgui\imgui_draw.cpp" />
     <ClCompile Include="..\imgui\imgui_tables.cpp" />
     <ClCompile Include="..\imgui\imgui_widgets.cpp" />
-    <ClCompile Include="..\imgui\backends\imgui_impl_glfw.cpp" />
+    <ClCompile Include="..\imgui\backends\imgui_impl_sdl3.cpp" />
     <ClCompile Include="..\imgui\backends\imgui_impl_opengl3.cpp" />
-    <!-- GLFW sources -->
-    <ClCompile Include="..\vendor\glfw\src\context.c" />
-    <ClCompile Include="..\vendor\glfw\src\init.c" />
-    <ClCompile Include="..\vendor\glfw\src\input.c" />
-    <ClCompile Include="..\vendor\glfw\src\monitor.c" />
-    <ClCompile Include="..\vendor\glfw\src\platform.c" />
-    <ClCompile Include="..\vendor\glfw\src\vulkan.c" />
-    <ClCompile Include="..\vendor\glfw\src\window.c" />
-    <ClCompile Include="..\vendor\glfw\src\egl_context.c" />
-    <ClCompile Include="..\vendor\glfw\src\osmesa_context.c" />
-    <ClCompile Include="..\vendor\glfw\src\null_init.c" />
-    <ClCompile Include="..\vendor\glfw\src\null_monitor.c" />
-    <ClCompile Include="..\vendor\glfw\src\null_window.c" />
-    <ClCompile Include="..\vendor\glfw\src\null_joystick.c" />
-    <ClCompile Include="..\vendor\glfw\src\win32_module.c" />
-    <ClCompile Include="..\vendor\glfw\src\win32_time.c" />
-    <ClCompile Include="..\vendor\glfw\src\win32_thread.c" />
-    <ClCompile Include="..\vendor\glfw\src\win32_init.c" />
-    <ClCompile Include="..\vendor\glfw\src\win32_joystick.c" />
-    <ClCompile Include="..\vendor\glfw\src\win32_monitor.c" />
-    <ClCompile Include="..\vendor\glfw\src\win32_window.c" />
-    <ClCompile Include="..\vendor\glfw\src\wgl_context.c" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="app.h" />
@@ -204,6 +185,9 @@
   <ItemGroup>
     <ResourceCompile Include="blitzide_imgui.rc" />
   </ItemGroup>
+  <Target Name="CopySDL3Runtime" AfterTargets="Build">
+    <Copy SourceFiles="$(SDL3Root)\lib\$(SDL3Arch)\SDL3.dll" DestinationFolder="$(OutDir)" SkipUnchangedFiles="true" />
+  </Target>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
 </Project>
 

@@ -12,7 +12,7 @@
 #include "prefs.h"
 #include "TextEditor.h"
 
-struct GLFWwindow;
+struct SDL_Window;
 
 struct Doc {
 	std::string path;
@@ -103,7 +103,7 @@ private:
 
 	void initKeywords();
 
-	GLFWwindow* window = nullptr;
+	SDL_Window* window = nullptr;
 	int windowW = 800, windowH = 600;
 
 	std::vector<Doc> docs;
