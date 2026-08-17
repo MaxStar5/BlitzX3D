@@ -361,6 +361,8 @@ void App::frame() {
 		if (ctrl && ImGui::IsKeyPressed(ImGuiKey_S)) { if (currentIndex >= 0) fileSave(currentIndex); }
 		if (ctrl && ImGui::IsKeyPressed(ImGuiKey_N)) fileNew();
 		if (ctrl && ImGui::IsKeyPressed(ImGuiKey_O)) fileOpen();
+		if (ctrl && ImGui::IsKeyPressed(ImGuiKey_F5)) programCompile();
+		if (!ctrl && ImGui::IsKeyPressed(ImGuiKey_F5)) programExecute();
 		(void)shift;
 	}
 
