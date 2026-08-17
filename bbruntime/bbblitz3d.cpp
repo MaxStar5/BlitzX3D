@@ -23,6 +23,7 @@
 #include "../blitz3d/cachedtexture.h"
 #include "../MultiLang/MultiLang.h"
 #include "../gxruntime/gxeffect.h"
+#include "../gxruntime/gxsound.h"
 #include "../blitz3d/scene.h"
 
 //Why is everything static?
@@ -342,6 +343,7 @@ void bbRenderWorld(float tween) {
 	debug3d("RenderWorld");
 
 	CachedTexture::flushAll();
+	gxSound::flushAll();
 
 	//Should we remove this stuff?
 #ifdef BETA

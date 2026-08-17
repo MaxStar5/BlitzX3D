@@ -143,6 +143,7 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="asyncimage.cpp" />
+    <ClCompile Include="asyncsound.cpp" />
     <ClCompile Include="ddutil.cpp" />
     <ClCompile Include="gxeffect.cpp" />
     <ClCompile Include="gxfont.cpp" />
@@ -165,6 +166,7 @@
       <AssemblerOutput Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">AssemblyAndSourceCode</AssemblerOutput>
     </ClCompile>
     <ClCompile Include="gxscene.cpp" />
+    <ClCompile Include="gxshadercompat.cpp" />
     <ClCompile Include="gxsound.cpp" />
     <ClCompile Include="gxtimer.cpp" />
     <ClCompile Include="gxutf8.cpp" />
@@ -178,6 +180,7 @@
   <ItemGroup>
     <ClInclude Include="asmcoder.h" />
     <ClInclude Include="asyncimage.h" />
+    <ClInclude Include="asyncsound.h" />
     <ClInclude Include="ddutil.h" />
     <ClInclude Include="gxeffect.h" />
     <ClInclude Include="gxfont.h" />
@@ -194,6 +197,7 @@
     <ClInclude Include="gxmovie.h" />
     <ClInclude Include="gxruntime.h" />
     <ClInclude Include="gxscene.h" />
+    <ClInclude Include="gxshadercompat.h" />
     <ClInclude Include="gxsound.h" />
     <ClInclude Include="gxtimer.h" />
     <ClInclude Include="gxutf8.h" />

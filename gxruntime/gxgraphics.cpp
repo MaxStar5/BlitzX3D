@@ -2,6 +2,7 @@
 #include "gxgraphics.h"
 #include "gxeffect.h"
 #include "gxruntime.h"
+#include "gxshadercompat.h"
 #include "../gxruntime/gxutf8.h"
 #include <cstring>
 
@@ -96,6 +97,21 @@ gxGraphics::~gxGraphics() {
 gxEffect* gxGraphics::createEffect(const std::string& filename) {
 	ID3DXEffect* effect = nullptr;
 	ID3DXBuffer* errors = nullptr;
+
+	// BlitzPro shader support
+	/*
+	std::string converted;
+	HRESULT hr = E_FAIL;
+	if (convertShaderSource(dir3dDev, filename, converted)) {
+		hr = D3DXCreateEffect(dir3dDev, converted.data(), (UINT)converted.size(),
+			nullptr, nullptr, 0, nullptr, &effect, &errors);
+	}
+	if (FAILED(hr)) {
+		if (errors) { errors->Release(); errors = nullptr; }
+		hr = D3DXCreateEffectFromFile(dir3dDev, filename.c_str(), nullptr, nullptr, 0, nullptr, &effect, &errors);
+	}
+	*/
+
 	HRESULT hr = D3DXCreateEffectFromFile(dir3dDev, filename.c_str(), nullptr, nullptr, 0, nullptr, &effect, &errors);
 	if (FAILED(hr)) {
 		if (errors) {
