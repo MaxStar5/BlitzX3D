@@ -310,7 +310,7 @@ bool App::init(int argc, char* argv[]) {
 		if (a.size() && a[0] == '-') continue;
 		openPath(a);
 	}
-	if (docs.empty()) fileNew();
+	if (skipPicker && docs.empty()) fileNew();
 
 	return true;
 }
@@ -349,15 +349,9 @@ void App::frame() {
 		ImGuiIO& kio = ImGui::GetIO();
 		bool ctrl = kio.KeyCtrl;
 		bool shift = kio.KeyShift;
-		if (ctrl && ImGui::IsKeyPressed(ImGuiKey_F)) editFind();
-		if (ctrl && ImGui::IsKeyPressed(ImGuiKey_H)) editReplace();
+		if (!kio.WantTextInput && ctrl && ImGui::IsKeyPressed(ImGuiKey_F)) editFind();
+		if (!kio.WantTextInput && ctrl && ImGui::IsKeyPressed(ImGuiKey_H)) editReplace();
 		if (ImGui::IsKeyPressed(ImGuiKey_F3)) editFindNext();
-		if (ctrl && ImGui::IsKeyPressed(ImGuiKey_Z)) { if (Doc* d = currentDoc()) d->editor.Undo(); }
-		if (ctrl && ImGui::IsKeyPressed(ImGuiKey_Y)) { if (Doc* d = currentDoc()) d->editor.Redo(); }
-		if (ctrl && ImGui::IsKeyPressed(ImGuiKey_X)) editCut();
-		if (ctrl && ImGui::IsKeyPressed(ImGuiKey_C)) editCopy();
-		if (ctrl && ImGui::IsKeyPressed(ImGuiKey_V)) editPaste();
-		if (ctrl && ImGui::IsKeyPressed(ImGuiKey_A)) editSelectAll();
 		if (ctrl && ImGui::IsKeyPressed(ImGuiKey_S)) { if (currentIndex >= 0) fileSave(currentIndex); }
 		if (ctrl && ImGui::IsKeyPressed(ImGuiKey_N)) fileNew();
 		if (ctrl && ImGui::IsKeyPressed(ImGuiKey_O)) fileOpen();
@@ -519,6 +513,14 @@ void App::drawTabs() {
 	if (currentIndex < 0) currentIndex = 0;
 	int closeIdx = -1;
 	if (ImGui::BeginTabBar("##doctabs", ImGuiTabBarFlags_Reorderable | ImGuiTabBarFlags_AutoSelectNewTabs)) {
+		if (requestedIndex >= 0 && requestedIndex < (int)docs.size()) {
+			currentIndex = requestedIndex;
+			Doc& requested = docs[currentIndex];
+			std::string label = requested.name;
+			if (requested.modified) label += '*';
+			ImGui::GetCurrentTabBar()->NextSelectedTabId = ImGui::GetID(label.c_str());
+			requestedIndex = -1;
+		}
 		for (int k = 0; k < (int)docs.size(); ++k) {
 			Doc& d = docs[k];
 			std::string label = d.name;
@@ -681,14 +683,19 @@ void App::drawFindReplace() {
 	ImGui::SetNextWindowPos(ImVec2(windowW / 2.0f - 200, 40), ImGuiCond_Appearing);
 	if (ImGui::Begin("Find / Replace", &showFind, flags)) {
 		ImGui::BringWindowToDisplayFront(ImGui::GetCurrentWindow());
-		bool doFind = false, doReplace = false, doReplaceAll = false;static char findBuf[512], replaceBuf[512];
-		strcpy(findBuf, findStr.c_str());
+		bool doFind = false, doReplace = false, doReplaceAll = false;
+		if (findFocusPending) {
+			strcpy(findBuf, findStr.c_str());
+			strcpy(replaceBuf, replaceStr.c_str());
+			findFocusPending = false;
+		}
 		ImGui::SetNextItemWidth(300);
+		if (ImGui::IsWindowAppearing()) ImGui::SetKeyboardFocusHere();
 		ImGui::InputText("Find text", findBuf, sizeof(findBuf));
 		ImGui::SameLine();
 		if (ImGui::Button("Find")) doFind = true;
 		ImGui::Checkbox("Match case", &matchCase);
-		strcpy(replaceBuf, replaceStr.c_str());
+		ImGui::Checkbox("Search all open files", &findAllFiles);
 		ImGui::SetNextItemWidth(300);
 		ImGui::InputText("Replace text", replaceBuf, sizeof(replaceBuf));
 		ImGui::SameLine();
@@ -720,7 +727,10 @@ void App::drawFindReplace() {
 					if (doFind) editFindNext();
 				}
 			}
-			showFind = showReplace = false;
+			if (!doFind || findStatus.empty()) showFind = showReplace = false;
+		}
+		if (!findStatus.empty()) {
+			ImGui::TextColored(ImVec4(1.0f, 0.35f, 0.35f, 1.0f), "%s", findStatus.c_str());
 		}
 	}
 	ImGui::End();
@@ -758,7 +768,7 @@ int App::addDoc(const std::string& path) {
 
 bool App::openFile(const std::string& path, bool recent) {
 	for (int k = 0; k < (int)docs.size(); ++k) {
-		if (samePath(docs[k].path, path)) { currentIndex = k; return true; }
+		if (samePath(docs[k].path, path)) { currentIndex = k; requestedIndex = k; return true; }
 	}
 	fs::path p(path);
 	if (!fs::exists(p)) return false;
@@ -833,8 +843,17 @@ bool App::openProject(const std::string& path) {
 }
 
 bool App::openPath(const std::string& path) {
-	if (fs::path(path).extension().string() == ".ipf") return openProject(path);
+	if (toLower(fs::path(path).extension().string()) == ".ipf") return openProject(path);
 	return openFile(path);
+}
+
+static int editorColumn(const std::string& line, size_t bytePos) {
+	int column = 0;
+	for (size_t k = 0; k < bytePos && k < line.size(); ++k) {
+		if (line[k] == '\t') column = (column / 4 + 1) * 4;
+		else if ((line[k] & 0xc0) != 0x80) ++column;
+	}
+	return column;
 }
 
 void App::fileNew() { addDoc(""); }
@@ -898,42 +917,60 @@ void App::editCut() { if (Doc* d = currentDoc()) d->editor.Cut(); }
 void App::editCopy() { if (Doc* d = currentDoc()) d->editor.Copy(); }
 void App::editPaste() { if (Doc* d = currentDoc()) d->editor.Paste(); }
 void App::editSelectAll() { if (Doc* d = currentDoc()) d->editor.SelectAll(); }
-void App::editFind() { showFind = true; showReplace = true; }
-void App::editReplace() { showReplace = true; showFind = true; }
+void App::editFind() { showFind = true; showReplace = true; findFocusPending = true; findStatus.clear(); }
+void App::editReplace() { showReplace = true; showFind = true; findFocusPending = true; findStatus.clear(); }
 
 void App::editFindNext() {
-	Doc* d = currentDoc();
-	if (!d || findStr.empty()) { editFind(); return; }
-	TextEditor::Coordinates cur = d->editor.GetCursorPosition();
-	std::string full = d->editor.GetText();
-	std::vector<std::string> lines;
-	{
-		std::stringstream ss(full);
-		std::string ln;
-		while (std::getline(ss, ln, '\n')) lines.push_back(ln);
-	}
-	int total = (int)lines.size();
-	std::string needle = findStr;
+	if (findStr.empty()) { editFind(); return; }
+	if (docs.empty()) return;
 	bool ic = !matchCase;
-	auto lower = [](std::string t) { std::transform(t.begin(), t.end(), t.begin(), [](unsigned char c){ return std::tolower(c); }); return t; };
-	if (ic) needle = lower(needle);
-	auto findFrom = [&](int startLine, int startCol) -> bool {
-		for (int line = startLine; line < total; ++line) {
-			std::string hay = ic ? lower(lines[line]) : lines[line];
-			int sc = (line == startLine) ? startCol : 0;
-			size_t pos = hay.find(needle, sc);
-			if (pos != std::string::npos) {
-				d->editor.SetCursorPosition(TextEditor::Coordinates(line, (int)pos + (int)needle.size()));
-				d->editor.SetSelection(TextEditor::Coordinates(line, (int)pos),
-					TextEditor::Coordinates(line, (int)pos + (int)needle.size()));
-				return true;
-			}
+	std::string needle = ic ? toLower(findStr) : findStr;
+	auto searchDoc = [&](Doc& d, int startLine, int startCol) -> bool {
+		std::vector<std::string> lines;
+		std::stringstream ss(d.editor.GetText());
+		std::string line;
+		while (std::getline(ss, line, '\n')) lines.push_back(line);
+		for (int row = startLine; row < (int)lines.size(); ++row) {
+			std::string hay = ic ? toLower(lines[row]) : lines[row];
+			size_t from = row == startLine ? (size_t)(startCol > 0 ? startCol : 0) : 0;
+			size_t pos = hay.find(needle, from);
+			if (pos == std::string::npos) continue;
+			size_t endPos = pos + findStr.size();
+			int startColumn = editorColumn(lines[row], pos);
+			int endColumn = editorColumn(lines[row], endPos);
+			d.editor.SetCursorPosition(TextEditor::Coordinates(row, endColumn));
+			d.editor.SetSelection(TextEditor::Coordinates(row, startColumn),
+				TextEditor::Coordinates(row, endColumn));
+			return true;
 		}
 		return false;
 	};
-	if (!findFrom(cur.mLine, cur.mColumn)) {
-		findFrom(0, 0);
+
+	int first = currentIndex >= 0 ? currentIndex : 0;
+	Doc& current = docs[first];
+	TextEditor::Coordinates cur = current.editor.GetCursorPosition();
+	if (searchDoc(current, cur.mLine, cur.mColumn)) {
+		findStatus.clear();
+		return;
 	}
+
+	if (findAllFiles) {
+		for (int offset = 1; offset < (int)docs.size(); ++offset) {
+			int index = (first + offset) % (int)docs.size();
+			if (searchDoc(docs[index], 0, 0)) {
+				currentIndex = index;
+				requestedIndex = index;
+				findStatus.clear();
+				return;
+			}
+		}
+	}
+
+	if (searchDoc(current, 0, 0)) {
+		findStatus.clear();
+		return;
+	}
+	findStatus = "Failed to find text in \"" + findStr + "\"";
 }
 
 void App::programExecute() { build(true, false); }
@@ -1003,6 +1040,7 @@ void App::drawPicker() {
 		if (ImGui::Button("New BlitzX3D IDE", ImVec2(-1, 0))) {
 			glfwMaximizeWindow(window);
 			windowW = prefs.win_w; windowH = prefs.win_h;
+			if (docs.empty()) fileNew();
 			pickerDone = true;
 		}
 		ImGui::Spacing();
@@ -1366,6 +1404,7 @@ void App::handleCtrlClick(Doc& d, const std::string& word, int line, int column)
 		for (const auto& f : t.funcs) {
 			if (stripDeclSuffix(toLower(f.label)) == lw) {
 				currentIndex = (int)k;
+				requestedIndex = (int)k;
 				t.editor.SetCursorPosition(TextEditor::Coordinates(f.line, 0));
 				t.editor.SetSelection(TextEditor::Coordinates(f.line, 0),
 					TextEditor::Coordinates(f.line, 0));

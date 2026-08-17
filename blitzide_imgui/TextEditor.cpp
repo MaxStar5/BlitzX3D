@@ -293,10 +293,14 @@ int TextEditor::InsertTextAt(Coordinates& /* inout */ aWhere, const char * aValu
 		else
 		{
 			auto& line = mLines[aWhere.mLine];
+			char inserted = *aValue;
 			auto d = UTF8CharLength(*aValue);
 			while (d-- > 0 && *aValue != '\0')
 				line.insert(line.begin() + cindex++, Glyph(*aValue++, PaletteIndex::Default));
-			++aWhere.mColumn;
+			if (inserted == '\t' && mTabSize > 0)
+				aWhere.mColumn = (aWhere.mColumn / mTabSize) * mTabSize + mTabSize;
+			else
+				++aWhere.mColumn;
 		}
 
 		mTextChanged = true;
@@ -716,6 +720,18 @@ void TextEditor::HandleKeyboardInputs()
 			Undo();
 		else if (!IsReadOnly() && ctrl && !shift && !alt && ImGui::IsKeyPressed(ImGuiKey_Y))
 			Redo();
+		else if (!IsReadOnly() && ctrl && !shift && !alt && ImGui::IsKeyPressed(ImGuiKey_Backspace))
+		{
+			if (HasSelection())
+				DeleteSelection();
+			else
+			{
+				auto end = GetActualCursorCoordinates();
+				MoveLeft(1, false, true);
+				SetSelection(GetActualCursorCoordinates(), end);
+				DeleteSelection();
+			}
+		}
 		else if (!ctrl && !alt && ImGui::IsKeyPressed(ImGuiKey_UpArrow))
 			MoveUp(1, shift);
 		else if (!ctrl && !alt && ImGui::IsKeyPressed(ImGuiKey_DownArrow))
@@ -749,7 +765,10 @@ void TextEditor::HandleKeyboardInputs()
 		else if (!IsReadOnly() && !ctrl && shift && !alt && ImGui::IsKeyPressed(ImGuiKey_Insert))
 			Paste();
 		else if (!IsReadOnly() && ctrl && !shift && !alt && ImGui::IsKeyPressed(ImGuiKey_V))
+		{
 			Paste();
+			io.InputQueueCharacters.resize(0);
+		}
 		else if (ctrl && !shift && !alt && ImGui::IsKeyPressed(ImGuiKey_X))
 			Cut();
 		else if (!ctrl && shift && !alt && ImGui::IsKeyPressed(ImGuiKey_Delete))
@@ -2005,12 +2024,16 @@ void TextEditor::Paste()
 
 		u.mAdded = clipText;
 		u.mAddedStart = GetActualCursorCoordinates();
-
-		InsertText(clipText);
-
-		u.mAddedEnd = GetActualCursorCoordinates();
+		Coordinates insertedEnd = u.mAddedStart;
+		int changedLines = InsertTextAt(insertedEnd, clipText);
+		SetSelection(insertedEnd, insertedEnd);
+		SetCursorPosition(insertedEnd);
+		u.mAddedEnd = insertedEnd;
 		u.mAfter = mState;
 		AddUndo(u);
+		mTextChanged = true;
+		Colorize(u.mAddedStart.mLine, changedLines + 1);
+		EnsureCursorVisible();
 	}
 }
 

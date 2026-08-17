@@ -164,6 +164,7 @@ void Prefs::open() {
 
 	std::string recentFile;
 	for (int i = 1; i < 11; ++i) {
+		recentFile.clear();
 		inipp::get_value(ini.sections["RECENT_FILES"], "File" + std::to_string(i), recentFile);
 		if (recentFile.empty()) continue;
 		bool dup = false;

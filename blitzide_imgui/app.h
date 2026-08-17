@@ -114,6 +114,12 @@ private:
 	bool showFind = false;
 	bool showReplace = false;
 	std::string findStr, replaceStr;
+	char findBuf[512] = {};
+	char replaceBuf[512] = {};
+	bool findFocusPending = false;
+	bool findAllFiles = false;
+	std::string findStatus;
+	int requestedIndex = -1;
 	int findFlags = 0;
 	bool matchCase = false;
 
