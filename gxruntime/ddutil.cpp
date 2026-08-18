@@ -295,9 +295,11 @@ void ddUtil::copy(IDirect3DDevice9* dev, IDirect3DSurface9* dest_surf, int dx, i
     if (src_readback) src_readback->Release();
 }
 
-IDirect3DSurface9* ddUtil::createDisplaySurface(int w, int h, gxGraphics* gfx) {
+IDirect3DSurface9* ddUtil::createDisplaySurface(int w, int h, int flags, gxGraphics* gfx) {
     IDirect3DSurface9* surf = nullptr;
-    gfx->dir3dDev->CreateOffscreenPlainSurface(w, h, D3DFMT_A8R8G8B8, D3DPOOL_SYSTEMMEM, &surf, nullptr);
+    D3DFORMAT format = (flags & (gxCanvas::CANVAS_TEX_ALPHA | gxCanvas::CANVAS_TEX_MASK))
+        ? D3DFMT_A8R8G8B8 : D3DFMT_X8R8G8B8;
+    gfx->dir3dDev->CreateOffscreenPlainSurface(w, h, format, D3DPOOL_SYSTEMMEM, &surf, nullptr);
     return surf;
 }
 

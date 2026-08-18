@@ -402,7 +402,7 @@ gxCanvas* gxGraphics::createCanvas(int w, int h, int flags) {
 		c->cls();
 		return c;
 	}
-	IDirect3DSurface9* surf = ddUtil::createDisplaySurface(w, h, this);
+    IDirect3DSurface9* surf = ddUtil::createDisplaySurface(w, h, flags, this);
 	if (!surf) return nullptr;
 	gxCanvas* c = new gxCanvas(this, surf, flags);
 	canvas_set.insert(c);
