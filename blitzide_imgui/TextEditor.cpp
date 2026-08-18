@@ -1914,17 +1914,19 @@ void TextEditor::Backspace()
 		else
 		{
 			auto& line = mLines[mState.mCursorPosition.mLine];
-			auto cindex = GetCharacterIndex(pos) - 1;
-			auto cend = cindex + 1;
+			auto cindex = GetCharacterIndex(pos);
+			if (cindex > 0)
+				--cindex;
 			while (cindex > 0 && IsUTFSequence(line[cindex].mChar))
 				--cindex;
 
 			//if (cindex > 0 && UTF8CharLength(line[cindex].mChar) > 1)
 			//	--cindex;
 
-			u.mRemovedStart = u.mRemovedEnd = GetActualCursorCoordinates();
-			--u.mRemovedStart.mColumn;
-			--mState.mCursorPosition.mColumn;
+			u.mRemovedStart = Coordinates(pos.mLine, GetCharacterColumn(pos.mLine, cindex));
+			u.mRemovedEnd = pos;
+			mState.mCursorPosition = u.mRemovedStart;
+			auto cend = cindex + UTF8CharLength(line[cindex].mChar);
 
 			while (cindex < line.size() && cend-- > cindex)
 			{
