@@ -63,6 +63,15 @@ static std::string resolveConfigDir() {
 	return prefs.homeDir + "/cfg";
 }
 
+static std::string recentPathKey(const std::string& path) {
+	try {
+		return std::filesystem::weakly_canonical(path).lexically_normal().string();
+	}
+	catch (...) {
+		return path;
+	}
+}
+
 static void parseColor(const std::string& s, int* rgb) {
 	rgb[0] = rgb[1] = rgb[2] = 0;
 	sscanf(s.c_str(), "%d %d %d", &rgb[0], &rgb[1], &rgb[2]);
@@ -141,6 +150,12 @@ void Prefs::open() {
 	inipp::get_value(ini.sections["COLORS"], "Comment", c); parseColor(c, rgb_comment);
 	inipp::get_value(ini.sections["COLORS"], "Digit", c); parseColor(c, rgb_digit);
 	inipp::get_value(ini.sections["COLORS"], "Default", c); parseColor(c, rgb_default);
+	if (inipp::get_value(ini.sections["COLORS"], "Known", c)) parseColor(c, rgb_known);
+	if (inipp::get_value(ini.sections["COLORS"], "Preproc", c)) parseColor(c, rgb_preproc);
+	if (inipp::get_value(ini.sections["COLORS"], "Global", c)) parseColor(c, rgb_global);
+	if (inipp::get_value(ini.sections["COLORS"], "Const", c)) parseColor(c, rgb_const);
+	if (inipp::get_value(ini.sections["COLORS"], "Cursor", c)) parseColor(c, rgb_cursor);
+	if (inipp::get_value(ini.sections["COLORS"], "Selection", c)) parseColor(c, rgb_selection);
 
 	inipp::get_value(ini.sections["EDITOR"], "TabSpaces", edit_tabs);
 	inipp::get_value(ini.sections["EDITOR"], "BackupCount", edit_backup);
@@ -153,20 +168,23 @@ void Prefs::open() {
 
 	inipp::get_value(ini.sections["UPDATE"], "IgnoreVersion", ignore_version_update);
 
+	recentFiles.clear();
 	std::string recentFile;
 	for (int i = 1; i < 11; ++i) {
 		recentFile.clear();
 		inipp::get_value(ini.sections["RECENT_FILES"], "File" + std::to_string(i), recentFile);
 		if (recentFile.empty()) continue;
+		const std::string recentKey = recentPathKey(recentFile);
 		bool dup = false;
 		for (const auto& existing : recentFiles) {
-			if (existing.size() != recentFile.size()) continue;
+			const std::string existingKey = recentPathKey(existing);
+			if (existingKey.size() != recentKey.size()) continue;
 			bool same = true;
-			for (size_t c = 0; c < existing.size(); ++c)
-				if (std::tolower((unsigned char)existing[c]) != std::tolower((unsigned char)recentFile[c])) { same = false; break; }
+			for (size_t c = 0; c < existingKey.size(); ++c)
+				if (std::tolower((unsigned char)existingKey[c]) != std::tolower((unsigned char)recentKey[c])) { same = false; break; }
 			if (same) { dup = true; break; }
 		}
-		if (!dup) recentFiles.push_back(recentFile);
+		if (!dup) recentFiles.push_back(recentKey);
 	}
 
 	themeLoadUserThemes(configDir + "/themes.ini");
@@ -210,6 +228,12 @@ void Prefs::close() {
 	colorsSection.insert(std::make_pair("Comment", colorToString(rgb_comment)));
 	colorsSection.insert(std::make_pair("Digit", colorToString(rgb_digit)));
 	colorsSection.insert(std::make_pair("Default", colorToString(rgb_default)));
+	colorsSection.insert(std::make_pair("Known", colorToString(rgb_known)));
+	colorsSection.insert(std::make_pair("Preproc", colorToString(rgb_preproc)));
+	colorsSection.insert(std::make_pair("Global", colorToString(rgb_global)));
+	colorsSection.insert(std::make_pair("Const", colorToString(rgb_const)));
+	colorsSection.insert(std::make_pair("Cursor", colorToString(rgb_cursor)));
+	colorsSection.insert(std::make_pair("Selection", colorToString(rgb_selection)));
 
 	auto& editorSection = ini.sections["EDITOR"];
 	editorSection.insert(std::make_pair("TabSpaces", std::to_string(edit_tabs)));

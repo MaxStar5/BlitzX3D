@@ -29,6 +29,7 @@
 #include <algorithm>
 #include <cctype>
 #include <filesystem>
+#include <map>
 
 namespace fs = std::filesystem;
 
@@ -98,6 +99,44 @@ static bool samePath(const std::string& a, const std::string& b) {
 #endif
 }
 
+static void constrainFloatingWindow() {
+	if (ImGui::GetWindowDockNode() != nullptr) return;
+	ImGuiViewport* viewport = ImGui::GetMainViewport();
+	ImVec2 pos = ImGui::GetWindowPos();
+	ImVec2 size = ImGui::GetWindowSize();
+	const float minX = viewport->WorkPos.x - size.x + 48.0f;
+	const float maxX = viewport->WorkPos.x + viewport->WorkSize.x - 48.0f;
+	const float minY = viewport->WorkPos.y;
+	const float maxY = viewport->WorkPos.y + viewport->WorkSize.y - ImGui::GetFrameHeight();
+	auto clampValue = [](float value, float low, float high) {
+		if (high < low) high = low;
+		if (value < low) return low;
+		if (value > high) return high;
+		return value;
+	};
+	ImGui::SetWindowPos(ImVec2(clampValue(pos.x, minX, maxX), clampValue(pos.y, minY, maxY)), ImGuiCond_Always);
+}
+
+static std::string getXmlAttr(const std::string& text, const std::string& key) {
+	size_t k = text.find(key + "=");
+	if (k == std::string::npos) return "";
+	size_t q1 = text.find('"', k);
+	if (q1 == std::string::npos) return "";
+	size_t q2 = text.find('"', q1 + 1);
+	if (q2 == std::string::npos) return "";
+	return text.substr(q1 + 1, q2 - q1 - 1);
+}
+
+static std::string unescapeXml(const std::string& value) {
+	std::string result = value;
+	for (size_t i = 0; i < value.size(); ++i) {
+		if (value.compare(i, 5, "&amp;") == 0) { result += '&'; i += 4; }
+		else if (value.compare(i, 6, "&quot;") == 0) { result += '"'; i += 5; }
+		else result += value[i];
+	}
+	return result;
+}
+
 static bool fileDefinesFunction(const std::string& path, const std::string& name, int& outLine) {
 	std::ifstream in(path, std::ios::binary);
 	if (!in.good()) return false;
@@ -137,6 +176,7 @@ static std::vector<std::string> getIncludePaths(const std::string& path) {
 		if (!line.empty() && line.back() == '\r') line.pop_back();
 		size_t lead = line.find_first_not_of(" \t");
 		std::string t = lead == std::string::npos ? "" : toLower(line.substr(lead));
+		if (!t.empty() && t[0] == '#') t.erase(0, 1);
 		if (startsWithWord(t, "include")) {
 			size_t q1 = line.find('"');
 			size_t q2 = q1 == std::string::npos ? std::string::npos : line.find('"', q1 + 1);
@@ -183,7 +223,7 @@ static ImVec4 themeCol3(const int* rgb) {
 }
 
 static void applyEditorColorsToPrefs(const std::string& name) {
-	int cols[7][3];
+	int cols[ThemeEditorColorCount][3];
 	if (!themeEditorColors(name, cols)) return;
 	memcpy(prefs.rgb_bkgrnd, cols[0], sizeof(prefs.rgb_bkgrnd));
 	memcpy(prefs.rgb_string, cols[1], sizeof(prefs.rgb_string));
@@ -192,9 +232,15 @@ static void applyEditorColorsToPrefs(const std::string& name) {
 	memcpy(prefs.rgb_comment, cols[4], sizeof(prefs.rgb_comment));
 	memcpy(prefs.rgb_digit, cols[5], sizeof(prefs.rgb_digit));
 	memcpy(prefs.rgb_default, cols[6], sizeof(prefs.rgb_default));
+	memcpy(prefs.rgb_known, cols[7], sizeof(prefs.rgb_known));
+	memcpy(prefs.rgb_preproc, cols[8], sizeof(prefs.rgb_preproc));
+	memcpy(prefs.rgb_global, cols[9], sizeof(prefs.rgb_global));
+	memcpy(prefs.rgb_const, cols[10], sizeof(prefs.rgb_const));
+	memcpy(prefs.rgb_cursor, cols[11], sizeof(prefs.rgb_cursor));
+	memcpy(prefs.rgb_selection, cols[12], sizeof(prefs.rgb_selection));
 }
 
-static void currentEditorColors(int out[7][3]) {
+static void currentEditorColors(int out[ThemeEditorColorCount][3]) {
 	memcpy(out[0], prefs.rgb_bkgrnd, sizeof(prefs.rgb_bkgrnd));
 	memcpy(out[1], prefs.rgb_string, sizeof(prefs.rgb_string));
 	memcpy(out[2], prefs.rgb_ident, sizeof(prefs.rgb_ident));
@@ -202,6 +248,12 @@ static void currentEditorColors(int out[7][3]) {
 	memcpy(out[4], prefs.rgb_comment, sizeof(prefs.rgb_comment));
 	memcpy(out[5], prefs.rgb_digit, sizeof(prefs.rgb_digit));
 	memcpy(out[6], prefs.rgb_default, sizeof(prefs.rgb_default));
+	memcpy(out[7], prefs.rgb_known, sizeof(prefs.rgb_known));
+	memcpy(out[8], prefs.rgb_preproc, sizeof(prefs.rgb_preproc));
+	memcpy(out[9], prefs.rgb_global, sizeof(prefs.rgb_global));
+	memcpy(out[10], prefs.rgb_const, sizeof(prefs.rgb_const));
+	memcpy(out[11], prefs.rgb_cursor, sizeof(prefs.rgb_cursor));
+	memcpy(out[12], prefs.rgb_selection, sizeof(prefs.rgb_selection));
 }
 
 static void applyCurrentTheme() {
@@ -226,6 +278,7 @@ bool App::init(int argc, char* argv[]) {
 	if (!SDL_Init(SDL_INIT_VIDEO | SDL_INIT_GAMEPAD)) return false;
 
 	prefs.open();
+	applyEditorColorsToPrefs(prefs.theme);
 
 	windowW = prefs.win_w; windowH = prefs.win_h;
 	if (!skipPicker) { windowW = 320; windowH = 140; }
@@ -257,6 +310,9 @@ bool App::init(int argc, char* argv[]) {
 	ImGui::CreateContext();
 	ImGuiIO& io = ImGui::GetIO();
 	io.ConfigFlags |= ImGuiConfigFlags_ViewportsEnable;
+	io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
+	io.ConfigWindowsMoveFromTitleBarOnly = true;
+	io.ConfigWindowsResizeFromEdges = true;
 	io.Fonts->AddFontDefaultBitmap();
 	if (!prefs.configDir.empty()) {
 		io.IniFilename = strdup((prefs.configDir + "/imgui.ini").c_str());
@@ -289,6 +345,7 @@ void App::shutdown() {
 		prefs.win_w = windowW;
 		prefs.win_h = windowH;
 	}
+	if (ImGui::GetIO().IniFilename) ImGui::SaveIniSettingsToDisk(ImGui::GetIO().IniFilename);
 	prefs.close();
 
 	ImGui_ImplOpenGL3_Shutdown();
@@ -318,6 +375,9 @@ void App::frame() {
 	ImGui::NewFrame();
 
 	if (skipPicker || pickerDone) {
+		ImGui::DockSpaceOverViewport(ImHashStr("BlitzX3DDockSpaceV5"));
+		setupDockLayout();
+
 		ImGuiIO& kio = ImGui::GetIO();
 		bool ctrl = kio.KeyCtrl;
 		bool shift = kio.KeyShift;
@@ -349,13 +409,16 @@ void App::frame() {
 
 	if (keywordsLoaded) {
 		keywordsLoaded = false;
-		for (auto& d : docs) {
-			std::set<std::string> custom;
-			for (const auto& f : d.funcs) {
-				if (f.kind == 0) custom.insert(f.label);
+		if (projectOpen)
+			refreshProjectSymbols();
+		else
+			for (auto& d : docs) {
+				std::set<std::string> custom;
+				for (const auto& f : d.funcs) {
+					if (f.kind == 0) custom.insert(f.label);
+				}
+				d.editor.SetLanguageDefinition(makeBlitzLangDef(keywords, funcs, custom, d.globals, d.consts));
 			}
-			d.editor.SetLanguageDefinition(makeBlitzLangDef(keywords, funcs, custom, d.globals, d.consts));
-		}
 	}
 
 	menuBar();
@@ -365,6 +428,7 @@ void App::frame() {
 	drawEditorPane();
 
 	if (showFuncList) drawFuncList();
+	if (showProjectNavigator) drawProjectNavigator();
 
 	if (showOutput) drawOutput();
 
@@ -373,6 +437,7 @@ void App::frame() {
 	drawCommandLine();
 
 	drawStylize();
+	drawProjectWindow();
 
 	drawUpdate();
 	drawUpdateDialog();
@@ -431,6 +496,7 @@ void App::menuBar() {
 			if (prefs.recentFiles.empty()) ImGui::TextDisabled("(none)");
 			ImGui::EndMenu();
 		}
+		if (ImGui::MenuItem("Project...")) openProjectWindow();
 		ImGui::Separator();
 		if (ImGui::MenuItem("Exit", "Alt+F4")) quitting = true;
 		ImGui::EndMenu();
@@ -452,6 +518,7 @@ void App::menuBar() {
 
 	if (ImGui::BeginMenu("View")) {
 		if (ImGui::MenuItem("Functions Panel", nullptr, &showFuncList)) {}
+		if (ImGui::MenuItem("Project Navigator", nullptr, &showProjectNavigator)) {}
 		if (ImGui::MenuItem("Output Panel", nullptr, &showOutput)) {}
 		ImGui::Separator();
 		if (ImGui::MenuItem("Stylization...")) showStylize = true;
@@ -510,11 +577,9 @@ void App::drawTabs() {
 }
 
 void App::drawEditorPane() {
-	ImGuiViewport* vp = ImGui::GetMainViewport();
-	float menuH = ImGui::GetFrameHeight();
-	ImGui::SetNextWindowPos(ImVec2(vp->WorkPos.x + vp->WorkSize.x * 0.22f, vp->WorkPos.y + menuH), ImGuiCond_Always);
-	ImGui::SetNextWindowSize(ImVec2(vp->WorkSize.x * 0.78f, vp->WorkSize.y - menuH - vp->WorkSize.y * 0.30f), ImGuiCond_Always);
-	ImGui::Begin("Editor", nullptr, ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize);
+	ImGui::SetNextWindowSize(ImVec2(800, 500), ImGuiCond_FirstUseEver);
+	ImGui::Begin("Editor", nullptr, ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
+	constrainFloatingWindow();
 	drawTabs();
 
 	Doc* d = currentDoc();
@@ -584,50 +649,168 @@ void App::applyPalette(Doc& d) {
 	pal[(int)TextEditor::PaletteIndex::Background] = col(prefs.rgb_bkgrnd);
 	pal[(int)TextEditor::PaletteIndex::String] = col(prefs.rgb_string);
 	pal[(int)TextEditor::PaletteIndex::Identifier] = col(prefs.rgb_ident);
-	pal[(int)TextEditor::PaletteIndex::KnownIdentifier] = IM_COL32(150, 255, 200, 255);
-	pal[(int)TextEditor::PaletteIndex::PreprocIdentifier] = IM_COL32(255, 200, 120, 255);
-	pal[(int)TextEditor::PaletteIndex::Global] = IM_COL32(196, 160, 255, 255);
-	pal[(int)TextEditor::PaletteIndex::Const] = IM_COL32(235, 205, 255, 255);
+	pal[(int)TextEditor::PaletteIndex::KnownIdentifier] = col(prefs.rgb_known);
+	pal[(int)TextEditor::PaletteIndex::PreprocIdentifier] = col(prefs.rgb_preproc);
+	pal[(int)TextEditor::PaletteIndex::Global] = col(prefs.rgb_global);
+	pal[(int)TextEditor::PaletteIndex::Const] = col(prefs.rgb_const);
 	pal[(int)TextEditor::PaletteIndex::Keyword] = col(prefs.rgb_keyword);
 	pal[(int)TextEditor::PaletteIndex::Comment] = col(prefs.rgb_comment);
 	pal[(int)TextEditor::PaletteIndex::MultiLineComment] = col(prefs.rgb_comment);
 	pal[(int)TextEditor::PaletteIndex::Number] = col(prefs.rgb_digit);
 	pal[(int)TextEditor::PaletteIndex::Default] = col(prefs.rgb_default);
-	pal[(int)TextEditor::PaletteIndex::Selection] = IM_COL32(255, 200, 80, 170);
+	pal[(int)TextEditor::PaletteIndex::Cursor] = col(prefs.rgb_cursor);
+	pal[(int)TextEditor::PaletteIndex::Selection] = IM_COL32(prefs.rgb_selection[0], prefs.rgb_selection[1], prefs.rgb_selection[2], 170);
 	pal[(int)TextEditor::PaletteIndex::LineNumber] = IM_COL32(120, 120, 120, 200);
 	d.editor.SetPalette(pal);
 }
 
 void App::drawFuncList() {
-	ImGuiViewport* vp = ImGui::GetMainViewport();
-	float menuH = ImGui::GetFrameHeight();
-	ImGui::SetNextWindowPos(ImVec2(vp->WorkPos.x, vp->WorkPos.y + menuH), ImGuiCond_Always);
-	ImGui::SetNextWindowSize(ImVec2(vp->WorkSize.x * 0.22f, vp->WorkSize.y - menuH), ImGuiCond_Always);
-	ImGui::Begin("Functions", nullptr, ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize);
+	ImGui::SetNextWindowSize(ImVec2(280, 600), ImGuiCond_FirstUseEver);
+	ImGui::Begin("Functions");
+	constrainFloatingWindow();
 	Doc* d = currentDoc();
 	if (d) {
-		for (size_t k = 0; k < d->funcs.size(); ++k) {
-			const Doc::FuncItem& f = d->funcs[k];
-			const char* prefix = f.kind == 0 ? "F " : f.kind == 1 ? "T " : ". ";
-			std::string label = prefix + f.label;
-			ImGui::PushID((int)k);
-			if (ImGui::Selectable(label.c_str())) {
-				d->editor.SetCursorPosition(TextEditor::Coordinates(f.line, 0));
-				d->editor.SetSelection(TextEditor::Coordinates(f.line, 0),
-					TextEditor::Coordinates(f.line, 0));
+		std::vector<int> functionDocs;
+		if (projectOpen)
+			functionDocs = projectIncludedDocs;
+		if (functionDocs.empty()) functionDocs.push_back(currentIndex);
+
+		int item = 0;
+		for (int docIndex : functionDocs) {
+			if (docIndex < 0 || docIndex >= (int)docs.size()) continue;
+			Doc& source = docs[docIndex];
+			if (projectOpen && functionDocs.size() > 1)
+				ImGui::TextDisabled("%s", source.name.c_str());
+			for (const auto& f : source.funcs) {
+				const char* prefix = f.kind == 0 ? "F " : f.kind == 1 ? "T " : ". ";
+				std::string label = prefix + f.label;
+				ImGui::PushID(item++);
+				if (ImGui::Selectable(label.c_str())) {
+					currentIndex = docIndex;
+					requestedIndex = docIndex;
+					source.editor.SetCursorPosition(TextEditor::Coordinates(f.line, 0));
+					source.editor.SetSelection(TextEditor::Coordinates(f.line, 0),
+						TextEditor::Coordinates(f.line, 0));
+				}
+				ImGui::PopID();
 			}
-			ImGui::PopID();
 		}
-		if (d->funcs.empty()) ImGui::TextDisabled("(no functions)");
+		if (item == 0) ImGui::TextDisabled("(no functions)");
 	}
 	ImGui::End();
 }
 
+void App::drawProjectNavigator() {
+	ImGui::SetNextWindowSize(ImVec2(330, 520), ImGuiCond_FirstUseEver);
+	if (!ImGui::Begin("Project Navigator", &showProjectNavigator)) {
+		ImGui::End();
+		return;
+	}
+	constrainFloatingWindow();
+	if (!projectOpen) {
+		ImGui::Spacing();
+		ImGui::TextWrapped("Open a project to use this navigator.");
+		ImGui::End();
+		return;
+	}
+	const std::vector<int>& sourceDocs = projectNavigatorDocs.empty() ? projectIncludedDocs : projectNavigatorDocs;
+
+	if (ImGui::BeginTabBar("##project_navigator_tabs")) {
+		if (ImGui::BeginTabItem("Files")) {
+			ImGui::SetNextItemWidth(-1);
+			ImGui::InputTextWithHint("##project_filter", "Filter files...", projectFilterBuf, sizeof(projectFilterBuf));
+			std::string filter = toLower(projectFilterBuf);
+			ImGui::BeginChild("##project_file_list", ImVec2(0, 0), false);
+			for (int docIndex : sourceDocs) {
+				if (docIndex < 0 || docIndex >= (int)docs.size()) continue;
+				Doc& d = docs[docIndex];
+				if (!filter.empty() && toLower(d.name).find(filter) == std::string::npos && toLower(d.path).find(filter) == std::string::npos) continue;
+				ImGui::PushID(docIndex);
+				if (ImGui::Selectable(d.name.c_str(), currentIndex == docIndex)) {
+					currentIndex = docIndex;
+					requestedIndex = docIndex;
+				}
+				ImGui::TextDisabled("%s", d.path.c_str());
+				ImGui::PopID();
+			}
+			ImGui::EndChild();
+			ImGui::EndTabItem();
+		}
+
+		if (ImGui::BeginTabItem("Symbols")) {
+			ImGui::SetNextItemWidth(-1);
+			ImGui::InputTextWithHint("##project_symbol_filter", "Search symbols...", projectSymbolFilterBuf, sizeof(projectSymbolFilterBuf));
+			std::string filter = toLower(projectSymbolFilterBuf);
+			ImGui::BeginChild("##project_symbol_list", ImVec2(0, 0), false);
+			const std::vector<int>& symbolDocs = projectIncludedDocs.empty() ? sourceDocs : projectIncludedDocs;
+			int item = 0;
+			for (int docIndex : symbolDocs) {
+				if (docIndex < 0 || docIndex >= (int)docs.size()) continue;
+				Doc& d = docs[docIndex];
+				ImGui::TextDisabled("%s", d.name.c_str());
+				for (const auto& f : d.funcs) {
+					if (!filter.empty() && toLower(f.label).find(filter) == std::string::npos && toLower(d.name).find(filter) == std::string::npos) continue;
+					const char* prefix = f.kind == 0 ? "F " : f.kind == 1 ? "T " : ". ";
+					std::string label = prefix + f.label;
+					ImGui::PushID(item++);
+					if (ImGui::Selectable(label.c_str())) {
+						currentIndex = docIndex;
+						requestedIndex = docIndex;
+						d.editor.SetCursorPosition(TextEditor::Coordinates(f.line, 0));
+						d.editor.SetSelection(TextEditor::Coordinates(f.line, 0), TextEditor::Coordinates(f.line, 0));
+					}
+					ImGui::PopID();
+				}
+			}
+			if (item == 0) ImGui::TextDisabled("(no symbols)");
+			ImGui::EndChild();
+			ImGui::EndTabItem();
+		}
+
+		if (ImGui::BeginTabItem("Project")) {
+			ImGui::TextUnformatted("Project");
+			ImGui::TextWrapped("%s", projectPath.c_str());
+			ImGui::Separator();
+			ImGui::TextUnformatted("Main file");
+			ImGui::TextWrapped("%s", projectMainPath.c_str());
+			if (ImGui::Button("Project Manager")) openProjectWindow();
+			ImGui::SameLine();
+			if (ImGui::Button("Refresh")) refreshProjectSymbols();
+			ImGui::EndTabItem();
+		}
+		ImGui::EndTabBar();
+	}
+	ImGui::End();
+}
+
+void App::setupDockLayout() {
+	static bool dockLayoutInitialized = false;
+	if (dockLayoutInitialized) return;
+	dockLayoutInitialized = true;
+	ImGuiViewport* viewport = ImGui::GetMainViewport();
+	ImGuiID dockspace = ImHashStr("BlitzX3DDockSpaceV5");
+	ImGuiDockNode* node = ImGui::DockBuilderGetNode(dockspace);
+	if (node && (node->ChildNodes[0] != nullptr || node->ChildNodes[1] != nullptr)) return;
+
+	ImGui::DockBuilderRemoveNode(dockspace);
+	ImGui::DockBuilderAddNode(dockspace, ImGuiDockNodeFlags_DockSpace);
+	ImGui::DockBuilderSetNodeSize(dockspace, viewport->WorkSize);
+
+	ImGuiID left, right, center, bottom;
+	ImGui::DockBuilderSplitNode(dockspace, ImGuiDir_Left, 0.145f, &left, &center);
+	ImGui::DockBuilderSplitNode(center, ImGuiDir_Right, 0.18f, &right, &center);
+	ImGui::DockBuilderSplitNode(center, ImGuiDir_Down, 0.22f, &bottom, &center);
+	ImGui::DockBuilderDockWindow("Functions", left);
+	ImGui::DockBuilderDockWindow("Project Navigator", right);
+	ImGui::DockBuilderDockWindow("Editor", center);
+	ImGui::DockBuilderDockWindow("Output", bottom);
+	ImGui::DockBuilderFinish(dockspace);
+}
+
 void App::drawOutput() {
-	ImGuiViewport* vp = ImGui::GetMainViewport();
-	ImGui::SetNextWindowPos(ImVec2(vp->WorkPos.x + vp->WorkSize.x * 0.22f, vp->WorkPos.y + vp->WorkSize.y * 0.70f), ImGuiCond_Always);
-	ImGui::SetNextWindowSize(ImVec2(vp->WorkSize.x * 0.78f, vp->WorkSize.y * 0.30f), ImGuiCond_Always);
-	ImGui::Begin("Output", nullptr, ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize);
+	ImGui::SetNextWindowSize(ImVec2(900, 220), ImGuiCond_FirstUseEver);
+	ImGui::Begin("Output");
+	constrainFloatingWindow();
 	ImGui::BeginChild("##outlines", ImVec2(0, -ImGui::GetFrameHeightWithSpacing() - 4), false);
 	{
 		std::lock_guard<std::mutex> lock(outputMutex);
@@ -740,7 +923,12 @@ int App::addDoc(const std::string& path) {
 
 bool App::openFile(const std::string& path, bool recent) {
 	for (int k = 0; k < (int)docs.size(); ++k) {
-		if (samePath(docs[k].path, path)) { currentIndex = k; requestedIndex = k; return true; }
+		if (samePath(docs[k].path, path)) {
+			currentIndex = k;
+			requestedIndex = k;
+			if (recent) addRecent(path);
+			return true;
+		}
 	}
 	fs::path p(path);
 	if (!fs::exists(p)) return false;
@@ -749,9 +937,24 @@ bool App::openFile(const std::string& path, bool recent) {
 	return true;
 }
 
+static std::string pathKey(const std::string& path) {
+	std::string key = normalizePath(path);
+#if defined(_WIN32)
+	return toLower(key);
+#else
+	return key;
+#endif
+}
+
 bool App::openProject(const std::string& path) {
 	fs::path p(path);
 	if (!fs::exists(p)) return false;
+	projectOpen = false;
+	projectPath.clear();
+	projectMainPath.clear();
+	projectFiles.clear();
+	projectIncludedDocs.clear();
+	projectNavigatorDocs.clear();
 	fs::path dir = p.parent_path();
 
 	std::ifstream in(path, std::ios::binary);
@@ -795,12 +998,17 @@ bool App::openProject(const std::string& path) {
 		}
 	}
 
-	auto openRel = [&](const std::string& rel) {
+		auto openRel = [&](const std::string& rel) {
 		std::string r = rel;
 		if (!r.empty() && (r[0] == '\\' || r[0] == '/')) r = r.substr(1);
 		std::replace(r.begin(), r.end(), '\\', '/');
 		fs::path f = dir / r;
-		if (fs::exists(f)) openFile(f.string(), false);
+		if (fs::exists(f)) {
+			std::string absolute = normalizePath(f.string());
+			if (std::find_if(projectFiles.begin(), projectFiles.end(), [&](const std::string& existing) { return samePath(existing, absolute); }) == projectFiles.end())
+				projectFiles.push_back(absolute);
+			openFile(f.string(), false);
+		}
 	};
 
 	if (!mainRel.empty()) openRel(mainRel);
@@ -809,14 +1017,104 @@ bool App::openProject(const std::string& path) {
 		openRel(rel);
 	}
 
-	currentIndex = 0;
+	std::string mainTarget = path;
+	if (!mainRel.empty()) {
+		std::string r = mainRel;
+		if (!r.empty() && (r[0] == '\\' || r[0] == '/')) r = r.substr(1);
+		std::replace(r.begin(), r.end(), '\\', '/');
+		mainTarget = (dir / r).string();
+	}
+	for (size_t k = 0; k < docs.size(); ++k) {
+		if (samePath(docs[k].path, mainTarget)) {
+			currentIndex = (int)k;
+			requestedIndex = (int)k;
+			break;
+		}
+	}
+	addRecent(path);
+	return true;
+}
+
+bool App::openBlitzProject(const std::string& path) {
+	fs::path projectFile(path);
+	if (!fs::exists(projectFile)) return false;
+
+	std::ifstream in(path, std::ios::binary);
+	if (!in.good()) return false;
+	std::stringstream ss;
+	ss << in.rdbuf();
+	std::string text = ss.str();
+
+	std::string mainFile = unescapeXml(getXmlAttr(text, "MainFile"));
+	std::vector<std::string> files;
+	size_t pos = 0;
+	while ((pos = text.find("<File", pos)) != std::string::npos) {
+		size_t end = text.find('>', pos);
+		if (end == std::string::npos) break;
+		std::string file = unescapeXml(getXmlAttr(text.substr(pos, end - pos + 1), "Path"));
+		if (!file.empty()) files.push_back(file);
+		pos = end + 1;
+	}
+	if (mainFile.empty() && !files.empty()) mainFile = files.front();
+	if (mainFile.empty()) return false;
+
+	fs::path dir = projectFile.parent_path();
+	auto resolve = [&](const std::string& file) {
+		fs::path result(file);
+		if (result.is_relative()) result = dir / result;
+		return result.lexically_normal();
+	};
+
+	fs::path mainPath = resolve(mainFile);
+	if (std::find_if(files.begin(), files.end(), [&](const std::string& file) { return samePath(resolve(file).string(), mainPath.string()); }) == files.end())
+		files.insert(files.begin(), mainFile);
+
+	projectOpen = true;
+	projectPath = normalizePath(path);
+	projectMainPath = normalizePath(mainPath.string());
+	projectFiles.clear();
+
+	auto openProjectFile = [&](const std::string& file) {
+		fs::path resolved = resolve(file);
+		if (!fs::exists(resolved)) return;
+		std::string absolute = normalizePath(resolved.string());
+		if (std::find_if(projectFiles.begin(), projectFiles.end(), [&](const std::string& existing) { return samePath(existing, absolute); }) != projectFiles.end()) return;
+		projectFiles.push_back(absolute);
+		openFile(absolute, false);
+	};
+
+	openProjectFile(mainFile);
+	for (const auto& file : files)
+		if (!samePath(resolve(file).string(), mainPath.string())) openProjectFile(file);
+
+	if (projectFiles.empty()) {
+		projectOpen = false;
+		projectPath.clear();
+		projectMainPath.clear();
+		return false;
+	}
+
+	for (size_t k = 0; k < docs.size(); ++k) {
+		if (samePath(docs[k].path, projectMainPath)) {
+			currentIndex = (int)k;
+			requestedIndex = (int)k;
+			break;
+		}
+	}
+	refreshProjectSymbols();
 	addRecent(path);
 	return true;
 }
 
 bool App::openPath(const std::string& path) {
-	if (toLower(fs::path(path).extension().string()) == ".ipf") return openProject(path);
-	return openFile(path);
+	std::string extension = toLower(fs::path(path).extension().string());
+	bool opened = extension == ".ipf"
+		? openProject(path)
+		: extension == ".bxp"
+		? openBlitzProject(path)
+		: openFile(path);
+	if (!opened) removeRecent(path);
+	return opened;
 }
 
 static int editorColumn(const std::string& line, size_t bytePos) {
@@ -833,13 +1131,108 @@ void App::fileOpen() {
 	std::string path;
 	if (fileOpenDialog(path)) openPath(path);
 }
+void App::openProjectWindow() {
+	projectDraftMainPath = projectOpen ? projectMainPath : "";
+	if (projectDraftMainPath.empty()) {
+		if (Doc* d = currentDoc()) projectDraftMainPath = d->path;
+	}
+	std::memset(projectSavePathBuf, 0, sizeof(projectSavePathBuf));
+	std::string savePath = projectPath;
+	if (!savePath.empty()) std::strncpy(projectSavePathBuf, savePath.c_str(), sizeof(projectSavePathBuf) - 1);
+	projectStatus.clear();
+	showProjectWindow = true;
+}
+bool App::convertIpfToBxp(const std::string& path) {
+	if (!openProject(path)) return false;
+	Doc* main = currentDoc();
+	if (!main || main->path.empty()) return false;
+	projectDraftMainPath = main->path;
+	fs::path target(path);
+	target.replace_extension(".bxp");
+	return saveProjectFile(target.string());
+}
+bool App::saveProjectFile(const std::string& path) {
+	if (path.empty()) return false;
+	std::string mainPath = normalizePath(projectDraftMainPath);
+	if (mainPath.empty() || !fs::exists(mainPath)) return false;
+
+	std::vector<std::string> files;
+	if (!projectFiles.empty()) {
+		for (const auto& file : projectFiles) {
+			if (!fs::exists(file)) continue;
+			std::string normalized = normalizePath(file);
+			if (std::find_if(files.begin(), files.end(), [&](const std::string& existing) { return samePath(existing, normalized); }) == files.end())
+				files.push_back(normalized);
+		}
+	}
+	else {
+		for (const auto& d : docs) {
+			if (d.path.empty() || !fs::exists(d.path)) continue;
+			std::string file = normalizePath(d.path);
+			if (std::find_if(files.begin(), files.end(), [&](const std::string& existing) { return samePath(existing, file); }) == files.end())
+				files.push_back(file);
+		}
+	}
+	if (std::find_if(files.begin(), files.end(), [&](const std::string& file) { return samePath(file, mainPath); }) == files.end())
+		files.insert(files.begin(), mainPath);
+
+	fs::path projectFile(path);
+	fs::path dir = projectFile.parent_path();
+	if (dir.empty()) dir = fs::current_path();
+	std::ofstream out(path, std::ios::binary | std::ios::trunc);
+	if (!out.good()) return false;
+
+	auto escape = [](const std::string& value) {
+		std::string result;
+		for (char c : value) {
+			if (c == '&') result += "&amp;";
+			else if (c == '"') result += "&quot;";
+			else result += c;
+		}
+		return result;
+	};
+	auto relativePath = [&](const std::string& file) {
+		std::error_code ec;
+		fs::path relative = fs::relative(file, dir, ec);
+		if (ec || relative.empty()) relative = fs::path(file).filename();
+		return relative.generic_string();
+	};
+
+	out << "<BlitzX3DProject MainFile=\"" << escape(relativePath(mainPath)) << "\">\r\n";
+	for (const auto& file : files)
+		out << "  <File Path=\"" << escape(relativePath(file)) << "\"/>\r\n";
+	out << "</BlitzX3DProject>\r\n";
+	out.close();
+	if (!out) return false;
+
+	projectOpen = true;
+	projectPath = normalizePath(path);
+	projectMainPath = mainPath;
+	projectFiles = files;
+	refreshProjectSymbols();
+	addRecent(path);
+	return true;
+}
 void App::addRecent(const std::string& path) {
 	if (path.empty()) return;
-	for (auto it = prefs.recentFiles.begin(); it != prefs.recentFiles.end(); ++it) {
-		if (samePath(*it, path)) { prefs.recentFiles.erase(it); break; }
+	const std::string storedPath = normalizePath(path);
+	const std::string& recentPath = storedPath.empty() ? path : storedPath;
+	for (auto it = prefs.recentFiles.begin(); it != prefs.recentFiles.end();) {
+		if (samePath(*it, recentPath))
+			it = prefs.recentFiles.erase(it);
+		else
+			++it;
 	}
-	prefs.recentFiles.insert(prefs.recentFiles.begin(), path);
+	prefs.recentFiles.insert(prefs.recentFiles.begin(), recentPath);
 	if (prefs.recentFiles.size() > 10) prefs.recentFiles.pop_back();
+}
+void App::removeRecent(const std::string& path) {
+	for (auto it = prefs.recentFiles.begin(); it != prefs.recentFiles.end();) {
+		if (samePath(*it, path))
+			it = prefs.recentFiles.erase(it);
+		else
+			++it;
+	}
 }
 void App::fileRecent(const std::string& path) { openPath(path); }
 
@@ -882,6 +1275,7 @@ void App::fileClose(int idx) {
 	docs.erase(docs.begin() + idx);
 	if (currentIndex >= (int)docs.size()) currentIndex = (int)docs.size() - 1;
 	if (docs.empty()) currentIndex = -1;
+	if (projectOpen) refreshProjectSymbols();
 }
 void App::fileExit() { quitting = true; }
 
@@ -1109,7 +1503,7 @@ void App::drawStylize() {
 				if (ImGui::Button("Save current as theme")) {
 					std::string name = themeNameBuf;
 					if (!name.empty()) {
-						int cols[7][3];
+					int cols[ThemeEditorColorCount][3];
 						currentEditorColors(cols);
 						UserTheme t;
 						t.name = name;
@@ -1143,7 +1537,18 @@ void App::drawStylize() {
 				pick("Comment", prefs.rgb_comment);
 				pick("Number", prefs.rgb_digit);
 				pick("Default", prefs.rgb_default);
-				if (deactivated) prefs.close();
+				pick("Known identifier", prefs.rgb_known);
+				pick("Preprocessor identifier", prefs.rgb_preproc);
+				pick("Global", prefs.rgb_global);
+				pick("Constant", prefs.rgb_const);
+				pick("Cursor", prefs.rgb_cursor);
+				pick("Selection", prefs.rgb_selection);
+				if (deactivated) {
+					int cols[ThemeEditorColorCount][3];
+					currentEditorColors(cols);
+					themeSetUserEditorColors(prefs.theme, cols);
+					prefs.close();
+				}
 				ImGui::EndTabItem();
 			}
 
@@ -1169,6 +1574,75 @@ void App::drawStylize() {
 
 			ImGui::EndTabBar();
 		}
+	}
+	ImGui::End();
+}
+
+void App::drawProjectWindow() {
+	if (!showProjectWindow) return;
+	int flags = ImGuiWindowFlags_NoCollapse;
+	ImGui::SetNextWindowSize(ImVec2(620, 480), ImGuiCond_Appearing);
+	if (ImGui::Begin("BlitzX3D Project", &showProjectWindow, flags)) {
+		ImGui::BringWindowToDisplayFront(ImGui::GetCurrentWindow());
+		constrainFloatingWindow();
+		ImGui::TextUnformatted("Project file");
+		ImGui::SetNextItemWidth(-110);
+		ImGui::InputText("##project_path", projectSavePathBuf, sizeof(projectSavePathBuf));
+		ImGui::SameLine();
+		if (ImGui::Button("Save As...")) {
+			std::string path;
+			if (fileSaveDialog(path, "project.bxp", "BlitzX3D project (*.bxp)|*.bxp|All files (*.*)|*.*")) {
+				std::strncpy(projectSavePathBuf, path.c_str(), sizeof(projectSavePathBuf) - 1);
+				projectSavePathBuf[sizeof(projectSavePathBuf) - 1] = 0;
+			}
+		}
+		ImGui::Separator();
+		ImGui::TextUnformatted("Main file");
+		if (projectDraftMainPath.empty()) ImGui::TextDisabled("(none)");
+		else ImGui::TextWrapped("%s", projectDraftMainPath.c_str());
+		ImGui::Separator();
+		ImGui::TextUnformatted("Source files");
+		ImGui::BeginChild("##project_sources", ImVec2(0, -78), true);
+		for (size_t k = 0; k < docs.size(); ++k) {
+			if (docs[k].path.empty()) continue;
+			ImGui::PushID((int)k);
+			bool selected = samePath(projectDraftMainPath, docs[k].path);
+			if (ImGui::Selectable(docs[k].name.c_str(), selected)) projectDraftMainPath = docs[k].path;
+			ImGui::SameLine();
+			ImGui::TextDisabled("%s", docs[k].path.c_str());
+			ImGui::PopID();
+		}
+		ImGui::EndChild();
+		if (ImGui::Button("Open Source...")) {
+			std::string path;
+			if (fileOpenDialog(path, "Blitz source (*.bb)|*.bb|All files (*.*)|*.*") && openFile(path)) {
+				if (projectOpen) projectFiles.push_back(normalizePath(path));
+				if (projectOpen) refreshProjectSymbols();
+			}
+		}
+		ImGui::SameLine();
+		if (ImGui::Button("Save Project")) {
+			std::string path = projectSavePathBuf;
+			if (path.empty()) {
+				if (fileSaveDialog(path, "project.bxp", "BlitzX3D project (*.bxp)|*.bxp|All files (*.*)|*.*")) {
+					std::strncpy(projectSavePathBuf, path.c_str(), sizeof(projectSavePathBuf) - 1);
+					projectSavePathBuf[sizeof(projectSavePathBuf) - 1] = 0;
+				}
+			}
+			if (!path.empty()) projectStatus = saveProjectFile(path) ? "Project saved." : "Project could not be saved.";
+		}
+		ImGui::SameLine();
+		if (ImGui::Button("Import IPF...")) {
+			std::string path;
+			if (fileOpenDialog(path, "Old Blitz project (*.ipf)|*.ipf|All files (*.*)|*.*")) {
+				if (convertIpfToBxp(path)) {
+					openProjectWindow();
+					projectStatus = "IPF converted to BXP.";
+				}
+				else projectStatus = "IPF conversion failed.";
+			}
+		}
+		if (!projectStatus.empty()) ImGui::TextUnformatted(projectStatus.c_str());
 	}
 	ImGui::End();
 }
@@ -1199,7 +1673,7 @@ void App::build(bool exec, bool publish) {
 		return;
 	}
 
-	std::string src_file = e->path;
+	std::string src_file = projectOpen && !projectMainPath.empty() ? projectMainPath : e->path;
 	std::vector<std::string> args;
 	args.push_back(prefs.homeDir + "/bin/blitzcc");
 	args.push_back("-q");
@@ -1232,7 +1706,7 @@ void App::build(bool exec, bool publish) {
 		rebuildFuncList(*e);
 	}
 	else {
-		prefs.prg_lastbuild = e->path;
+		prefs.prg_lastbuild = src_file;
 	}
 
 	args.push_back(src);
@@ -1334,6 +1808,15 @@ void App::rebuildFuncList(Doc& d) {
 			std::string name = p == std::string::npos ? "" : line.substr(p + 1);
 			if (name.size()) d.funcs.push_back({ name, ln, 1 });
 		}
+		else if (startsWithWord(t, "enum")) {
+			size_t p = line.find_first_of(" \t", lead);
+			if (p != std::string::npos) {
+				std::string name = line.substr(p + 1);
+				size_t end = name.find_first_of(" \t({");
+				if (end != std::string::npos) name.resize(end);
+				if (!name.empty()) d.funcs.push_back({ name, ln, 1 });
+			}
+		}
 		else if (startsWithWord(t, "global")) {
 			parseBlitzDecl(line.substr(lead + 6), d.globals);
 		}
@@ -1349,11 +1832,61 @@ void App::rebuildFuncList(Doc& d) {
 	}
 }
 
+void App::refreshProjectSymbols() {
+	if (!projectOpen || projectMainPath.empty()) return;
+
+	std::vector<std::string> visited;
+	std::vector<std::string> reachable;
+	std::function<void(const std::string&)> visit = [&](const std::string& path) {
+		std::string key = pathKey(path);
+		if (std::find(visited.begin(), visited.end(), key) != visited.end()) return;
+		visited.push_back(key);
+		reachable.push_back(key);
+		for (const auto& include : getIncludePaths(path)) visit(include);
+	};
+	visit(projectMainPath);
+	for (const auto& path : projectFiles) {
+		std::string key = pathKey(path);
+		if (std::find(reachable.begin(), reachable.end(), key) == reachable.end()) reachable.push_back(key);
+	}
+	for (const auto& d : docs) {
+		if (d.path.empty()) continue;
+		std::string key = pathKey(d.path);
+		if (std::find(reachable.begin(), reachable.end(), key) == reachable.end()) reachable.push_back(key);
+	}
+
+	projectIncludedDocs.clear();
+	projectNavigatorDocs.clear();
+	std::map<std::string, int> docsByPath;
+	for (size_t docIndex = 0; docIndex < docs.size(); ++docIndex) {
+		if (!docs[docIndex].path.empty()) docsByPath[pathKey(docs[docIndex].path)] = (int)docIndex;
+	}
+	std::set<std::string> projectGlobals;
+	std::set<std::string> projectConsts;
+	std::set<std::string> projectFuncs;
+	for (const auto& path : reachable) {
+		auto docIt = docsByPath.find(path);
+		if (docIt == docsByPath.end()) continue;
+		int docIndex = docIt->second;
+		auto& d = docs[docIndex];
+		projectIncludedDocs.push_back(docIndex);
+		projectGlobals.insert(d.globals.begin(), d.globals.end());
+		projectConsts.insert(d.consts.begin(), d.consts.end());
+		for (const auto& f : d.funcs)
+			if (f.kind == 0) projectFuncs.insert(f.label);
+	}
+	projectNavigatorDocs = projectIncludedDocs;
+
+	for (auto& d : docs)
+		d.editor.SetLanguageDefinition(makeBlitzLangDef(keywords, funcs, projectFuncs, projectGlobals, projectConsts));
+}
+
 void App::handleCtrlClick(Doc& d, const std::string& word, int line, int column) {
 	(void)column;
 	std::string ln = d.editor.GetLineText(line);
 	size_t lead = ln.find_first_not_of(" \t");
 	std::string t = lead == std::string::npos ? "" : toLower(ln.substr(lead));
+	if (!t.empty() && t[0] == '#') t.erase(0, 1);
 
 	if (startsWithWord(t, "include")) {
 		size_t q1 = ln.find('"');
@@ -1372,6 +1905,7 @@ void App::handleCtrlClick(Doc& d, const std::string& word, int line, int column)
 
 	std::string lw = stripDeclSuffix(toLower(word));
 	for (size_t k = 0; k < docs.size(); ++k) {
+		if (projectOpen && std::find(projectIncludedDocs.begin(), projectIncludedDocs.end(), (int)k) == projectIncludedDocs.end()) continue;
 		Doc& t = docs[k];
 		for (const auto& f : t.funcs) {
 			if (stripDeclSuffix(toLower(f.label)) == lw) {

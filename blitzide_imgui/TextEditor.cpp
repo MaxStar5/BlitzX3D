@@ -802,6 +802,8 @@ void TextEditor::HandleMouseInputs()
 
 	if (ImGui::IsWindowHovered())
 	{
+		if (ctrl && !alt && !GetWordAt(ScreenPosToCoordinates(ImGui::GetMousePos())).empty())
+			ImGui::SetMouseCursor(ImGuiMouseCursor_Hand);
 		if (!shift && !alt)
 		{
 			auto click = ImGui::IsMouseClicked(0);
@@ -2333,7 +2335,17 @@ const TextEditor::Palette & TextEditor::GetRetroBluePalette()
 
 std::string TextEditor::GetText() const
 {
-	return GetText(Coordinates(), Coordinates((int)mLines.size(), 0));
+	std::string result;
+
+	for (size_t i = 0; i < mLines.size(); ++i)
+	{
+		for (const auto& glyph : mLines[i])
+			result += glyph.mChar;
+		if (i + 1 < mLines.size())
+			result += '\n';
+	}
+
+	return result;
 }
 
 std::vector<std::string> TextEditor::GetTextLines() const

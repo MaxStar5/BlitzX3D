@@ -29,6 +29,12 @@ struct Prefs {
 	int rgb_comment[3] = { 255, 238, 0 };
 	int rgb_digit[3] = { 51, 255, 221 };
 	int rgb_default[3] = { 238, 238, 238 };
+	int rgb_known[3] = { 150, 255, 200 };
+	int rgb_preproc[3] = { 255, 200, 120 };
+	int rgb_global[3] = { 196, 160, 255 };
+	int rgb_const[3] = { 235, 205, 255 };
+	int rgb_cursor[3] = { 255, 255, 255 };
+	int rgb_selection[3] = { 255, 200, 80 };
 
 	int edit_tabs = 4;
 	int edit_backup = 2;

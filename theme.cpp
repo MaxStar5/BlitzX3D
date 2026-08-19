@@ -95,25 +95,25 @@ static void applyStyleBase(const ImVec4& bg, const ImVec4& panel, const ImVec4& 
 
 static const ThemeSpec gThemes[] = {
 	{ "Classic Dark", colf(32, 32, 36), colf(28, 28, 31), colf(24, 24, 27), colf(220, 220, 220), colf(120, 190, 240),
-		{ { 34, 85, 136 }, { 0, 255, 102 }, { 255, 255, 255 }, { 170, 255, 255 }, { 255, 238, 0 }, { 51, 255, 221 }, { 238, 238, 238 } } },
+		{ { 34, 85, 136 }, { 0, 255, 102 }, { 255, 255, 255 }, { 170, 255, 255 }, { 255, 238, 0 }, { 51, 255, 221 }, { 238, 238, 238 }, { 150, 255, 200 }, { 255, 200, 120 }, { 255, 190, 60 }, { 235, 205, 255 }, { 255, 255, 255 }, { 255, 200, 80 } } },
 	{ "Classic Light", colf(238, 238, 242), colf(250, 250, 252), colf(255, 255, 255), colf(40, 40, 40), colf(0, 120, 215),
-		{ { 248, 248, 248 }, { 0, 128, 64 }, { 40, 40, 40 }, { 0, 0, 200 }, { 0, 128, 0 }, { 160, 64, 0 }, { 20, 20, 20 } } },
+		{ { 248, 248, 248 }, { 0, 128, 64 }, { 40, 40, 40 }, { 0, 0, 200 }, { 0, 128, 0 }, { 160, 64, 0 }, { 20, 20, 20 }, { 0, 100, 180 }, { 160, 80, 0 }, { 100, 40, 160 }, { 120, 60, 160 }, { 20, 20, 20 }, { 180, 210, 245 } } },
 	{ "Classic", colf(31, 31, 31), colf(42, 42, 42), colf(48, 48, 48), colf(255, 255, 255), colf(97, 139, 191),
-		{ { 30, 30, 30 }, { 106, 255, 132 }, { 220, 220, 220 }, { 86, 156, 214 }, { 106, 153, 85 }, { 181, 206, 168 }, { 212, 212, 212 } } },
+		{ { 30, 30, 30 }, { 106, 255, 132 }, { 220, 220, 220 }, { 86, 156, 214 }, { 106, 153, 85 }, { 181, 206, 168 }, { 212, 212, 212 }, { 120, 220, 150 }, { 220, 170, 100 }, { 190, 150, 240 }, { 220, 180, 250 }, { 255, 255, 255 }, { 120, 160, 220 } } },
 	{ "BlitzPro", colf(32, 32, 34), colf(24, 24, 26), colf(20, 20, 22), colf(220, 220, 214), colf(230, 125, 163),
-		{ { 30, 30, 30 }, { 240, 155, 135 }, { 220, 220, 204 }, { 230, 125, 163 }, { 87, 166, 74 }, { 50, 235, 135 }, { 238, 238, 238 } } },
+		{ { 30, 30, 30 }, { 240, 155, 135 }, { 220, 220, 204 }, { 230, 125, 163 }, { 87, 166, 74 }, { 50, 235, 135 }, { 238, 238, 238 }, { 140, 220, 160 }, { 240, 190, 120 }, { 210, 150, 240 }, { 230, 190, 250 }, { 255, 255, 255 }, { 130, 100, 150 } } },
 	{ "One Dark", colf(40, 44, 52), colf(33, 37, 43), colf(48, 53, 63), colf(171, 178, 191), colf(97, 175, 239),
-		{ { 40, 44, 52 }, { 152, 195, 121 }, { 224, 228, 235 }, { 198, 120, 221 }, { 92, 99, 112 }, { 209, 154, 102 }, { 171, 178, 191 } } },
+		{ { 40, 44, 52 }, { 152, 195, 121 }, { 224, 228, 235 }, { 198, 120, 221 }, { 92, 99, 112 }, { 209, 154, 102 }, { 171, 178, 191 }, { 130, 210, 150 }, { 230, 170, 100 }, { 190, 145, 240 }, { 220, 175, 245 }, { 240, 240, 240 }, { 90, 120, 170 } } },
 	{ "Gruvbox Dark", colf(40, 40, 40), colf(29, 32, 33), colf(50, 48, 47), colf(235, 219, 178), colf(215, 153, 33),
-		{ { 40, 40, 40 }, { 184, 187, 38 }, { 235, 219, 178 }, { 204, 36, 29 }, { 146, 131, 116 }, { 214, 93, 14 }, { 235, 219, 178 } } },
+		{ { 40, 40, 40 }, { 184, 187, 38 }, { 235, 219, 178 }, { 204, 36, 29 }, { 146, 131, 116 }, { 214, 93, 14 }, { 235, 219, 178 }, { 170, 210, 110 }, { 240, 170, 90 }, { 210, 160, 230 }, { 225, 185, 240 }, { 250, 240, 210 }, { 130, 100, 50 } } },
 	{ "Solarized Dark", colf(0, 43, 54), colf(7, 54, 66), colf(0, 58, 73), colf(147, 161, 161), colf(38, 139, 210),
-		{ { 0, 43, 54 }, { 133, 153, 0 }, { 211, 54, 130 }, { 181, 137, 0 }, { 108, 113, 196 }, { 220, 50, 47 }, { 147, 161, 161 } } },
+		{ { 0, 43, 54 }, { 133, 153, 0 }, { 211, 54, 130 }, { 181, 137, 0 }, { 108, 113, 196 }, { 220, 50, 47 }, { 147, 161, 161 }, { 170, 190, 100 }, { 240, 180, 90 }, { 190, 150, 220 }, { 220, 180, 235 }, { 230, 240, 230 }, { 60, 110, 140 } } },
 	{ "Dracula", colf(40, 42, 54), colf(33, 34, 44), colf(55, 57, 71), colf(248, 248, 242), colf(189, 147, 249),
-		{ { 40, 42, 54 }, { 241, 250, 140 }, { 248, 248, 242 }, { 255, 121, 198 }, { 98, 114, 164 }, { 139, 233, 253 }, { 248, 248, 242 } } },
+		{ { 40, 42, 54 }, { 241, 250, 140 }, { 248, 248, 242 }, { 255, 121, 198 }, { 98, 114, 164 }, { 139, 233, 253 }, { 248, 248, 242 }, { 180, 240, 180 }, { 255, 190, 120 }, { 220, 170, 255 }, { 240, 200, 255 }, { 255, 255, 255 }, { 130, 100, 180 } } },
 	{ "Nord", colf(46, 52, 64), colf(59, 66, 82), colf(67, 76, 94), colf(216, 222, 233), colf(136, 192, 208),
-		{ { 46, 52, 64 }, { 163, 190, 140 }, { 216, 222, 233 }, { 129, 161, 193 }, { 76, 86, 106 }, { 208, 135, 112 }, { 216, 222, 233 } } },
+		{ { 46, 52, 64 }, { 163, 190, 140 }, { 216, 222, 233 }, { 129, 161, 193 }, { 76, 86, 106 }, { 208, 135, 112 }, { 216, 222, 233 }, { 170, 210, 170 }, { 230, 175, 120 }, { 190, 170, 230 }, { 220, 195, 240 }, { 240, 245, 250 }, { 90, 130, 170 } } },
 	{ "Catppuccin", colf(30, 30, 46), colf(24, 24, 37), colf(49, 49, 68), colf(205, 214, 244), colf(180, 190, 254),
-		{ { 30, 30, 46 }, { 166, 227, 161 }, { 205, 214, 244 }, { 203, 166, 247 }, { 108, 112, 134 }, { 250, 179, 135 }, { 205, 214, 244 } } },
+		{ { 30, 30, 46 }, { 166, 227, 161 }, { 205, 214, 244 }, { 203, 166, 247 }, { 108, 112, 134 }, { 250, 179, 135 }, { 205, 214, 244 }, { 180, 235, 180 }, { 255, 195, 130 }, { 220, 180, 255 }, { 240, 205, 255 }, { 255, 255, 255 }, { 120, 130, 190 } } },
 };
 
 static const int gThemeBuiltinCount = (int)(sizeof(gThemes) / sizeof(gThemes[0]));
@@ -174,7 +174,7 @@ void themeLoadUserThemes(const std::string& path) {
 
 	for (auto& sec : ini.sections) {
 		if (sec.first.rfind("theme_", 0) != 0) continue;
-		UserTheme t;
+		UserTheme t = {};
 		if (!inipp::get_value(sec.second, "Name", t.name)) continue;
 		std::string v;
 		if (inipp::get_value(sec.second, "Bg", v)) parseColor(v, t.bg);
@@ -189,6 +189,18 @@ void themeLoadUserThemes(const std::string& path) {
 		if (inipp::get_value(sec.second, "Comment", v)) parseColor(v, t.editor[4]);
 		if (inipp::get_value(sec.second, "Digit", v)) parseColor(v, t.editor[5]);
 		if (inipp::get_value(sec.second, "Default", v)) parseColor(v, t.editor[6]);
+		memcpy(t.editor[7], t.editor[2], sizeof(t.editor[7]));
+		memcpy(t.editor[8], t.editor[3], sizeof(t.editor[8]));
+		memcpy(t.editor[9], t.editor[2], sizeof(t.editor[9]));
+		memcpy(t.editor[10], t.editor[3], sizeof(t.editor[10]));
+		memcpy(t.editor[11], t.editor[6], sizeof(t.editor[11]));
+		memcpy(t.editor[12], t.editor[0], sizeof(t.editor[12]));
+		if (inipp::get_value(sec.second, "Known", v)) parseColor(v, t.editor[7]);
+		if (inipp::get_value(sec.second, "Preproc", v)) parseColor(v, t.editor[8]);
+		if (inipp::get_value(sec.second, "Global", v)) parseColor(v, t.editor[9]);
+		if (inipp::get_value(sec.second, "Const", v)) parseColor(v, t.editor[10]);
+		if (inipp::get_value(sec.second, "Cursor", v)) parseColor(v, t.editor[11]);
+		if (inipp::get_value(sec.second, "Selection", v)) parseColor(v, t.editor[12]);
 		gUserThemes.push_back(t);
 	}
 }
@@ -212,6 +224,12 @@ void themeSaveUserThemes(const std::string& path) {
 		sec.insert(std::make_pair("Comment", colorToString(t.editor[4])));
 		sec.insert(std::make_pair("Digit", colorToString(t.editor[5])));
 		sec.insert(std::make_pair("Default", colorToString(t.editor[6])));
+		sec.insert(std::make_pair("Known", colorToString(t.editor[7])));
+		sec.insert(std::make_pair("Preproc", colorToString(t.editor[8])));
+		sec.insert(std::make_pair("Global", colorToString(t.editor[9])));
+		sec.insert(std::make_pair("Const", colorToString(t.editor[10])));
+		sec.insert(std::make_pair("Cursor", colorToString(t.editor[11])));
+		sec.insert(std::make_pair("Selection", colorToString(t.editor[12])));
 	}
 	std::ofstream out(path.c_str(), std::ios::out | std::ios::trunc);
 	if (!out.good()) return;
@@ -258,7 +276,7 @@ void themeApplyStyle(const std::string& name, float rounding, float alpha) {
 	applyStyleBase(t.bg, t.panel, t.surface, t.text, t.accent, rounding, alpha);
 }
 
-bool themeEditorColors(const std::string& name, int out[7][3]) {
+bool themeEditorColors(const std::string& name, int out[13][3]) {
 	bool isUser = false;
 	int idx = 0;
 	if (!themeFind(name, &isUser, &idx)) return false;
@@ -271,7 +289,7 @@ bool themeEditorColors(const std::string& name, int out[7][3]) {
 	return true;
 }
 
-void themeCapture(UserTheme& t, const int editor[7][3]) {
+void themeCapture(UserTheme& t, const int editor[13][3]) {
 	ImGuiStyle& s = ImGui::GetStyle();
 	auto to3 = [](const ImVec4& c, int* rgb) {
 		rgb[0] = (int)(c.x * 255.0f + 0.5f);
@@ -284,4 +302,12 @@ void themeCapture(UserTheme& t, const int editor[7][3]) {
 	to3(s.Colors[ImGuiCol_Text], t.text);
 	to3(s.Colors[ImGuiCol_CheckMark], t.accent);
 	memcpy(t.editor, editor, sizeof(t.editor));
+}
+
+void themeSetUserEditorColors(const std::string& name, const int editor[13][3]) {
+	bool isUser = false;
+	int index = 0;
+	if (!themeFind(name, &isUser, &index) || !isUser) return;
+	memcpy(gUserThemes[index].editor, editor, sizeof(gUserThemes[index].editor));
+	themeSaveUserThemes(gUserThemesPath);
 }

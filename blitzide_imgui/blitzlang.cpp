@@ -109,7 +109,7 @@ TextEditor::LanguageDefinition makeBlitzLangDef(const std::set<std::string>& key
 		std::transform(t.begin(), t.end(), t.begin(), [](unsigned char c) { return std::toupper(c); });
 		TextEditor::Identifier id;
 		id.mDeclaration = "Function";
-		langDef.mPreprocIdentifiers.insert(std::make_pair(t, id));
+		langDef.mIdentifiers.insert(std::make_pair(t, id));
 	}
 
 	for (const auto& g : globals) {

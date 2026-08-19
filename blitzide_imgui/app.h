@@ -53,6 +53,7 @@ private:
 	void fileExit();
 	void fileRecent(const std::string& path);
 	void addRecent(const std::string& path);
+	void removeRecent(const std::string& path);
 
 	void editCut();
 	void editCopy();
@@ -85,8 +86,13 @@ private:
 	int addDoc(const std::string& path);
 	bool openFile(const std::string& path, bool recent = true);
 	bool openProject(const std::string& path);
+	bool openBlitzProject(const std::string& path);
 	bool openPath(const std::string& path);
 	void rebuildFuncList(Doc& d);
+	void refreshProjectSymbols();
+	void openProjectWindow();
+	bool convertIpfToBxp(const std::string& path);
+	bool saveProjectFile(const std::string& path);
 	void handleCtrlClick(Doc& d, const std::string& word, int line, int column);
 	void applyPalette(Doc& d);
 
@@ -99,6 +105,9 @@ private:
 	void drawMenus();
 	void drawCommandLine();
 	void drawStylize();
+	void drawProjectWindow();
+	void drawProjectNavigator();
+	void setupDockLayout();
 	void drawPaneBackground();
 
 	void initKeywords();
@@ -149,6 +158,20 @@ private:
 	bool updateOpen = false;
 
 	bool showStylize = false;
+	bool showProjectWindow = false;
+	bool showProjectNavigator = true;
+	std::string projectDraftMainPath;
+	std::string projectStatus;
+	char projectSavePathBuf[1024] = {};
+	char projectFilterBuf[256] = {};
+	char projectSymbolFilterBuf[256] = {};
+
+	bool projectOpen = false;
+	std::string projectPath;
+	std::string projectMainPath;
+	std::vector<std::string> projectFiles;
+	std::vector<int> projectIncludedDocs;
+	std::vector<int> projectNavigatorDocs;
 
 	bool aboutOpen = false;
 	bool quitting = false;
