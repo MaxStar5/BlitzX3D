@@ -630,11 +630,17 @@ void App::drawEditorPane() {
 	}
 
 	applyPalette(*d);
+	bool textChanged = d->editor.IsTextChanged();
 
 	ImVec2 avail = ImGui::GetContentRegionAvail();
 	ImGui::PushFont(nullptr, ImGui::GetStyle().FontSizeBase * editorFontScale);
 	d->editor.Render(d->name.c_str(), avail, false);
 	ImGui::PopFont();
+	textChanged = textChanged || d->editor.IsTextChanged();
+	if (textChanged) {
+		d->modified = true;
+		rebuildFuncList(*d);
+	}
 
 	std::string word;
 	int cline, ccol;
@@ -943,6 +949,7 @@ int App::addDoc(const std::string& path) {
 		if (f.kind == 0) custom.insert(f.label);
 	}
 	d.editor.SetLanguageDefinition(makeBlitzLangDef(keywords, funcs, custom, d.globals, d.consts));
+	d.editor.ClearTextChanged();
 	d.modified = false;
 	docs.push_back(std::move(d));
 	currentIndex = (int)docs.size() - 1;
