@@ -118,17 +118,32 @@ static void constrainFloatingWindow() {
 }
 
 static std::string getXmlAttr(const std::string& text, const std::string& key) {
-	size_t k = text.find(key + "=");
-	if (k == std::string::npos) return "";
-	size_t q1 = text.find('"', k);
-	if (q1 == std::string::npos) return "";
-	size_t q2 = text.find('"', q1 + 1);
-	if (q2 == std::string::npos) return "";
-	return text.substr(q1 + 1, q2 - q1 - 1);
+	size_t k = 0;
+	while ((k = text.find(key, k)) != std::string::npos) {
+		size_t end = k + key.size();
+		if (k > 0 && (std::isalnum((unsigned char)text[k - 1]) || text[k - 1] == '_')) {
+			k = end;
+			continue;
+		}
+		while (end < text.size() && std::isspace((unsigned char)text[end])) ++end;
+		if (end >= text.size() || text[end] != '=') {
+			k = end;
+			continue;
+		}
+		++end;
+		while (end < text.size() && std::isspace((unsigned char)text[end])) ++end;
+		if (end >= text.size() || (text[end] != '"' && text[end] != '\'')) return "";
+		char quote = text[end++];
+		size_t close = text.find(quote, end);
+		if (close == std::string::npos) return "";
+		return text.substr(end, close - end);
+	}
+	return "";
 }
 
 static std::string unescapeXml(const std::string& value) {
-	std::string result = value;
+	std::string result;
+	result.reserve(value.size());
 	for (size_t i = 0; i < value.size(); ++i) {
 		if (value.compare(i, 5, "&amp;") == 0) { result += '&'; i += 4; }
 		else if (value.compare(i, 6, "&quot;") == 0) { result += '"'; i += 5; }
@@ -977,43 +992,31 @@ bool App::openProject(const std::string& path) {
 	std::string mainFile;
 	std::vector<std::string> absPaths;
 
-	auto getAttr = [](const std::string& s, const std::string& key) -> std::string {
-		size_t k = s.find(key + "=");
-		if (k == std::string::npos) return "";
-		size_t q1 = s.find('"', k);
-		if (q1 == std::string::npos) return "";
-		size_t q2 = s.find('"', q1 + 1);
-		if (q2 == std::string::npos) return "";
-		return s.substr(q1 + 1, q2 - q1 - 1);
-	};
-
 	size_t pos = 0;
-	while ((pos = text.find("AbsPath=", pos)) != std::string::npos) {
-		std::string v = getAttr(text.substr(pos), "AbsPath");
+	while ((pos = text.find("AbsPath", pos)) != std::string::npos) {
+		std::string v = getXmlAttr(text.substr(pos), "AbsPath");
 		if (!v.empty()) absPaths.push_back(v);
-		pos += 8;
+		pos += 7;
 	}
-	mainFile = getAttr(text, "MainFile");
+	mainFile = getXmlAttr(text, "MainFile");
 
 	if (absPaths.empty()) return false;
 
 	std::string mainRel;
 	if (!mainFile.empty()) {
+		std::string mainName = toLower(fs::path(mainFile).filename().string());
 		for (const auto& rel : absPaths) {
-			std::string r = rel;
-			if (!r.empty() && (r[0] == '\\' || r[0] == '/')) r = r.substr(1);
-			std::string base = r;
-			size_t slash = base.find_last_of('/');
-			if (slash != std::string::npos) base = base.substr(slash + 1);
-			if (base == mainFile) { mainRel = rel; break; }
+			if (toLower(fs::path(rel).filename().string()) == mainName) { mainRel = rel; break; }
 		}
 	}
 
-		auto openRel = [&](const std::string& rel) {
-		std::string r = rel;
-		if (!r.empty() && (r[0] == '\\' || r[0] == '/')) r = r.substr(1);
-		std::replace(r.begin(), r.end(), '\\', '/');
-		fs::path f = dir / r;
+	auto resolveProjectPath = [&](const std::string& rel) {
+		fs::path f(rel);
+		if (f.is_relative()) f = dir / f;
+		return f.lexically_normal();
+	};
+	auto openRel = [&](const std::string& rel) {
+		fs::path f = resolveProjectPath(rel);
 		if (fs::exists(f)) {
 			std::string absolute = normalizePath(f.string());
 			if (std::find_if(projectFiles.begin(), projectFiles.end(), [&](const std::string& existing) { return samePath(existing, absolute); }) == projectFiles.end())
@@ -1030,10 +1033,7 @@ bool App::openProject(const std::string& path) {
 
 	std::string mainTarget = path;
 	if (!mainRel.empty()) {
-		std::string r = mainRel;
-		if (!r.empty() && (r[0] == '\\' || r[0] == '/')) r = r.substr(1);
-		std::replace(r.begin(), r.end(), '\\', '/');
-		mainTarget = (dir / r).string();
+		mainTarget = resolveProjectPath(mainRel).string();
 	}
 	for (size_t k = 0; k < docs.size(); ++k) {
 		if (samePath(docs[k].path, mainTarget)) {
