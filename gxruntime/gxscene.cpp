@@ -609,6 +609,7 @@ void gxScene::setRenderState(const RenderState& rs) {
 	setEffect(rs.effect);
 
 	if (lastRenderStateValid && memcmp(&rs, &lastRenderState, sizeof(rs)) == 0) {
+		setFogMode();
 		return;
 	}
 
@@ -693,6 +694,7 @@ void gxScene::setRenderState(const RenderState& rs) {
 			setRS(D3DRS_ALPHATESTENABLE, false);
 		}
 	}
+	setFogMode();
 	if(setmat) {
 		dir3dDev->SetMaterial(&material);
 	}
