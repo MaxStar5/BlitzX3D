@@ -326,8 +326,8 @@ bool App::init(int argc, char* argv[]) {
 	ImGuiIO& io = ImGui::GetIO();
 	io.ConfigFlags |= ImGuiConfigFlags_ViewportsEnable;
 	io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
-	io.ConfigWindowsMoveFromTitleBarOnly = true;
 	io.ConfigWindowsResizeFromEdges = true;
+	io.ConfigDockingAlwaysTabBar = true;
 	io.Fonts->AddFontDefaultBitmap();
 	if (!prefs.configDir.empty()) {
 		io.IniFilename = strdup((prefs.configDir + "/imgui.ini").c_str());
@@ -392,8 +392,8 @@ void App::frame() {
 	ImGui::NewFrame();
 
 	if (skipPicker || pickerDone) {
-		ImGui::DockSpaceOverViewport(ImHashStr("BlitzX3DDockSpaceV5"));
 		setupDockLayout();
+		ImGui::DockSpaceOverViewport(ImHashStr("BlitzX3DDockSpaceV5"));
 
 		ImGuiIO& kio = ImGui::GetIO();
 		bool ctrl = kio.KeyCtrl;
