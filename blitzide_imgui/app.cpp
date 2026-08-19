@@ -1128,13 +1128,53 @@ bool App::openBlitzProject(const std::string& path) {
 
 bool App::openPath(const std::string& path) {
 	std::string extension = toLower(fs::path(path).extension().string());
+	bool alreadyOpen = false;
+	for (const auto& d : docs)
+		if (samePath(d.path, path)) { alreadyOpen = true; break; }
 	bool opened = extension == ".ipf"
 		? openProject(path)
 		: extension == ".bxp"
 		? openBlitzProject(path)
 		: openFile(path);
-	if (!opened) removeRecent(path);
+	if (!opened) { removeRecent(path); return opened; }
+	if (extension != ".ipf" && extension != ".bxp" && !projectOpen && !alreadyOpen)
+		autoSetupProjectFromIncludes(path);
 	return opened;
+}
+
+void App::autoSetupProjectFromIncludes(const std::string& path) {
+	if (projectOpen) return;
+	if (!fs::exists(path)) return;
+
+	std::vector<std::string> visited;
+	std::vector<std::string> reachable;
+	std::function<void(const std::string&)> visit = [&](const std::string& p) {
+		std::string key = pathKey(p);
+		if (std::find(visited.begin(), visited.end(), key) != visited.end()) return;
+		visited.push_back(key);
+		reachable.push_back(key);
+		for (const auto& inc : getIncludePaths(p)) visit(inc);
+	};
+	visit(path);
+
+	std::vector<std::string> others;
+	for (const auto& r : reachable)
+		if (!samePath(r, path)) others.push_back(r);
+	if (others.empty()) return;
+
+	projectOpen = true;
+	projectPath.clear();
+	projectMainPath = normalizePath(path);
+	projectFiles.clear();
+	for (const auto& r : reachable) {
+		std::string abs = normalizePath(r);
+		if (std::find_if(projectFiles.begin(), projectFiles.end(), [&](const std::string& e) { return samePath(e, abs); }) == projectFiles.end())
+			projectFiles.push_back(abs);
+	}
+	for (const auto& f : projectFiles) {
+		if (!samePath(f, path)) openFile(f, false);
+	}
+	refreshProjectSymbols();
 }
 
 static int editorColumn(const std::string& line, size_t bytePos) {

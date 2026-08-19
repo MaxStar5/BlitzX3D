@@ -88,6 +88,7 @@ private:
 	bool openProject(const std::string& path);
 	bool openBlitzProject(const std::string& path);
 	bool openPath(const std::string& path);
+	void autoSetupProjectFromIncludes(const std::string& path);
 	void rebuildFuncList(Doc& d);
 	void refreshProjectSymbols();
 	void openProjectWindow();
