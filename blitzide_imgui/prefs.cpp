@@ -123,6 +123,11 @@ void Prefs::open() {
 	inipp::get_value(ini.sections["COMPILER"], "Preprocess", prg_preprocess);
 	inipp::get_value(ini.sections["COMPILER"], "Debug", prg_debug);
 	inipp::get_value(ini.sections["COMPILER"], "NoLAA", prg_nolaa);
+	inipp::get_value(ini.sections["COMPILER"], "DumpAsm", prg_dumpasm);
+	inipp::get_value(ini.sections["COMPILER"], "Quiet", prg_quiet);
+	inipp::get_value(ini.sections["COMPILER"], "VeryQuiet", prg_veryquiet);
+	inipp::get_value(ini.sections["COMPILER"], "DumpKeys", prg_dumpkeys);
+	inipp::get_value(ini.sections["COMPILER"], "Encrypt", prg_encrypt);
 	inipp::get_value(ini.sections["COMPILER"], "LastBuild", prg_lastbuild);
 	inipp::get_value(ini.sections["COMPILER"], "CommandLine", cmd_line);
 
@@ -202,6 +207,11 @@ void Prefs::close() {
 	compilerSection.insert(std::make_pair("Preprocess", boolToString(prg_preprocess)));
 	compilerSection.insert(std::make_pair("Debug", boolToString(prg_debug)));
 	compilerSection.insert(std::make_pair("NoLAA", boolToString(prg_nolaa)));
+	compilerSection.insert(std::make_pair("DumpAsm", boolToString(prg_dumpasm)));
+	compilerSection.insert(std::make_pair("Quiet", boolToString(prg_quiet)));
+	compilerSection.insert(std::make_pair("VeryQuiet", boolToString(prg_veryquiet)));
+	compilerSection.insert(std::make_pair("DumpKeys", boolToString(prg_dumpkeys)));
+	compilerSection.insert(std::make_pair("Encrypt", boolToString(prg_encrypt)));
 	compilerSection.insert(std::make_pair("LastBuild", prg_lastbuild));
 	compilerSection.insert(std::make_pair("CommandLine", cmd_line));
 

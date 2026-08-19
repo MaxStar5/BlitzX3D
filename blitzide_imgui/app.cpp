@@ -534,6 +534,17 @@ void App::menuBar() {
 		if (ImGui::MenuItem("Preprocess", nullptr, &prefs.prg_preprocess)) {}
 		if (ImGui::MenuItem("Debug", nullptr, &prefs.prg_debug)) {}
 		if (ImGui::MenuItem("No LAA", nullptr, &prefs.prg_nolaa)) {}
+		ImGui::Separator();
+		if (ImGui::BeginMenu("Compile Options")) {
+			ImGui::MenuItem("Dump assembly", nullptr, &prefs.prg_dumpasm);
+			if (ImGui::MenuItem("Quiet", nullptr, &prefs.prg_quiet) && !prefs.prg_quiet)
+				prefs.prg_veryquiet = false;
+			if (ImGui::MenuItem("Very quiet", nullptr, &prefs.prg_veryquiet) && prefs.prg_veryquiet)
+				prefs.prg_quiet = true;
+			ImGui::MenuItem("Dump keys", nullptr, &prefs.prg_dumpkeys);
+			ImGui::MenuItem("Encrypt", nullptr, &prefs.prg_encrypt);
+			ImGui::EndMenu();
+		}
 		ImGui::EndMenu();
 	}
 
@@ -1676,19 +1687,21 @@ void App::build(bool exec, bool publish) {
 	std::string src_file = projectOpen && !projectMainPath.empty() ? projectMainPath : e->path;
 	std::vector<std::string> args;
 	args.push_back(prefs.homeDir + "/bin/blitzcc");
-	args.push_back("-q");
-	if (prefs.prg_preprocess) args.push_back("-p");
+	if (prefs.prg_dumpasm) args.push_back("-a");
+	if (prefs.prg_veryquiet) args.push_back("+q");
+	else if (prefs.prg_quiet) args.push_back("-q");
+	if (!publish && !exec) args.push_back("-c");
 	if (prefs.prg_debug) args.push_back("-d");
+	if (prefs.prg_dumpkeys) args.push_back("-k");
+	if (prefs.prg_preprocess) args.push_back("-p");
 	if (prefs.prg_nolaa) args.push_back("-nlaa");
+	if (prefs.prg_encrypt) args.push_back("-encrypt");
 
 	if (publish) {
 		std::string exe = publishExePath.empty() ? src_file : publishExePath;
 		if (exe.empty()) exe = "untitled.exe";
 		args.push_back("-o");
 		args.push_back(exe);
-	}
-	else if (!exec) {
-		args.push_back("-c");
 	}
 
 	std::string src = src_file;
