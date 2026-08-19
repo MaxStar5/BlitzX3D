@@ -203,10 +203,11 @@ static void ImGui_ImplSDL3_UpdateIme()
 {
     ImGui_ImplSDL3_Data* bd = ImGui_ImplSDL3_GetBackendData();
     ImGuiPlatformImeData* data = &bd->ImeData;
+    const bool want_text_input = ImGui::GetIO().WantTextInput;
     SDL_Window* window = SDL_GetKeyboardFocus();
 
     // Stop previous input
-    if ((!(data->WantVisible || data->WantTextInput) || bd->ImeWindow != window) && bd->ImeWindow != nullptr)
+    if ((!(data->WantVisible || data->WantTextInput || want_text_input) || bd->ImeWindow != window) && bd->ImeWindow != nullptr)
     {
         SDL_StopTextInput(bd->ImeWindow);
         bd->ImeWindow = nullptr;
@@ -229,7 +230,7 @@ static void ImGui_ImplSDL3_UpdateIme()
         SDL_SetTextInputArea(window, &r, 0);
         bd->ImeWindow = window;
     }
-    if (!SDL_TextInputActive(window) && (data->WantVisible || data->WantTextInput))
+    if (!SDL_TextInputActive(window) && (data->WantVisible || data->WantTextInput || want_text_input))
         SDL_StartTextInput(window);
 }
 
