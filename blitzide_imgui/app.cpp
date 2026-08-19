@@ -365,6 +365,7 @@ void App::shutdown() {
 
 	ImGui_ImplOpenGL3_Shutdown();
 	ImGui_ImplSDL3_Shutdown();
+	SDL_StopTextInput(window);
 	ImGui::DestroyContext();
 	SDL_GL_DestroyContext(SDL_GL_GetCurrentContext());
 	SDL_DestroyWindow(window);
@@ -373,6 +374,7 @@ void App::shutdown() {
 
 void App::mainloop() {
 	while (!quitting) {
+		SDL_StartTextInput(window);
 		SDL_Event event;
 		while (SDL_PollEvent(&event)) {
 			ImGui_ImplSDL3_ProcessEvent(&event);
