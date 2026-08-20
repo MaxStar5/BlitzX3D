@@ -153,7 +153,8 @@ void gxRuntime::closeRuntime(gxRuntime* r) {
 gxRuntime::gxRuntime(HINSTANCE hi, const std::string& cl, HWND hw) :
 	hinst(hi), cmd_line(cl), hwnd(hw), curr_driver(0), enum_all(false),
 	pointer_visible(true), audio(0), input(0), graphics(0), fileSystem(0), use_di(false),
-	d3d(0), d3dDevice(0), backBuffer(0), frontBuffer(0) {
+	d3d(0), d3dDevice(0), backBuffer(0), frontBuffer(0),
+	stretchRT(0), stretchRT_w(0), stretchRT_h(0) {
 
 	CoInitialize(0);
 
@@ -221,6 +222,7 @@ void gxRuntime::resumeAudio() {
 void gxRuntime::restoreGraphics() {
 	if(auto_suspend) {
 		if(!graphics->restore()) gfx_lost = true;
+		else gfx_lost = false;
 	}
 }
 
@@ -310,12 +312,15 @@ void gxRuntime::paint() {
 
 	gxGraphics::DeviceState state = graphics->getDeviceState();
 	if (state == gxGraphics::DEVICE_LOST) {
+		gfx_lost = true;
 		return;
 	}
 	if (state == gxGraphics::DEVICE_NEEDS_RESET) {
 		if (!graphics->restore()) {
+			gfx_lost = true;
 			return;
 		}
+		gfx_lost = false;
 	}
 
 	switch (gfx_mode) {
@@ -323,7 +328,9 @@ void gxRuntime::paint() {
 	case GMODE_FIXED: {
 		if (!graphics) break;
 		gxCanvas* f = graphics->getFrontCanvas();
+		if (!f) break;
 		IDirect3DSurface9* canvasSurf = f->getSurface();
+		if (!canvasSurf) break;
 
 		RECT src, dest;
 		GetClientRect(hwnd, &dest);
@@ -336,23 +343,37 @@ void gxRuntime::paint() {
 			d3dDevice->UpdateSurface(canvasSurf, &src, backBuffer, &pt);
 		}
 		else {
-			IDirect3DSurface9* stretchSrc = nullptr;
 			D3DSURFACE_DESC desc;
 			canvasSurf->GetDesc(&desc);
-			if (SUCCEEDED(d3dDevice->CreateRenderTarget(desc.Width, desc.Height, desc.Format, D3DMULTISAMPLE_NONE, 0, FALSE, &stretchSrc, nullptr))) {
+
+			if (!stretchRT || stretchRT_w != (int)desc.Width || stretchRT_h != (int)desc.Height) {
+				if (stretchRT) { stretchRT->Release(); stretchRT = 0; }
+				if (SUCCEEDED(d3dDevice->CreateRenderTarget(desc.Width, desc.Height, desc.Format, D3DMULTISAMPLE_NONE, 0, FALSE, &stretchRT, nullptr))) {
+					stretchRT_w = (int)desc.Width;
+					stretchRT_h = (int)desc.Height;
+				}
+			}
+
+			if (stretchRT) {
 				POINT zero = { 0, 0 };
 				RECT full = { 0, 0, (LONG)desc.Width, (LONG)desc.Height };
-				d3dDevice->UpdateSurface(canvasSurf, &full, stretchSrc, &zero);
-				d3dDevice->StretchRect(stretchSrc, &src, backBuffer, &dest, D3DTEXF_LINEAR);
-				stretchSrc->Release();
+				d3dDevice->UpdateSurface(canvasSurf, &full, stretchRT, &zero);
+				d3dDevice->StretchRect(stretchRT, &src, backBuffer, &dest, D3DTEXF_LINEAR);
 			}
 		}
-		d3dDevice->Present(NULL, NULL, NULL, NULL);
+		HRESULT hr = d3dDevice->Present(NULL, NULL, NULL, NULL);
+		if (hr == D3DERR_DEVICELOST || hr == D3DERR_DEVICEHUNG || hr == D3DERR_DEVICEREMOVED) {
+			gfx_lost = true;
+		}
 		break;
 	}
-	case GMODE_EXCLUSIVE:
-		d3dDevice->Present(NULL, NULL, NULL, NULL);
+	case GMODE_EXCLUSIVE: {
+		HRESULT hr = d3dDevice->Present(NULL, NULL, NULL, NULL);
+		if (hr == D3DERR_DEVICELOST || hr == D3DERR_DEVICEHUNG || hr == D3DERR_DEVICEREMOVED) {
+			gfx_lost = true;
+		}
 		break;
+	}
 	}
 }
 
@@ -373,16 +394,47 @@ void gxRuntime::flip(bool vwait) {
 
 	if (!graphics || !d3dDevice) return;
 
+	if (suspended) {
+		MSG m;
+		while (suspended && run_flag) {
+			if (!GetMessageW(&m, 0, 0, 0)) break;
+			switch (m.message) {
+			case WM_STOP:
+				if (!suspended) forceSuspend();
+				break;
+			case WM_RUN:
+				if (suspended) forceResume();
+				break;
+			case WM_END:
+				debugger = 0;
+				run_flag = false;
+				break;
+			default:
+				TranslateMessage(&m);
+				DispatchMessageW(&m);
+			}
+		}
+		if (!run_flag || !graphics || !d3dDevice) return;
+	}
+
 	gxGraphics::DeviceState state = graphics->getDeviceState();
 	if (state == gxGraphics::DEVICE_LOST) {
+		gfx_lost = true;
 		return;
 	}
 	if (state == gxGraphics::DEVICE_NEEDS_RESET) {
 		if (!graphics->restore()) {
+			gfx_lost = true;
 			return;
 		}
+		gfx_lost = false;
 	}
-	d3dDevice->Present(NULL, NULL, NULL, NULL);
+
+	HRESULT hr = d3dDevice->Present(NULL, NULL, NULL, NULL);
+	if (hr == D3DERR_DEVICELOST || hr == D3DERR_DEVICEHUNG || hr == D3DERR_DEVICEREMOVED) {
+		gfx_lost = true;
+		return;
+	}
 }
 
 ////////////////
@@ -424,6 +476,7 @@ LRESULT gxRuntime::windowProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
 		case WM_PAINT:
 			if(gfx_mode && !auto_suspend) {
 				if(!graphics->restore()) gfx_lost = true;
+				else gfx_lost = false;
 			}
 			BeginPaint(hwnd, &ps);
 			paint();
@@ -1120,6 +1173,7 @@ void gxRuntime::closeGraphics(gxGraphics* g) {
 	if (d3dDevice) {
 		if (frontBuffer && frontBuffer != backBuffer) frontBuffer->Release();
 		if (backBuffer) backBuffer->Release();
+		if (stretchRT) { stretchRT->Release(); stretchRT = 0; stretchRT_w = stretchRT_h = 0; }
 		d3dDevice->Release();
 		d3dDevice = 0;
 		backBuffer = 0;
@@ -1141,20 +1195,17 @@ void gxRuntime::closeGraphics(gxGraphics* g) {
 }
 
 bool gxRuntime::graphicsLost() {
-	if (!d3dDevice) return false;
-	HRESULT hr = d3dDevice->CheckDeviceState(hwnd);
-	if (hr == D3DERR_DEVICELOST || hr == D3DERR_DEVICEHUNG || hr == D3DERR_DEVICEREMOVED) return true;
+	if (!graphics || !d3dDevice) return false;
 
-	if (hr == D3DERR_DEVICENOTRESET || hr == S_PRESENT_MODE_CHANGED) {
-		applyAntialiasToParams(d3dpp);
-		if (FAILED(d3dDevice->ResetEx(&d3dpp, d3dpp.Windowed ? nullptr : &d3ddmEx))) return true;
-		if (backBuffer) { backBuffer->Release(); backBuffer = nullptr; }
-		if (frontBuffer) { frontBuffer->Release(); frontBuffer = nullptr; }
-		d3dDevice->GetBackBuffer(0, 0, D3DBACKBUFFER_TYPE_MONO, &backBuffer);
-		frontBuffer = backBuffer;
-		if (frontBuffer) frontBuffer->AddRef();
+	gxGraphics::DeviceState state = graphics->getDeviceState();
+	if (state == gxGraphics::DEVICE_OK) {
+		gfx_lost = false;
+		return false;
 	}
-	return false;
+
+	bool ok = graphics->restore();
+	gfx_lost = !ok;
+	return !ok;
 }
 
 bool gxRuntime::focus() {

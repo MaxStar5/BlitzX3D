@@ -30,6 +30,10 @@ public:
     IDirect3DDevice9Ex* d3dDevice;
     IDirect3DSurface9* backBuffer;
     IDirect3DSurface9* frontBuffer;
+
+    IDirect3DSurface9* stretchRT;
+    int stretchRT_w, stretchRT_h;
+
     D3DPRESENT_PARAMETERS d3dpp;
     D3DDISPLAYMODEEX d3ddmEx;
 

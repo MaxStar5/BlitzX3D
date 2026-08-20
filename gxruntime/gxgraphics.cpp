@@ -175,6 +175,8 @@ bool gxGraphics::restore() {
 
 		if (runtime->backBuffer) runtime->backBuffer->Release();
 		runtime->backBuffer = newBack;
+		if (runtime->stretchRT) { runtime->stretchRT->Release(); runtime->stretchRT = nullptr; }
+
 		bool wasAliased = front_canvas && back_canvas && front_canvas->surf == back_canvas->surf;
 
 		if (back_canvas && back_canvas->surf) {
@@ -290,6 +292,8 @@ bool gxGraphics::changeDisplayMode(int width, int height, bool fullscreen, bool 
 	runtime->frontBuffer = newBack;
 	newBack->AddRef();
 	newBack->AddRef();
+
+	if (runtime->stretchRT) { runtime->stretchRT->Release(); runtime->stretchRT = nullptr; }
 
 	auto updateCanvas = [&](gxCanvas* canvas) {
 		if (!canvas) return;
