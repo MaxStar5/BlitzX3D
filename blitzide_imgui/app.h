@@ -51,6 +51,8 @@ private:
 	bool fileSaveAll();
 	void fileClose(int idx);
 	void fileExit();
+	void requestQuit();
+	void drawExitPrompt();
 	void fileRecent(const std::string& path);
 	void addRecent(const std::string& path);
 	void removeRecent(const std::string& path);
@@ -176,6 +178,7 @@ private:
 
 	bool aboutOpen = false;
 	bool quitting = false;
+	bool showExitPrompt = false;
 };
 
 #endif

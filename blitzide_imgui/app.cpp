@@ -379,7 +379,7 @@ void App::mainloop() {
 		while (SDL_PollEvent(&event)) {
 			ImGui_ImplSDL3_ProcessEvent(&event);
 			if (event.type == SDL_EVENT_QUIT ||
-				(event.type == SDL_EVENT_WINDOW_CLOSE_REQUESTED && event.window.windowID == SDL_GetWindowID(window))) quitting = true;
+				(event.type == SDL_EVENT_WINDOW_CLOSE_REQUESTED && event.window.windowID == SDL_GetWindowID(window))) requestQuit();
 			if (event.type == SDL_EVENT_DROP_FILE && event.drop.data) openPath(event.drop.data);
 		}
 		frame();
@@ -459,6 +459,8 @@ void App::frame() {
 	drawUpdate();
 	drawUpdateDialog();
 
+	drawExitPrompt();
+
 	if (aboutOpen) {
 		ImGui::Begin("About BlitzX3D", &aboutOpen);
 		ImGui::BringWindowToDisplayFront(ImGui::GetCurrentWindow());
@@ -515,7 +517,7 @@ void App::menuBar() {
 		}
 		if (ImGui::MenuItem("Project...")) openProjectWindow();
 		ImGui::Separator();
-		if (ImGui::MenuItem("Exit", "Alt+F4")) quitting = true;
+		if (ImGui::MenuItem("Exit", "Alt+F4")) requestQuit();
 		ImGui::EndMenu();
 	}
 
@@ -1337,7 +1339,55 @@ void App::fileClose(int idx) {
 	if (docs.empty()) currentIndex = -1;
 	if (projectOpen) refreshProjectSymbols();
 }
-void App::fileExit() { quitting = true; }
+void App::fileExit() { requestQuit(); }
+
+void App::requestQuit() {
+	for (auto& d : docs) {
+		if (d.modified) {
+			showExitPrompt = true;
+			return;
+		}
+	}
+	quitting = true;
+}
+
+void App::drawExitPrompt() {
+	if (!showExitPrompt) return;
+
+	ImGui::SetNextWindowSize(ImVec2(420, 0), ImGuiCond_Always);
+	ImGui::OpenPopup("Unsaved Changes");
+	if (ImGui::BeginPopupModal("Unsaved Changes", nullptr,
+		ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoResize)) {
+		ImGui::BringWindowToDisplayFront(ImGui::GetCurrentWindow());
+		ImGui::TextUnformatted("You have unsaved changes in the following file(s):");
+		ImGui::BeginChild("##exitprompt_list", ImVec2(0, 120), true);
+		for (auto& d : docs) {
+			if (d.modified) {
+				ImGui::PushID(&d);
+				ImGui::Bullet();
+				ImGui::TextWrapped("%s", (d.path.empty() ? d.name : d.path).c_str());
+				ImGui::PopID();
+			}
+		}
+		ImGui::EndChild();
+
+		float width = ImGui::GetContentRegionAvail().x;
+		float btn = (width - ImGui::GetStyle().ItemSpacing.x * 2) / 3.0f;
+		if (ImGui::Button("Save All", ImVec2(btn, 0))) {
+			if (fileSaveAll()) { showExitPrompt = false; quitting = true; }
+		}
+		ImGui::SameLine();
+		if (ImGui::Button("Discard", ImVec2(btn, 0))) {
+			showExitPrompt = false;
+			quitting = true;
+		}
+		ImGui::SameLine();
+		if (ImGui::Button("Cancel", ImVec2(btn, 0))) {
+			showExitPrompt = false;
+		}
+		ImGui::EndPopup();
+	}
+}
 
 void App::editCut() { if (Doc* d = currentDoc()) d->editor.Cut(); }
 void App::editCopy() { if (Doc* d = currentDoc()) d->editor.Copy(); }
@@ -1449,7 +1499,7 @@ void App::launchLegacyIDE() {
 		}
 	}
 #endif
-	quitting = true;
+	requestQuit();
 }
 
 void App::drawPicker() {
