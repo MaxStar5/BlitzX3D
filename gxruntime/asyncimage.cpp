@@ -2,6 +2,7 @@
 #include "asyncimage.h"
 
 #include <freeimage.h>
+#include "gxutf8.h"
 #include <chrono>
 
 std::mutex g_freeimage_mutex;
@@ -12,11 +13,11 @@ AsyncImageLoader& AsyncImageLoader::instance() {
 }
 
 static FIBITMAP* decodeTo32(const std::string& file, int* w, int* h) {
-	FREE_IMAGE_FORMAT fif = FreeImage_GetFileType(file.c_str(), 0);
-	if (fif == FIF_UNKNOWN) fif = FreeImage_GetFIFFromFilename(file.c_str());
+	FREE_IMAGE_FORMAT fif = FreeImage_GetFileTypeU(UTF8::toWide(file).c_str(), 0);
+	if (fif == FIF_UNKNOWN) fif = FreeImage_GetFIFFromFilenameU(UTF8::toWide(file).c_str());
 	if (fif == FIF_UNKNOWN) return nullptr;
 
-	FIBITMAP* fib = FreeImage_Load(fif, file.c_str(), 0);
+	FIBITMAP* fib = FreeImage_LoadU(fif, UTF8::toWide(file).c_str(), 0);
 	if (!fib) return nullptr;
 
 	FIBITMAP* fib32;

@@ -9,6 +9,7 @@
 #include <inttypes.h>
 #include <stdlib.h>
 #include <stdio.h>
+#include <fstream>
 #include <freetype/ftsynth.h>
 
 gxFont::gxFont(FT_Library ftLibrary, gxGraphics* gfx, const std::string& fn, int h, bool bold, bool italic, bool underlined) {
@@ -20,10 +21,25 @@ gxFont::gxFont(FT_Library ftLibrary, gxGraphics* gfx, const std::string& fn, int
 	this->underlined = underlined;
 	smooth = true;
 
-	if (FT_New_Face(ftLibrary,
-		filename.c_str(),
-		0,
-		&freeTypeFace)) {
+	{
+		std::ifstream in(UTF8::toWide(fn).c_str(), std::ios::binary);
+		if (in) {
+			in.seekg(0, std::ios::end);
+			std::streamoff size = in.tellg();
+			if (size > 0) {
+				in.seekg(0, std::ios::beg);
+				fontData.resize((size_t)size);
+				in.read((char*)fontData.data(), size);
+			}
+		}
+	}
+
+	if (fontData.empty() ||
+		FT_New_Memory_Face(ftLibrary,
+			fontData.data(),
+			(FT_Long)fontData.size(),
+			0,
+			&freeTypeFace)) {
 		RTEX(std::format("Failed to load file: {}", fn).c_str());
 	}
 

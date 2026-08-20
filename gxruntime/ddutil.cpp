@@ -4,6 +4,7 @@
 #include "gxcanvas.h"
 #include "gxgraphics.h"
 #include "gxruntime.h"
+#include "gxutf8.h"
 #include "asyncimage.h"
 
 extern gxRuntime* gx_runtime;
@@ -20,11 +21,11 @@ const std::string& ddUtil::getLastImageError() {
 
 bool ddUtil::hasAlphaChannel(const std::string& file) {
     std::lock_guard<std::mutex> lock(g_freeimage_mutex);
-    FREE_IMAGE_FORMAT fif = FreeImage_GetFileType(file.c_str(), 0);
-    if (fif == FIF_UNKNOWN) fif = FreeImage_GetFIFFromFilename(file.c_str());
+    FREE_IMAGE_FORMAT fif = FreeImage_GetFileTypeU(UTF8::toWide(file).c_str(), 0);
+    if (fif == FIF_UNKNOWN) fif = FreeImage_GetFIFFromFilenameU(UTF8::toWide(file).c_str());
     if (fif == FIF_UNKNOWN) return false;
 
-    FIBITMAP* fib = FreeImage_Load(fif, file.c_str(), 0);
+    FIBITMAP* fib = FreeImage_LoadU(fif, UTF8::toWide(file).c_str(), 0);
     if (!fib) return false;
 
     bool has = (FreeImage_IsTransparent(fib) == TRUE) || (FreeImage_GetColorType(fib) == FIC_RGBALPHA);
@@ -34,11 +35,11 @@ bool ddUtil::hasAlphaChannel(const std::string& file) {
 
 bool ddUtil::hasActualAlpha(const std::string& file) {
     std::lock_guard<std::mutex> lock(g_freeimage_mutex);
-    FREE_IMAGE_FORMAT fif = FreeImage_GetFileType(file.c_str(), 0);
-    if (fif == FIF_UNKNOWN) fif = FreeImage_GetFIFFromFilename(file.c_str());
+    FREE_IMAGE_FORMAT fif = FreeImage_GetFileTypeU(UTF8::toWide(file).c_str(), 0);
+    if (fif == FIF_UNKNOWN) fif = FreeImage_GetFIFFromFilenameU(UTF8::toWide(file).c_str());
     if (fif == FIF_UNKNOWN) return false;
 
-    FIBITMAP* fib = FreeImage_Load(fif, file.c_str(), 0);
+    FIBITMAP* fib = FreeImage_LoadU(fif, UTF8::toWide(file).c_str(), 0);
     if (!fib) return false;
 
     if (FreeImage_GetColorType(fib) != FIC_RGBALPHA && !FreeImage_IsTransparent(fib)) {
@@ -391,11 +392,11 @@ IDirect3DSurface9* ddUtil::loadDisplaySurface(const std::string& file, int flags
     std::lock_guard<std::mutex> lock(g_freeimage_mutex);
     g_lastImageError.clear();
 
-    FREE_IMAGE_FORMAT fif = FreeImage_GetFileType(file.c_str(), 0);
-    if (fif == FIF_UNKNOWN) fif = FreeImage_GetFIFFromFilename(file.c_str());
+    FREE_IMAGE_FORMAT fif = FreeImage_GetFileTypeU(UTF8::toWide(file).c_str(), 0);
+    if (fif == FIF_UNKNOWN) fif = FreeImage_GetFIFFromFilenameU(UTF8::toWide(file).c_str());
     if (fif == FIF_UNKNOWN) { g_lastImageError = "Unknown format: " + file; return nullptr; }
 
-    FIBITMAP* fib = FreeImage_Load(fif, file.c_str(), 0);
+    FIBITMAP* fib = FreeImage_LoadU(fif, UTF8::toWide(file).c_str(), 0);
     if (!fib) { g_lastImageError = "Load failed: " + file; return nullptr; }
 
     FIBITMAP* fib32;
@@ -469,11 +470,11 @@ IDirect3DSurface9* ddUtil::loadDisplaySurface(const std::string& file, int flags
 }
 
 bool ddUtil::decodeImageFile(const std::string& file, void** out32, int* outW, int* outH) {
-	FREE_IMAGE_FORMAT fif = FreeImage_GetFileType(file.c_str(), 0);
-	if (fif == FIF_UNKNOWN) fif = FreeImage_GetFIFFromFilename(file.c_str());
+	FREE_IMAGE_FORMAT fif = FreeImage_GetFileTypeU(UTF8::toWide(file).c_str(), 0);
+	if (fif == FIF_UNKNOWN) fif = FreeImage_GetFIFFromFilenameU(UTF8::toWide(file).c_str());
 	if (fif == FIF_UNKNOWN) return false;
 
-	FIBITMAP* fib = FreeImage_Load(fif, file.c_str(), 0);
+	FIBITMAP* fib = FreeImage_LoadU(fif, UTF8::toWide(file).c_str(), 0);
 	if (!fib) return false;
 
 	FIBITMAP* fib32;

@@ -6,12 +6,12 @@
 
 class gxDir {
 public:
-	gxDir(HANDLE h, const WIN32_FIND_DATA& f);
+	gxDir(HANDLE h, const WIN32_FIND_DATAW& f);
 	~gxDir();
 
 private:
 	HANDLE handle;
-	WIN32_FIND_DATA findData;
+	WIN32_FIND_DATAW findData;
 
 	/***** GX INTERFACE *****/
 public:

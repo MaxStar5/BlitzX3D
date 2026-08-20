@@ -1,6 +1,7 @@
 #include "std.h"
 #include "asyncsound.h"
 
+#include "gxutf8.h"
 #include <chrono>
 
 AsyncSoundLoader& AsyncSoundLoader::instance() {
@@ -9,7 +10,7 @@ AsyncSoundLoader& AsyncSoundLoader::instance() {
 }
 
 static std::shared_ptr<std::vector<char>> readFile(const std::string& file) {
-	std::ifstream in(file.c_str(), std::ios::binary);
+	std::ifstream in(UTF8::toWide(file).c_str(), std::ios::binary);
 	if (!in) return nullptr;
 
 	in.seekg(0, std::ios::end);

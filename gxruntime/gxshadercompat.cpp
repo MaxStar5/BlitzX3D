@@ -1,6 +1,7 @@
 #include "std.h"
 #include "gxshadercompat.h"
 
+#include "gxutf8.h"
 #include <cstring>
 #include <cstdio>
 #include <sstream>
@@ -17,7 +18,7 @@ static std::string joinPath(const std::string& dir, const std::string& name) {
 }
 
 static bool readTextFile(const std::string& path, std::string& out) {
-	std::ifstream f(path.c_str(), std::ios::binary);
+	std::ifstream f(UTF8::toWide(path).c_str(), std::ios::binary);
 	if (!f) return false;
 	std::ostringstream ss;
 	ss << f.rdbuf();

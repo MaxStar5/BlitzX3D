@@ -1,5 +1,7 @@
 #include "std.h"
 #include "q3bsprep.h"
+#include "../gxruntime/gxutf8.h"
+// careful ladies its called the sigma mindset
 
 /* Quake3 File format types */
 
@@ -576,7 +578,7 @@ Q3BSPRep::Q3BSPRep(const std::string& f, float gam) :root_node(0), vis_sz(0), vi
 
 	gamma_adj = 1 - gam;
 
-	FILE* buf = fopen(f.c_str(), "rb"); if(!buf) return;
+	FILE* buf = _wfopen(UTF8::toWide(f).c_str(), L"rb"); if(!buf) return;
 
 	fread(&header, sizeof(header), 1, buf);
 	if(header.magic != 'PSBI' || header.version != 0x2e) {
