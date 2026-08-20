@@ -892,6 +892,32 @@ bool gxRuntime::setDisplayMode(int w, int h, int d, bool d3d) {
 	return true;
 }
 
+void gxRuntime::applyAntialiasToParams(D3DPRESENT_PARAMETERS& pp) {
+	pp.MultiSampleType = D3DMULTISAMPLE_NONE;
+	pp.MultiSampleQuality = 0;
+
+	if (!requested_antialias) return;
+
+	if (pp.Windowed) return;
+
+	D3DFORMAT fmt = pp.BackBufferFormat;
+	if (fmt == D3DFMT_UNKNOWN) fmt = D3DFMT_X8R8G8B8;
+
+	D3DMULTISAMPLE_TYPE type = D3DMULTISAMPLE_4_SAMPLES;
+	DWORD quality = 0;
+	HRESULT hr = d3d->CheckDeviceMultiSampleType(curr_driver->adapter, D3DDEVTYPE_HAL, fmt, FALSE, type, &quality);
+	if (FAILED(hr) || quality == 0) {
+		type = D3DMULTISAMPLE_2_SAMPLES;
+		quality = 0;
+		hr = d3d->CheckDeviceMultiSampleType(curr_driver->adapter, D3DDEVTYPE_HAL, fmt, FALSE, type, &quality);
+		if (FAILED(hr) || quality == 0) return;
+	}
+
+	pp.MultiSampleType = type;
+	pp.MultiSampleQuality = quality > 0 ? quality - 1 : 0;
+	pp.Flags &= ~D3DPRESENTFLAG_LOCKABLE_BACKBUFFER;
+}
+
 gxGraphics* gxRuntime::openWindowedGraphics(int w, int h, int d, bool d3d) {
 	if (!d3d) return 0;
 
@@ -909,6 +935,8 @@ gxGraphics* gxRuntime::openWindowedGraphics(int w, int h, int d, bool d3d) {
 	if (FAILED(this->d3d->GetAdapterDisplayMode(curr_driver->adapter, &mode))) return 0;
 
 	d3dpp.BackBufferFormat = (mode.Format == D3DFMT_R8G8B8 || mode.Format == D3DFMT_A8R8G8B8 || mode.Format == D3DFMT_X8R8G8B8) ? mode.Format : D3DFMT_X8R8G8B8;
+
+	applyAntialiasToParams(d3dpp);
 
 	DWORD vp_flag = pickVertexProcessingFlag(this->d3d, curr_driver->adapter);
 	if (FAILED(this->d3d->CreateDeviceEx(curr_driver->adapter, D3DDEVTYPE_HAL, hwnd, vp_flag, &d3dpp, nullptr, &d3dDevice))) return 0;
@@ -967,6 +995,8 @@ gxGraphics* gxRuntime::openExclusiveGraphics(int w, int h, int d, bool d3d) {
 	d3ddmEx.Format = format;
 	d3ddmEx.RefreshRate = 0;
 	d3ddmEx.ScanLineOrdering = D3DSCANLINEORDERING_PROGRESSIVE;
+
+	applyAntialiasToParams(d3dpp);
 
 	DWORD vp_flag = pickVertexProcessingFlag(this->d3d, curr_driver->adapter);
 	if (FAILED(this->d3d->CreateDeviceEx(curr_driver->adapter, D3DDEVTYPE_HAL, hwnd, vp_flag, &d3dpp, &d3ddmEx, &d3dDevice))) {
@@ -1118,6 +1148,7 @@ bool gxRuntime::graphicsLost() {
 	if (hr == D3DERR_DEVICELOST || hr == D3DERR_DEVICEHUNG || hr == D3DERR_DEVICEREMOVED) return true;
 
 	if (hr == D3DERR_DEVICENOTRESET || hr == S_PRESENT_MODE_CHANGED) {
+		applyAntialiasToParams(d3dpp);
 		if (FAILED(d3dDevice->ResetEx(&d3dpp, d3dpp.Windowed ? nullptr : &d3ddmEx))) return true;
 		if (backBuffer) { backBuffer->Release(); backBuffer = nullptr; }
 		if (frontBuffer) { frontBuffer->Release(); frontBuffer = nullptr; }

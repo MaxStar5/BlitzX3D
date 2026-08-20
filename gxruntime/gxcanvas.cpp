@@ -420,7 +420,7 @@ bool gxCanvas::attachZBuffer() {
     D3DSURFACE_DESC desc;
     surf->GetDesc(&desc);
     IDirect3DDevice9* dev = graphics->dir3dDev;
-    HRESULT hr = dev->CreateDepthStencilSurface(desc.Width, desc.Height, graphics->zbuffFmt, D3DMULTISAMPLE_NONE, 0, TRUE, &z_surf, nullptr);
+    HRESULT hr = dev->CreateDepthStencilSurface(desc.Width, desc.Height, graphics->zbuffFmt, desc.MultiSampleType, desc.MultiSampleQuality, TRUE, &z_surf, nullptr);
     if (FAILED(hr) || !z_surf) {
         char buf[256];
         sprintf(buf, "CreateDepthStencilSurface failed: 0x%08X", hr);

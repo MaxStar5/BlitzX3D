@@ -33,11 +33,15 @@ public:
     D3DPRESENT_PARAMETERS d3dpp;
     D3DDISPLAYMODEEX d3ddmEx;
 
+    bool requested_antialias = false;
+
     float scale_x = .0f, scale_y = .0f;
 
     void flip(bool vwait);
     void moveMouse(int x, int y);
     LRESULT windowProc(HWND hwnd, UINT msg, WPARAM w, LPARAM l);
+
+    void applyAntialiasToParams(D3DPRESENT_PARAMETERS& pp);
 
     struct GfxMode;
     struct GfxDriver;
@@ -134,6 +138,9 @@ public:
     bool focus();
     int desktopWidth();
     int desktopHeight();
+
+    void setAntialiasRequest(bool enable) { requested_antialias = enable; }
+    bool antialiasRequested() const { return requested_antialias; }
 
     gxFileSystem* openFileSystem(int flags);
     void closeFileSystem(gxFileSystem* filesys);

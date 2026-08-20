@@ -189,7 +189,7 @@ gxScene::gxScene(gxGraphics* g, gxCanvas* t) :
 
 	wbuffer = can_wb;
 	dither = false; setDither(true);
-	antialias = true; setAntialias(false);
+	antialias = false;
 	wireframe = true; setWireframe(false);
 	flipped = true; setFlippedTris(false);
 	ambient = ~0; setAmbient(GRAY);
@@ -469,7 +469,10 @@ void gxScene::setDither(bool n) {
 }
 
 void gxScene::setAntialias(bool n) {
-	antialias = n; // we set MSAA in D3DPRESENT_PARAMETERS at device creation
+	antialias = n;
+	if (graphics && graphics->runtime) {
+		graphics->runtime->setAntialiasRequest(n);
+	}
 }
 
 void gxScene::setWireframe(bool n) {

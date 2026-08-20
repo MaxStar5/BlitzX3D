@@ -298,7 +298,8 @@ void bbDither(int enable) {
 
 void bbAntiAlias(int enable) {
 	debug3d("AntiAlias");
-	gx_scene->setAntialias(!!enable);
+	if (gx_runtime) gx_runtime->setAntialiasRequest(!!enable);
+	if (gx_scene) gx_scene->setAntialias(!!enable);
 }
 
 void bbWireFrame(int enable) {

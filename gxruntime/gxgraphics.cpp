@@ -164,6 +164,8 @@ bool gxGraphics::restore() {
 			present_params.Flags |= D3DPRESENTFLAG_LOCKABLE_BACKBUFFER;
 		}
 
+		runtime->applyAntialiasToParams(present_params);
+
 		hr = dir3dDev->ResetEx(&present_params, present_params.Windowed ? nullptr : &runtime->d3ddmEx);
 		if (FAILED(hr)) return false;
 
@@ -267,6 +269,8 @@ bool gxGraphics::changeDisplayMode(int width, int height, bool fullscreen, bool 
 	runtime->d3ddmEx.Format = present_params.BackBufferFormat;
 	runtime->d3ddmEx.RefreshRate = 0;
 	runtime->d3ddmEx.ScanLineOrdering = D3DSCANLINEORDERING_PROGRESSIVE;
+
+	runtime->applyAntialiasToParams(present_params);
 
 	HRESULT hr = dir3dDev->ResetEx(&present_params, fullscreen ? &runtime->d3ddmEx : nullptr);
 	if (FAILED(hr)) {
