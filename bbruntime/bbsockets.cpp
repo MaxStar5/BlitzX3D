@@ -65,8 +65,9 @@ UDPStream::~UDPStream() {
 
 int UDPStream::read(char* buff, int size) {
 	if (e) return 0;
-	int n = in_buf.size() - in_get;
-	if (n < size) size = n;
+	int n = (int)in_buf.size() - in_get;
+	if (n <= 0 || size <= 0) return 0;
+	if (size > n) size = n;
 	memcpy(buff, &in_buf[in_get], size);
 	in_get += size;
 	return size;
