@@ -15,6 +15,8 @@ BlitzX3D is a community-maintained fork of Blitz3D TSS, originally based on Blit
 - [Improved shader support, including .fx effects, runtime effect textures, and per-frame shader parameters.](https://github.com/krimbopple/BlitzX3D/wiki/New-Commands#loadeffect--setentityeffect--setbrusheffect)
 - Better render-target control with SetBufferDepth and RenderEntity.
 - Improved texture handling, including automatic alpha detection, animated texture grids, mipmapped filtering, cubemap fixes, and better transparency handling.
+- Full UTF-16 support for proper handling of special characters and international text in strings, file paths, and the IDE.
+- Upgraded audio system now powered by BASS for improved compatibility, stability, and sound quality.
 
 ### Used in
 * [**SCP: Containment Breach Multiplayer**](https://store.steampowered.com/app/1782380/SCP_Containment_Breach_Multiplayer/)
