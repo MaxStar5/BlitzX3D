@@ -608,6 +608,12 @@ void gxScene::setWorldMatrix(const Matrix* m) {
 void gxScene::setRenderState(const RenderState& rs) {
 	setEffect(rs.effect);
 
+	int fxChanged = rs.fx ^ fx;
+	fx = rs.fx;
+
+	setLights();
+	setAmbient();
+
 	if (lastRenderStateValid && memcmp(&rs, &lastRenderState, sizeof(rs)) == 0) {
 		setFogMode();
 		return;
@@ -657,40 +663,36 @@ void gxScene::setRenderState(const RenderState& rs) {
 				break;
 		}
 	}
-	if(rs.fx != fx) {
-		int t = rs.fx ^ fx; fx = rs.fx;
-		if(t & (FX_FULLBRIGHT | FX_CONDLIGHT)) {
-			setLights();
-			setAmbient();
-		}
-		if(t & FX_VERTEXCOLOR) {
+	if(fxChanged) {
+		if(fxChanged & FX_VERTEXCOLOR) {
 			setRS(D3DRS_COLORVERTEX, fx & FX_VERTEXCOLOR ? true : false);
 		}
-		if(t & FX_FLATSHADED) {
+		if(fxChanged & FX_FLATSHADED) {
 			setRS(D3DRS_SHADEMODE, fx & FX_FLATSHADED ? D3DSHADE_FLAT : D3DSHADE_GOURAUD);
 		}
-		if(t & FX_NOFOG) {
+		if(fxChanged & FX_NOFOG) {
 			setFogMode();
 		}
-		if(t & FX_DOUBLESIDED) {
+		if(fxChanged & FX_DOUBLESIDED) {
 			setTriCull();
 		}
-		if(!wireframe && t & FX_WIREFRAME) {
+		if(!wireframe && fxChanged & FX_WIREFRAME) {
 			setRS(D3DRS_FILLMODE, fx & FX_WIREFRAME ? D3DFILL_WIREFRAME : D3DFILL_SOLID);
 		}
-		if(t & FX_EMISSIVE) {
-			//Q3 Hack!
-			int n = fx & FX_EMISSIVE;
-			setRS(D3DRS_DIFFUSEMATERIALSOURCE, n ? D3DMCS_MATERIAL : D3DMCS_COLOR1);
-			setRS(D3DRS_AMBIENTMATERIALSOURCE, n ? D3DMCS_MATERIAL : D3DMCS_COLOR1);
-			setRS(D3DRS_EMISSIVEMATERIALSOURCE, n ? D3DMCS_COLOR1 : D3DMCS_MATERIAL);
-			setRS(D3DRS_COLORVERTEX, n ? true : false);
+		if(fxChanged & (FX_EMISSIVE | FX_VERTEXCOLOR)) {
+			bool vc = fx & (FX_VERTEXCOLOR | FX_EMISSIVE);
+			setRS(D3DRS_COLORVERTEX, vc ? true : false);
+			bool emissive = fx & FX_EMISSIVE;
+			bool vcolor = fx & FX_VERTEXCOLOR;
+			setRS(D3DRS_DIFFUSEMATERIALSOURCE, vcolor ? D3DMCS_COLOR1 : D3DMCS_MATERIAL);
+			setRS(D3DRS_AMBIENTMATERIALSOURCE, vcolor ? D3DMCS_COLOR1 : D3DMCS_MATERIAL);
+			setRS(D3DRS_EMISSIVEMATERIALSOURCE, emissive ? D3DMCS_COLOR1 : D3DMCS_MATERIAL);
 		}
 		if(fx & FX_ALPHATEST) {
 			setRS(D3DRS_ALPHAREF, computeAlphaRef(rs));
 			setRS(D3DRS_ALPHATESTENABLE, true);
 		}
-		else if(t & FX_ALPHATEST) {
+		else if(fxChanged & FX_ALPHATEST) {
 			setRS(D3DRS_ALPHATESTENABLE, false);
 		}
 	}
@@ -733,11 +735,13 @@ void gxScene::setRenderState(const RenderState& rs) {
 		}
 		++hw; ++n_texs;
 	}
-	if(n_texs < tex_stages && hw->canvas) {
-		hw->canvas = 0;
-		setTSS(n_texs, D3DTSS_COLOROP, D3DTOP_DISABLE);
-		setTSS(n_texs, D3DTSS_ALPHAOP, D3DTOP_DISABLE);
-		setTex(n_texs, nullptr);
+	for(int s = n_texs; s < tex_stages; ++s) {
+		if(texstate[s].canvas) {
+			texstate[s].canvas = 0;
+			setTSS(s, D3DTSS_COLOROP, D3DTOP_DISABLE);
+			setTSS(s, D3DTSS_ALPHAOP, D3DTOP_DISABLE);
+			setTex(s, nullptr);
+		}
 	}
 	lastRenderState = rs;
 	lastRenderStateValid = true;

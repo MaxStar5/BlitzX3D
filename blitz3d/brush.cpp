@@ -218,6 +218,18 @@ const gxScene::RenderState& Brush::getRenderState()const {
 		ts->bumpEnvScale = rep->texs[k].getBumpEnvScale();
 		ts->bumpEnvOffset = rep->texs[k].getBumpEnvOffset();
 	}
+	// Clear unused slots so stale shit never leaks through!
+	for (int k = rep->max_tex; k < gxScene::MAX_TEXTURES; ++k) {
+		gxScene::RenderState::TexState* ts = &rep->rs.tex_states[k];
+		ts->canvas = nullptr;
+		ts->matrix = nullptr;
+		ts->blend = 0;
+		ts->flags = 0;
+		ts->bumpEnvMat[0][0] = ts->bumpEnvMat[1][0] = 0;
+		ts->bumpEnvMat[0][1] = ts->bumpEnvMat[1][1] = 0;
+		ts->bumpEnvScale = 0;
+		ts->bumpEnvOffset = 0;
+	}
 	rep->rs.effect = rep->effect;
 	return rep->rs;
 }
