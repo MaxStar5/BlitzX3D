@@ -41,6 +41,9 @@ public:
 	bool isTransparent()const;
 	bool operator<(const Texture& t)const;
 
+	void setPinned(bool pinned);
+	bool pinned()const;
+
 	static void clearFilters();
 	static void addFilter(const std::string& filter, int flags);
 

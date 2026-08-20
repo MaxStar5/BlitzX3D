@@ -30,6 +30,9 @@ public:
 	const gxScene::RenderState& getRenderState()const;
 	gxEffect* getEffect() const;
 
+	void setPinned(bool pinned);
+	bool pinned()const;
+
 	bool operator<(const Brush& b)const;
 
 private:

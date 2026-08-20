@@ -501,6 +501,7 @@ Texture* bbCreateTexture(int w, int h, int flags, int frames) {
 void bbFreeTexture(Texture* t) {
 	if (!t) return;
 	debugTexture(t, "FreeTexture");
+	if (t->pinned()) return;
 	if (texture_set.erase(t)) delete t;
 }
 
@@ -632,6 +633,7 @@ Brush* bbLoadBrush(BBStr* file, int flags, float u_scale, float v_scale) {
 void  bbFreeBrush(Brush* b) {
 	if (!b) return;
 	debugBrush(b, "FreeBrush");
+	if (b->pinned()) return;
 	if (brush_set.erase(b)) delete b;
 }
 
@@ -1606,6 +1608,7 @@ Entity* bbCopyEntity(Entity* e, Entity* p) {
 
 void  bbFreeEntity(Entity* e) {
 	if (!e) return;
+	if (e->pinned()) return;
 	debugEntity(e, "FreeEntity");
 	erase(e);
 	delete e;
@@ -2204,20 +2207,85 @@ void  bbClearWorld(int e, int b, int t, int fx) {
 		int current = g_sceneManager.currentSceneId;
 		for (Entity* ent = Entity::orphans(); ent; ent = next) {
 			next = ent->successor();
+			if (ent->pinned()) continue;
 			if (current == 0 || ent->getScene() == current) {
 				bbFreeEntity(ent);
 			}
 		}
 	}
 	if (b) {
-		while (brush_set.size()) bbFreeBrush(*brush_set.begin());
+		for (auto it = brush_set.begin(); it != brush_set.end(); ) {
+			Brush* br = *it++;
+			if (br->pinned()) continue;
+			bbFreeBrush(br);
+		}
 	}
 	if (t) {
-		while (texture_set.size()) bbFreeTexture(*texture_set.begin());
+		for (auto it = texture_set.begin(); it != texture_set.end(); ) {
+			Texture* tx = *it++;
+			if (tx->pinned()) continue;
+			bbFreeTexture(tx);
+		}
 	}
 	if (fx) {
 		gx_graphics->clearEffects();
 	}
+}
+
+static void pinBrushTextures(const Brush& b, bool pinned) {
+	const_cast<Brush&>(b).setPinned(pinned);
+	for (int i = 0; i < gxScene::MAX_TEXTURES; ++i) {
+		Texture t = b.getTexture(i);
+		if (t.valid()) t.setPinned(pinned);
+	}
+}
+
+static void pinEntityResources(Entity* e, bool pinned) {
+	if (Model* m = e->getModel()) {
+		pinBrushTextures(m->getBrush(), pinned);
+		if (MeshModel* mm = m->getMeshModel()) {
+			for (Surface* s : mm->getSurfaces()) {
+				pinBrushTextures(s->getBrush(), pinned);
+			}
+		}
+	}
+	for (Entity* c = e->children(); c; c = c->successor()) {
+		pinEntityResources(c, pinned);
+	}
+}
+
+void bbPinEntity(Entity* e) {
+	VALIDATE_ENTITY_VOID(e, "PinEntity");
+	if (e->pinned()) return;
+	e->setPinned(true);
+	pinEntityResources(e, true);
+}
+
+void bbUnpinEntity(Entity* e) {
+	VALIDATE_ENTITY_VOID(e, "UnpinEntity");
+	if (!e->pinned()) return;
+	e->setPinned(false);
+	pinEntityResources(e, false);
+}
+
+void bbPinTexture(Texture* t) {
+	debugTexture(t, "PinTexture");
+	t->setPinned(true);
+}
+
+void bbUnpinTexture(Texture* t) {
+	debugTexture(t, "UnpinTexture");
+	t->setPinned(false);
+}
+
+void bbPinBrush(Brush* b) {
+	debugBrush(b, "PinBrush");
+	pinBrushTextures(*b, true);
+}
+
+void bbUnpinBrush(Brush* b) {
+	debugBrush(b, "UnpinBrush");
+	pinBrushTextures(*b, false);
 }
 
 extern int active_texs;
@@ -2317,6 +2385,12 @@ void blitz3d_link(void (*rtSym)(const char* sym, void* pc)) {
 	rtSym("CaptureWorld", bbCaptureWorld);
 	rtSym("RenderWorld#tween=1", bbRenderWorld);
 	rtSym("ClearWorld%entities=1%brushes=1%textures=1%effects=1", bbClearWorld);
+	rtSym("PinEntity%entity", bbPinEntity);
+	rtSym("UnpinEntity%entity", bbUnpinEntity);
+	rtSym("PinTexture%texture", bbPinTexture);
+	rtSym("UnpinTexture%texture", bbUnpinTexture);
+	rtSym("PinBrush%brush", bbPinBrush);
+	rtSym("UnpinBrush%brush", bbUnpinBrush);
 	rtSym("RenderEntity%entity%camera#tween=1", bbRenderEntity);
 	rtSym("%ActiveTextures", bbActiveTextures);
 	rtSym("%TrisRendered", bbTrisRendered);

@@ -38,6 +38,9 @@ public:
 	void setVisible(bool vis);
 	void setEnabled(bool ena);
 
+	void setPinned(bool pinned);
+	bool pinned()const { return _pinned; }
+
 	bool visible()const { return _visible; }
 	bool enabled()const { return _enabled; }
 
@@ -80,7 +83,7 @@ private:
 	static Entity* _orphans, * _last_orphan;
 	
 	int sceneId = 0;
-	bool _visible, _enabled;
+	bool _visible, _enabled, _pinned = false;
 
 	std::string _name;
 

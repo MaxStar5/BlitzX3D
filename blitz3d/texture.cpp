@@ -42,6 +42,7 @@ struct Texture::Rep {
 	float sx, sy, tx, ty, rot;
 	bool mat_used, mat_valid;
 	gxScene::Matrix matrix;
+	int pin_count = 0;
 
 	Rep(int w, int h, int flags, int cnt) :
 		ref_cnt(1), cached_tex(w, h, flags, cnt),
@@ -218,6 +219,16 @@ const gxScene::Matrix* Texture::getMatrix()const {
 bool Texture::operator<(const Texture& t)const {
 	if(rep && t.rep) return rep->cached_tex < t.rep->cached_tex;
 	return rep < t.rep;
+}
+
+void Texture::setPinned(bool pinned) {
+	if (!rep) return;
+	if (pinned) ++rep->pin_count;
+	else if (rep->pin_count > 0) --rep->pin_count;
+}
+
+bool Texture::pinned()const {
+	return rep ? rep->pin_count > 0 : false;
 }
 
 void Texture::clearFilters() {

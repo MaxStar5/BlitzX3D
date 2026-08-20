@@ -75,7 +75,19 @@ Entity::Entity(const Entity& e) :
 }
 
 Entity::~Entity() {
-	while (children()) delete children();
+	while (Entity* c = _children) {
+		if (c->_pinned) {
+			if (c->_succ) c->_succ->_pred = c->_pred;
+			if (c->_pred) c->_pred->_succ = c->_succ;
+			else _children = c->_succ;
+			if (_last_child == c) _last_child = c->_pred;
+			c->_parent = 0;
+			c->insert();
+		}
+		else {
+			delete c;
+		}
+	}
 	remove();
 }
 
@@ -134,6 +146,10 @@ void Entity::setVisible(bool visible) {
 
 void Entity::setEnabled(bool enabled) {
 	_enabled = enabled;
+}
+
+void Entity::setPinned(bool pinned) {
+	_pinned = pinned;
 }
 
 void Entity::enumVisible(std::vector<Object*>& out) {
