@@ -801,7 +801,15 @@ gxAudio* gxRuntime::openAudio(int flags) {
 		FSOUND_INIT_USEDEFAULTMIDISYNTH;
 
 	FSOUND_SetHWND(hwnd);
-	if(!FSOUND_Init(44100, 1024, f_flags)) {
+	static const int mixrates[] = { 96000, 48000, 44100 };
+	bool ok = false;
+	for (int i = 0; i < sizeof(mixrates) / sizeof(mixrates[0]); ++i) {
+		if (FSOUND_Init(mixrates[i], 1024, f_flags)) {
+			ok = true;
+			break;
+		}
+	}
+	if (!ok) {
 		return 0;
 	}
 

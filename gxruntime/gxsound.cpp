@@ -16,7 +16,11 @@ gxSound::gxSound(gxAudio* a, const std::shared_ptr<AsyncSoundLoader::Job>& j, bo
 
 gxSound::~gxSound() {
 	cancelJob();
-	if (sample) FSOUND_Sample_Free(sample);
+	if (sample) {
+		FSOUND_Sample_Free(sample);
+		sample = 0;
+	}
+	sampleData.reset();
 }
 
 void gxSound::cancelJob() {
@@ -64,14 +68,18 @@ bool gxSound::materialize(bool blocking) {
 			return false;
 		}
 
-		int flags = FSOUND_NORMAL | FSOUND_LOADMEMORY | (use_3d ? FSOUND_FORCEMONO : FSOUND_2D);
-		sample = FSOUND_Sample_Load(FSOUND_FREE, data->data(), flags, 0, (int)data->size());
-		cancelJob();
+		int flags = FSOUND_NORMAL | (use_3d ? FSOUND_FORCEMONO : FSOUND_2D);
+		sample = FSOUND_Sample_Load(FSOUND_FREE, data->data(), flags | FSOUND_LOADMEMORY, 0, (int)data->size());
+		if (!sample) {
+			sample = FSOUND_Sample_Load(FSOUND_FREE, job->file.c_str(), flags, 0, 0);
+		}
 		if (!sample) {
 			failed = true;
 			materialized = true;
 			return false;
 		}
+		sampleData = data;
+		cancelJob();
 		FSOUND_Sample_GetDefaults(sample, &def_freq, &def_vol, &def_pan, &def_pri);
 		defs_valid = true;
 		materialized = true;

@@ -22,6 +22,7 @@ private:
 	int def_freq, def_vol, def_pan, def_pri;
 	FSOUND_SAMPLE* sample;
 	std::shared_ptr<AsyncSoundLoader::Job> job;
+	std::shared_ptr<std::vector<char>> sampleData;
 	bool use_3d;
 	bool materialized;
 	bool failed;
