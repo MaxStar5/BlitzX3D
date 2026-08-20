@@ -4,9 +4,9 @@
 #include <string>
 
 #include "gxsound.h"
+#include "bass.h"
 
 class gxRuntime;
-struct FSOUND_SAMPLE;
 
 class gxAudio {
 public:
@@ -15,8 +15,8 @@ public:
 	gxAudio(gxRuntime* runtime);
 	~gxAudio();
 
-	gxChannel* play(FSOUND_SAMPLE* sample);
-	gxChannel* play3d(FSOUND_SAMPLE* sample, const float pos[3], const float vel[3]);
+	gxChannel* play(HSAMPLE sample, float def_vol);
+	gxChannel* play3d(HSAMPLE sample, const float pos[3], const float vel[3], float def_vol);
 
 	void pause();
 	void resume();

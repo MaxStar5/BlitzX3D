@@ -1,149 +1,98 @@
 #include "std.h"
 #include "gxaudio.h"
 #include "asyncsound.h"
+#include "bass.h"
 
 struct StaticChannel : public gxChannel {
 	virtual void play() = 0;
 };
 
 struct SoundChannel : public gxChannel {
-	SoundChannel() :channel(-1) {
+	SoundChannel() :channel(0) {
 	}
-	void set(int n) {
+	void set(HCHANNEL n) {
 		channel = n;
 	}
 	void stop() {
-		FSOUND_StopSound(channel);
+		BASS_ChannelStop(channel);
 	}
 	void setPaused(bool paused) {
-		FSOUND_SetPaused(channel, paused);
+		if (paused) BASS_ChannelPause(channel);
+		else BASS_ChannelPlay(channel, FALSE);
 	}
 	void setPitch(int pitch) {
-		FSOUND_SetFrequency(channel, pitch);
+		BASS_ChannelSetAttribute(channel, BASS_ATTRIB_FREQ, (float)pitch);
 	}
 	void setVolume(float volume) {
-		FSOUND_SetVolume(channel, volume * 255.0f);
+		if (volume < 0.0f) volume = 0.0f;
+		else if (volume > 1.0f) volume = 1.0f;
+		BASS_ChannelSetAttribute(channel, BASS_ATTRIB_VOL, volume);
 	}
 	void setPan(float pan) {
-		FSOUND_SetPan(channel, (pan + 1) * 127.5f);
+		BASS_ChannelSetAttribute(channel, BASS_ATTRIB_PAN, pan);
 	}
 	void set3d(const float pos[3], const float vel[3]) {
-		FSOUND_3D_SetAttributes(channel, (float*)pos, (float*)vel);
+		BASS_3DVECTOR p = { pos[0], pos[1], pos[2] };
+		BASS_3DVECTOR v = { vel[0], vel[1], vel[2] };
+		BASS_ChannelSet3DPosition(channel, &p, 0, &v);
+		BASS_Apply3D();
 	}
 	bool isPlaying() {
-		return FSOUND_IsPlaying(channel) ? true : false;
+		return BASS_ChannelIsActive(channel) != BASS_ACTIVE_STOPPED;
 	}
 private:
-	int channel;
-};
-
-struct CDChannel : public gxChannel {
-	void play(int track, int mode) {
-		stop();
-		int cd_mode = FSOUND_CD_PLAYONCE;
-		if (mode == gxAudio::CD_MODE_LOOP) cd_mode = FSOUND_CD_PLAYLOOPED;
-		else if (mode == gxAudio::CD_MODE_ALL) cd_mode = FSOUND_CD_PLAYCONTINUOUS;
-		FSOUND_CD_SetPlayMode(0, cd_mode);
-		FSOUND_CD_Play(0, track);
-	}
-	void stop() {
-		FSOUND_CD_Stop(0);
-	}
-	void setPaused(bool paused) {
-		FSOUND_CD_SetPaused(0, paused);
-	}
-	void setPitch(int pitch) {
-	}
-	void setVolume(float volume) {
-		FSOUND_CD_SetVolume(0, volume * 255.0f);
-	}
-	void setPan(float pan) {
-	}
-	void set3d(const float pos[3], const float vel[3]) {
-	}
-	bool isPlaying() {
-		return true;
-	}
+	HCHANNEL channel;
 };
 
 struct StreamChannel : public StaticChannel {
-	StreamChannel(FSOUND_STREAM* s) :stream(s) {
-		channel = FSOUND_Stream_Play(FSOUND_FREE, stream);
+	StreamChannel(HSTREAM s) :stream(s), channel(s) {
+		BASS_ChannelPlay(stream, TRUE);
 	}
 	~StreamChannel() {
-		FSOUND_Stream_Close(stream);
+		BASS_StreamFree(stream);
 	}
 	void play() {
 		stop();
-		channel = FSOUND_Stream_Play(FSOUND_FREE, stream);
+		channel = stream;
+		BASS_ChannelPlay(stream, TRUE);
 	}
 	void stop() {
-		FSOUND_Stream_Stop(stream);
-		channel = -1;
+		BASS_ChannelStop(stream);
+		channel = 0;
 	}
 	void setPaused(bool paused) {
-		FSOUND_SetPaused(channel, paused);
+		if (paused) BASS_ChannelPause(channel);
+		else BASS_ChannelPlay(channel, FALSE);
 	}
 	void setPitch(int pitch) {
-		FSOUND_SetFrequency(channel, pitch);
+		BASS_ChannelSetAttribute(channel, BASS_ATTRIB_FREQ, (float)pitch);
 	}
 	void setVolume(float volume) {
-		FSOUND_SetVolume(channel, volume * 255.0f);
+		if (volume < 0.0f) volume = 0.0f;
+		else if (volume > 1.0f) volume = 1.0f;
+		BASS_ChannelSetAttribute(channel, BASS_ATTRIB_VOL, volume);
 	}
 	void setPan(float pan) {
-		FSOUND_SetPan(channel, (pan + 1) * 127.5f);
+		BASS_ChannelSetAttribute(channel, BASS_ATTRIB_PAN, pan);
 	}
 	void set3d(const float pos[3], const float vel[3]) {
 	}
 	bool isPlaying() {
-		return FSOUND_IsPlaying(channel) ? true : false;
+		return channel && BASS_ChannelIsActive(channel) != BASS_ACTIVE_STOPPED;
 	}
 private:
-	FSOUND_STREAM* stream;
-	int channel;
-};
-
-struct MusicChannel : public StaticChannel {
-	MusicChannel(FMUSIC_MODULE* m) :module(m) {
-		play();
-	}
-	~MusicChannel() {
-		FMUSIC_FreeSong(module);
-	}
-	void play() {
-		FMUSIC_PlaySong(module);
-	}
-	void stop() {
-		FMUSIC_StopSong(module);
-	}
-	void setPaused(bool paused) {
-		FMUSIC_SetPaused(module, paused);
-	}
-	void setPitch(int pitch) {
-	}
-	void setVolume(float volume) {
-		FMUSIC_SetMasterVolume(module, volume * 255.0f);
-	}
-	void setPan(float pan) {
-	}
-	void set3d(const float pos[3], const float vel[3]) {
-	}
-	bool isPlaying() {
-		return FMUSIC_IsFinished(module) ? false : true;
-	}
-private:
-	FMUSIC_MODULE* module;
+	HSTREAM stream;
+	HCHANNEL channel;
 };
 
 static std::set<gxSound*> sound_set;
 static std::vector<gxChannel*> channels;
 static std::map<std::string, StaticChannel*> songs;
-static CDChannel* cdChannel;
 
 static int next_chan;
 static std::vector<SoundChannel*> soundChannels;
 
-static gxChannel* allocSoundChannel(int n) {
+static gxChannel* allocSoundChannel(HCHANNEL n) {
 
 	SoundChannel* chan = 0;
 	for (int k = 0; k < soundChannels.size(); ++k) {
@@ -176,9 +125,6 @@ gxAudio::gxAudio(gxRuntime* r) :
 	next_chan = 0;
 	soundChannels.resize(4096);
 	for (int k = 0; k < 4096; ++k) soundChannels[k] = 0;
-
-	cdChannel = new CDChannel();
-	channels.push_back(cdChannel);
 }
 
 gxAudio::~gxAudio() {
@@ -188,29 +134,35 @@ gxAudio::~gxAudio() {
 	while (sound_set.size()) freeSound(*sound_set.begin());
 	soundChannels.clear();
 	songs.clear();
-
-	FSOUND_Close();
 }
 
-gxChannel* gxAudio::play(FSOUND_SAMPLE* sample) {
-
-	int n = FSOUND_PlaySound(FSOUND_FREE, sample);
-	return n >= 0 ? allocSoundChannel(n) : 0;
+gxChannel* gxAudio::play(HSAMPLE sample, float def_vol) {
+	HCHANNEL n = BASS_SampleGetChannel(sample, 0);
+	if (!n) return 0;
+	BASS_ChannelSetAttribute(n, BASS_ATTRIB_VOL, def_vol);
+	BASS_ChannelSetAttribute(n, BASS_ATTRIB_PAN, 0.0f);
+	BASS_ChannelPlay(n, TRUE);
+	return allocSoundChannel(n);
 }
 
-gxChannel* gxAudio::play3d(FSOUND_SAMPLE* sample, const float pos[3], const float vel[3]) {
-
-	int n = FSOUND_PlaySoundEx(FSOUND_FREE, sample, 0, true);
-	if (n < 0) return 0;
-	FSOUND_3D_SetAttributes(n, (float*)pos, (float*)vel);
-	FSOUND_SetPaused(n, false);
+gxChannel* gxAudio::play3d(HSAMPLE sample, const float pos[3], const float vel[3], float def_vol) {
+	HCHANNEL n = BASS_SampleGetChannel(sample, 0);
+	if (!n) return 0;
+	BASS_3DVECTOR p = { pos[0], pos[1], pos[2] };
+	BASS_3DVECTOR v = { vel[0], vel[1], vel[2] };
+	BASS_ChannelSetAttribute(n, BASS_ATTRIB_VOL, def_vol);
+	BASS_ChannelSet3DPosition(n, &p, 0, &v);
+	BASS_ChannelPlay(n, TRUE);
+	BASS_Apply3D();
 	return allocSoundChannel(n);
 }
 
 void gxAudio::pause() {
+	BASS_Stop();
 }
 
 void gxAudio::resume() {
+	BASS_Start();
 }
 
 static bool soundFileExists(const std::string& f) {
@@ -236,21 +188,24 @@ void gxAudio::freeSound(gxSound* s) {
 }
 
 void gxAudio::setPaused(bool paused) {
-	FSOUND_SetPaused(FSOUND_ALL, paused);
+	if (paused) BASS_Stop();
+	else BASS_Start();
 }
 
 void gxAudio::setVolume(float volume) {
 }
 
 void gxAudio::set3dOptions(float roll, float dopp, float dist) {
-	FSOUND_3D_SetRolloffFactor(roll);
-	FSOUND_3D_SetDopplerFactor(dopp);
-	FSOUND_3D_SetDistanceFactor(dist);
+	BASS_Set3DFactors(dist, roll, dopp);
 }
 
 void gxAudio::set3dListener(const float pos[3], const float vel[3], const float forward[3], const float up[3]) {
-	FSOUND_3D_Listener_SetAttributes((float*)pos, (float*)vel, forward[0], forward[1], forward[2], up[0], up[1], up[2]);
-	FSOUND_Update();
+	BASS_3DVECTOR p = { pos[0], pos[1], pos[2] };
+	BASS_3DVECTOR v = { vel[0], vel[1], vel[2] };
+	BASS_3DVECTOR f = { forward[0], forward[1], forward[2] };
+	BASS_3DVECTOR t = { up[0], up[1], up[2] };
+	BASS_Set3DPosition(&p, &v, &f, &t);
+	BASS_Apply3D();
 }
 
 gxChannel* gxAudio::playFile(const std::string& t, bool use_3d, int mode) {
@@ -263,7 +218,10 @@ gxChannel* gxAudio::playFile(const std::string& t, bool use_3d, int mode) {
 		return chan;
 	}
 	else {
-		FSOUND_STREAM* stream = FSOUND_Stream_Open(f.c_str(), mode, 0, 0);
+		DWORD flags = 0;
+		if (use_3d) flags |= BASS_SAMPLE_3D;
+		if (mode & 0x00000002) flags |= BASS_SAMPLE_LOOP;
+		HSTREAM stream = BASS_StreamCreateFile(FALSE, f.c_str(), 0, 0, flags);
 		if (!stream) return 0;
 		chan = new StreamChannel(stream);
 	}
@@ -273,6 +231,5 @@ gxChannel* gxAudio::playFile(const std::string& t, bool use_3d, int mode) {
 }
 
 gxChannel* gxAudio::playCDTrack(int track, int mode) {
-	cdChannel->play(track, mode);
-	return cdChannel;
+	return 0;
 }

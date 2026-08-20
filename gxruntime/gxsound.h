@@ -3,15 +3,15 @@
 
 #include "gxchannel.h"
 #include "asyncsound.h"
+#include "bass.h"
 
 class gxAudio;
-struct FSOUND_SAMPLE;
 
 class gxSound {
 public:
 	gxAudio* audio;
 
-	gxSound(gxAudio* audio, FSOUND_SAMPLE* sample);
+	gxSound(gxAudio* audio, HSAMPLE sample);
 	gxSound(gxAudio* audio, const std::shared_ptr<AsyncSoundLoader::Job>& job, bool use_3d);
 	~gxSound();
 
@@ -19,8 +19,9 @@ public:
 
 private:
 	bool defs_valid;
-	int def_freq, def_vol, def_pan, def_pri;
-	FSOUND_SAMPLE* sample;
+	int def_freq;
+	float def_vol, def_pan;
+	HSAMPLE sample;
 	std::shared_ptr<AsyncSoundLoader::Job> job;
 	std::shared_ptr<std::vector<char>> sampleData;
 	bool use_3d;

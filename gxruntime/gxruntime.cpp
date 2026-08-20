@@ -10,6 +10,8 @@
 #include <sstream>
 #include <shellapi.h>
 
+#include "bass.h"
+
 static bool SetModernDPIAwareness() {
 	HMODULE hShcore = LoadLibraryW(L"shcore.dll");
 	if (!hShcore) return false;
@@ -796,15 +798,10 @@ void gxRuntime::setPointerVisible(bool vis) {
 gxAudio* gxRuntime::openAudio(int flags) {
 	if(audio) return 0;
 
-	int f_flags =
-		FSOUND_INIT_GLOBALFOCUS |
-		FSOUND_INIT_USEDEFAULTMIDISYNTH;
-
-	FSOUND_SetHWND(hwnd);
 	static const int mixrates[] = { 96000, 48000, 44100 };
 	bool ok = false;
 	for (int i = 0; i < sizeof(mixrates) / sizeof(mixrates[0]); ++i) {
-		if (FSOUND_Init(mixrates[i], 1024, f_flags)) {
+		if (BASS_Init(-1, mixrates[i], 0, hwnd, 0)) {
 			ok = true;
 			break;
 		}
@@ -812,6 +809,7 @@ gxAudio* gxRuntime::openAudio(int flags) {
 	if (!ok) {
 		return 0;
 	}
+	BASS_Start();
 
 	audio = new gxAudio(this);
 	return audio;

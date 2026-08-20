@@ -1,12 +1,17 @@
 #include "std.h"
 #include "gxsound.h"
 #include "gxaudio.h"
+#include "bass.h"
 
 std::vector<gxSound*> gxSound::pending;
 
-gxSound::gxSound(gxAudio* a, FSOUND_SAMPLE* s) :
+gxSound::gxSound(gxAudio* a, HSAMPLE s) :
 	audio(a), sample(s), job(), use_3d(false), materialized(true), failed(false), defs_valid(true) {
-	FSOUND_Sample_GetDefaults(sample, &def_freq, &def_vol, &def_pan, &def_pri);
+	BASS_SAMPLE info;
+	BASS_SampleGetInfo(sample, &info);
+	def_freq = info.freq;
+	def_vol = info.volume;
+	def_pan = info.pan;
 }
 
 gxSound::gxSound(gxAudio* a, const std::shared_ptr<AsyncSoundLoader::Job>& j, bool u3d) :
@@ -17,7 +22,7 @@ gxSound::gxSound(gxAudio* a, const std::shared_ptr<AsyncSoundLoader::Job>& j, bo
 gxSound::~gxSound() {
 	cancelJob();
 	if (sample) {
-		FSOUND_Sample_Free(sample);
+		BASS_SampleFree(sample);
 		sample = 0;
 	}
 	sampleData.reset();
@@ -68,10 +73,11 @@ bool gxSound::materialize(bool blocking) {
 			return false;
 		}
 
-		int flags = FSOUND_NORMAL | (use_3d ? FSOUND_FORCEMONO : FSOUND_2D);
-		sample = FSOUND_Sample_Load(FSOUND_FREE, data->data(), flags | FSOUND_LOADMEMORY, 0, (int)data->size());
+		DWORD flags = 0;
+		if (use_3d) flags |= BASS_SAMPLE_3D | BASS_SAMPLE_MONO;
+		sample = BASS_SampleLoad(BASS_FILE_MEM, data->data(), 0, (DWORD)data->size(), 64, flags);
 		if (!sample) {
-			sample = FSOUND_Sample_Load(FSOUND_FREE, job->file.c_str(), flags, 0, 0);
+			sample = BASS_SampleLoad(FALSE, job->file.c_str(), 0, 0, 64, flags);
 		}
 		if (!sample) {
 			failed = true;
@@ -80,7 +86,11 @@ bool gxSound::materialize(bool blocking) {
 		}
 		sampleData = data;
 		cancelJob();
-		FSOUND_Sample_GetDefaults(sample, &def_freq, &def_vol, &def_pan, &def_pri);
+		BASS_SAMPLE info;
+		BASS_SampleGetInfo(sample, &info);
+		def_freq = info.freq;
+		def_vol = info.volume;
+		def_pan = info.pan;
 		defs_valid = true;
 		materialized = true;
 	}
@@ -89,7 +99,11 @@ bool gxSound::materialize(bool blocking) {
 
 void gxSound::setDefaults() {
 	if(!defs_valid) {
-		FSOUND_Sample_SetDefaults(sample, def_freq, def_vol, def_pan, def_pri);
+		BASS_SAMPLE info;
+		BASS_SampleGetInfo(sample, &info);
+		info.freq = def_freq;
+		info.pan = def_pan;
+		BASS_SampleSetInfo(sample, &info);
 		defs_valid = true;
 	}
 }
@@ -97,18 +111,22 @@ void gxSound::setDefaults() {
 gxChannel* gxSound::play() {
 	if (!materialize(true)) return 0;
 	setDefaults();
-	return audio->play(sample);
+	return audio->play(sample, def_vol);
 }
 
 gxChannel* gxSound::play3d(const float pos[3], const float vel[3]) {
 	if (!materialize(true)) return 0;
 	setDefaults();
-	return audio->play3d(sample, pos, vel);
+	return audio->play3d(sample, pos, vel, def_vol);
 }
 
 void gxSound::setLoop(bool loop) {
 	if (!materialize(true)) return;
-	FSOUND_Sample_SetMode(sample, loop ? FSOUND_LOOP_NORMAL : FSOUND_LOOP_OFF);
+	BASS_SAMPLE info;
+	BASS_SampleGetInfo(sample, &info);
+	if (loop) info.flags |= BASS_SAMPLE_LOOP;
+	else info.flags &= ~BASS_SAMPLE_LOOP;
+	BASS_SampleSetInfo(sample, &info);
 }
 
 void gxSound::setPitch(int hertz) {
@@ -119,13 +137,15 @@ void gxSound::setPitch(int hertz) {
 
 void gxSound::setVolume(float volume) {
 	if (!materialize(true)) return;
-	def_vol = volume * 255.0f;
+	if (volume < 0.0f) volume = 0.0f;
+	else if (volume > 1.0f) volume = 1.0f;
+	def_vol = volume;
 	defs_valid = false;
 }
 
 void gxSound::setPan(float pan) {
 	if (!materialize(true)) return;
-	def_pan = (pan + 1.0f) * 127.5f;
+	def_pan = pan;
 	defs_valid = false;
 }
 
