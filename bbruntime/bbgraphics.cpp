@@ -1230,9 +1230,11 @@ bbImage* bbLoadAnimImage(BBStr* s, int w, int h, int first, int cnt) {
     }
     delete s;
 
-    IDirect3DTexture9* picTex = ddUtil::loadTextureSurface(path, 0, gx_graphics, false);
+    int srcFlags = ddUtil::hasActualAlpha(path) ? gxCanvas::CANVAS_TEX_ALPHA : 0;
+
+    IDirect3DTexture9* picTex = ddUtil::loadTextureSurface(path, srcFlags, gx_graphics, false);
     if (!picTex) return 0;
-    gxCanvas* pic = new gxCanvas(gx_graphics, picTex, gxCanvas::CANVAS_TEXTURE);
+    gxCanvas* pic = new gxCanvas(gx_graphics, picTex, gxCanvas::CANVAS_TEXTURE | srcFlags);
     gx_graphics->adoptCanvas(pic);
 
     int fpr = pic->getWidth() / w;
@@ -1247,13 +1249,13 @@ bbImage* bbLoadAnimImage(BBStr* s, int w, int h, int first, int cnt) {
 
     std::vector<gxCanvas*> frames;
     for (int k = 0; k < cnt; ++k) {
-        IDirect3DTexture9* tex = ddUtil::createTextureSurface(w, h, 0, gx_graphics, false);
+        IDirect3DTexture9* tex = ddUtil::createTextureSurface(w, h, gxCanvas::CANVAS_TEXTURE | srcFlags, gx_graphics, false);
         if (!tex) {
             for (int i = 0; i < k; ++i) gx_graphics->freeCanvas(frames[i]);
             gx_graphics->freeCanvas(pic);
             return 0;
         }
-        gxCanvas* c = new gxCanvas(gx_graphics, tex, gxCanvas::CANVAS_TEXTURE);
+        gxCanvas* c = new gxCanvas(gx_graphics, tex, gxCanvas::CANVAS_TEXTURE | srcFlags);
         gx_graphics->adoptCanvas(c);
 
         c->setLogicalSize(w, h);
