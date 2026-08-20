@@ -171,7 +171,7 @@ struct CachedTexture::Rep {
 
 				for (int face = 0; face < 6; ++face) {
 					tex->setCubeFace(face);
-					gx_graphics->copy(tex, 0, 0, tex->getWidth(), tex->getHeight(), t, face * cw, 0, cw, ch);
+					gx_graphics->copy(tex, 0, 0, cw, ch, t, face * cw, 0, cw, ch);
 				}
 				tex->setCubeFace(1);
 			}
@@ -191,8 +191,11 @@ struct CachedTexture::Rep {
 			int cnt = requested_cnt;
 			while (cnt--) {
 				gxCanvas* p = gx_graphics->createCanvas(w, h, frame_flags);
-				gx_graphics->copy(p, 0, 0, p->getWidth(), p->getHeight(), t, x, y, w, h);
-				frames.push_back(p);
+				if (p) {
+					gx_graphics->copy(p, 0, 0, w, h, t, x, y, w, h);
+					p->setLogicalSize(w, h);
+					frames.push_back(p);
+				}
 				x = x + w; if (x + w > t->getWidth()) { x = 0; y = y + h; }
 			}
 		}

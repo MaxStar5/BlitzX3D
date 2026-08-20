@@ -47,6 +47,8 @@ public:
 	bool attachZBuffer();
 	void releaseZBuffer();
 
+	void restoreZBuffer();
+
 	bool clip(RECT* d)          const;
 	bool clip(RECT* d, RECT* s) const;
 	void damage(const RECT& r)  const;

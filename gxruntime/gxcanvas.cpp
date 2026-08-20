@@ -312,6 +312,13 @@ void gxCanvas::backup() {
     }
 }
 
+void gxCanvas::restoreZBuffer() {
+	if (z_surf) {
+		releaseZBuffer();
+		attachZBuffer();
+	}
+}
+
 void gxCanvas::restore() {
     if (!t_surf) return;
 

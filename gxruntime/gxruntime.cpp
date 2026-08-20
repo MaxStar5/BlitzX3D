@@ -85,6 +85,8 @@ struct gxDll {
 
 static std::map<std::string, gxDll*> libs;
 
+static CRITICAL_SECTION g_gfxCS;
+
 static LRESULT CALLBACK windowProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam);
 
 //current gfx mode
@@ -133,6 +135,7 @@ gxRuntime* gxRuntime::openRuntime(HINSTANCE hinst, const std::string& cmd_line, 
 	UpdateWindow(hwnd);
 
 	runtime = new gxRuntime(hinst, cmd_line, hwnd);
+	InitializeCriticalSection(&g_gfxCS);
 	return runtime;
 }
 
@@ -142,8 +145,13 @@ void gxRuntime::closeRuntime(gxRuntime* r) {
 		FreeLibrary(it->second->hinst);
 	libs.clear();
 
-	delete runtime;
+	EnterCriticalSection(&g_gfxCS);
+	gxRuntime* whatARottenWayToDie = runtime;
 	runtime = 0;
+	LeaveCriticalSection(&g_gfxCS);
+	delete whatARottenWayToDie;
+
+	DeleteCriticalSection(&g_gfxCS);
 }
 
 
@@ -255,6 +263,7 @@ void gxRuntime::suspend() {
 	busy = true;
 	pauseAudio();
 	unacquireInput();
+	if (GetCapture() == hwnd) ReleaseCapture();
 	suspended = true;
 	busy = false;
 
@@ -902,13 +911,19 @@ void gxRuntime::closeInput(gxInput* i) {
 // TIMER CALLBACK FOR AUTOREFRESH OF WINDOWED MODE //
 /////////////////////////////////////////////////////
 static void CALLBACK timerCallback(UINT, UINT, DWORD, DWORD, DWORD) {
+	bool post = false;
+	HWND target = NULL;
+	EnterCriticalSection(&g_gfxCS);
 	if (gfx_mode && runtime && runtime->graphics) {
 		gxCanvas* f = runtime->graphics->getFrontCanvas();
 		if (f && f->getModify() != mod_cnt) {
 			mod_cnt = f->getModify();
-			PostMessage(runtime->hwnd, WM_PAINT, 0, 0);
+			post = true;
+			target = runtime->hwnd;
 		}
 	}
+	LeaveCriticalSection(&g_gfxCS);
+	if (post && target) PostMessage(target, WM_PAINT, 0, 0);
 }
 
 ////////////////////
@@ -1179,11 +1194,15 @@ void gxRuntime::closeGraphics(gxGraphics* g) {
 		backBuffer = 0;
 		frontBuffer = 0;
 	}
-	graphics->dir3dDev = nullptr;
-	graphics->frontBuffer = nullptr;
-	graphics->backBuffer = nullptr;
-	delete graphics;
+	EnterCriticalSection(&g_gfxCS);
+	gxGraphics* old_graphics = graphics;
 	graphics = 0;
+	LeaveCriticalSection(&g_gfxCS);
+
+	old_graphics->dir3dDev = nullptr;
+	old_graphics->frontBuffer = nullptr;
+	old_graphics->backBuffer = nullptr;
+	delete old_graphics;
 
 	if (gfx_mode == GMODE_EXCLUSIVE) {
 		ShowCursor(1);

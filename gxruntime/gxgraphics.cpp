@@ -192,7 +192,11 @@ bool gxGraphics::restore() {
 
 		for (auto it = canvas_set.begin(); it != canvas_set.end(); ++it) {
 			(*it)->restore();
+			(*it)->restoreZBuffer();
 		}
+
+		if (back_canvas) back_canvas->restoreZBuffer();
+		if (front_canvas && front_canvas != back_canvas) front_canvas->restoreZBuffer();
 
 		for (auto it = mesh_set.begin(); it != mesh_set.end(); ++it) {
 			(*it)->restore();
@@ -312,10 +316,7 @@ bool gxGraphics::changeDisplayMode(int width, int height, bool fullscreen, bool 
 		canvas->clip_rect.bottom = height;
 		canvas->setViewport(0, 0, width, height);
 
-		if (canvas->z_surf) {
-			canvas->releaseZBuffer();
-			canvas->attachZBuffer();
-		}
+		canvas->restoreZBuffer();
 		};
 
 	updateCanvas(front_canvas);
