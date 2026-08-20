@@ -3,7 +3,7 @@
 
 #include <string>
 
-#define BLITZIDE_VERSION "V1.4.2"
+#define BLITZIDE_VERSION "V1.4.3"
 
 class App;
 
