@@ -17,8 +17,12 @@ struct SoundChannel : public gxChannel {
 		BASS_ChannelStop(channel);
 	}
 	void setPaused(bool paused) {
-		if (paused) BASS_ChannelPause(channel);
-		else BASS_ChannelPlay(channel, FALSE);
+		if (paused) {
+			BASS_ChannelPause(channel);
+		}
+		else if (BASS_ChannelIsActive(channel) == BASS_ACTIVE_PAUSED) {
+			BASS_ChannelPlay(channel, FALSE);
+		}
 	}
 	void setPitch(int pitch) {
 		BASS_ChannelSetAttribute(channel, BASS_ATTRIB_FREQ, (float)pitch);
@@ -61,8 +65,12 @@ struct StreamChannel : public StaticChannel {
 		channel = 0;
 	}
 	void setPaused(bool paused) {
-		if (paused) BASS_ChannelPause(channel);
-		else BASS_ChannelPlay(channel, FALSE);
+		if (paused) {
+			BASS_ChannelPause(channel);
+		}
+		else if (BASS_ChannelIsActive(channel) == BASS_ACTIVE_PAUSED) {
+			BASS_ChannelPlay(channel, FALSE);
+		}
 	}
 	void setPitch(int pitch) {
 		BASS_ChannelSetAttribute(channel, BASS_ATTRIB_FREQ, (float)pitch);
