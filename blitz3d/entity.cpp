@@ -75,19 +75,7 @@ Entity::Entity(const Entity& e) :
 }
 
 Entity::~Entity() {
-	while (Entity* c = _children) {
-		if (c->_pinned) {
-			if (c->_succ) c->_succ->_pred = c->_pred;
-			if (c->_pred) c->_pred->_succ = c->_succ;
-			else _children = c->_succ;
-			if (_last_child == c) _last_child = c->_pred;
-			c->_parent = 0;
-			c->insert();
-		}
-		else {
-			delete c;
-		}
-	}
+	while (children()) delete children();
 	remove();
 }
 

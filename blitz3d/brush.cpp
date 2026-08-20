@@ -11,7 +11,7 @@ struct Brush::Rep {
 	Texture texs[gxScene::MAX_TEXTURES];
 	int tex_frame[gxScene::MAX_TEXTURES];
 	gxEffect* effect;
-	int pin_count = 0;
+	bool pinned = false;
 
 	static Rep* pool;
 
@@ -264,10 +264,9 @@ gxEffect* Brush::getEffect() const {
 }
 
 void Brush::setPinned(bool pinned) {
-	if (pinned) ++rep->pin_count;
-	else if (rep->pin_count > 0) --rep->pin_count;
+	rep->pinned = pinned;
 }
 
 bool Brush::pinned() const {
-	return rep->pin_count > 0;
+	return rep->pinned;
 }

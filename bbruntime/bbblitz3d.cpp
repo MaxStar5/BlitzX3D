@@ -501,7 +501,6 @@ Texture* bbCreateTexture(int w, int h, int flags, int frames) {
 void bbFreeTexture(Texture* t) {
 	if (!t) return;
 	debugTexture(t, "FreeTexture");
-	if (t->pinned()) return;
 	if (texture_set.erase(t)) delete t;
 }
 
@@ -633,7 +632,6 @@ Brush* bbLoadBrush(BBStr* file, int flags, float u_scale, float v_scale) {
 void  bbFreeBrush(Brush* b) {
 	if (!b) return;
 	debugBrush(b, "FreeBrush");
-	if (b->pinned()) return;
 	if (brush_set.erase(b)) delete b;
 }
 
@@ -1608,7 +1606,6 @@ Entity* bbCopyEntity(Entity* e, Entity* p) {
 
 void  bbFreeEntity(Entity* e) {
 	if (!e) return;
-	if (e->pinned()) return;
 	debugEntity(e, "FreeEntity");
 	erase(e);
 	delete e;
@@ -2232,40 +2229,14 @@ void  bbClearWorld(int e, int b, int t, int fx) {
 	}
 }
 
-static void pinBrushTextures(const Brush& b, bool pinned) {
-	const_cast<Brush&>(b).setPinned(pinned);
-	for (int i = 0; i < gxScene::MAX_TEXTURES; ++i) {
-		Texture t = b.getTexture(i);
-		if (t.valid()) t.setPinned(pinned);
-	}
-}
-
-static void pinEntityResources(Entity* e, bool pinned) {
-	if (Model* m = e->getModel()) {
-		pinBrushTextures(m->getBrush(), pinned);
-		if (MeshModel* mm = m->getMeshModel()) {
-			for (Surface* s : mm->getSurfaces()) {
-				pinBrushTextures(s->getBrush(), pinned);
-			}
-		}
-	}
-	for (Entity* c = e->children(); c; c = c->successor()) {
-		pinEntityResources(c, pinned);
-	}
-}
-
 void bbPinEntity(Entity* e) {
 	VALIDATE_ENTITY_VOID(e, "PinEntity");
-	if (e->pinned()) return;
 	e->setPinned(true);
-	pinEntityResources(e, true);
 }
 
 void bbUnpinEntity(Entity* e) {
 	VALIDATE_ENTITY_VOID(e, "UnpinEntity");
-	if (!e->pinned()) return;
 	e->setPinned(false);
-	pinEntityResources(e, false);
 }
 
 void bbPinTexture(Texture* t) {
@@ -2280,12 +2251,12 @@ void bbUnpinTexture(Texture* t) {
 
 void bbPinBrush(Brush* b) {
 	debugBrush(b, "PinBrush");
-	pinBrushTextures(*b, true);
+	b->setPinned(true);
 }
 
 void bbUnpinBrush(Brush* b) {
 	debugBrush(b, "UnpinBrush");
-	pinBrushTextures(*b, false);
+	b->setPinned(false);
 }
 
 extern int active_texs;
