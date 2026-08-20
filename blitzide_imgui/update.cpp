@@ -113,6 +113,7 @@ void App::drawUpdate() {
 	if (!updateFound) return;
 	updateFound = false;
 	updateOpen = true;
+	updateIgnore = false;
 	ImGui::OpenPopup("BlitzX3D Update");
 }
 
@@ -127,8 +128,9 @@ void App::drawUpdateDialog() {
 		ImGui::Spacing();
 		ImGui::TextWrapped("You are running %s. Version %s is available on GitHub.", BLITZIDE_VERSION, remoteVersion.c_str());
 		ImGui::Spacing();
-		bool ignore = false;
+		bool ignore = updateIgnore;
 		ImGui::Checkbox("Don't remind me again for this version", &ignore);
+		updateIgnore = ignore;
 		ImGui::Spacing();
 		if (ImGui::Button("View Releases", ImVec2(-1, 0))) {
 			App::openUrl(RELEASES_URL);

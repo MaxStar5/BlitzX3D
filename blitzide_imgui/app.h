@@ -159,6 +159,7 @@ private:
 
 	bool showCommandLine = false;
 	bool updateOpen = false;
+	bool updateIgnore = false;
 
 	bool showStylize = false;
 	bool showProjectWindow = false;
