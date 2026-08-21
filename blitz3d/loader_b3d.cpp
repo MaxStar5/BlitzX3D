@@ -82,9 +82,10 @@ static std::string readString() {
 	std::string t;
 	for (;;) {
 		char c;
-		read(&c, 1);
+		if (fread(&c, 1, 1, in) != 1) return t;
 		if (!c) return t;
 		t += c;
+		if (t.size() > 65535) return t;
 	}
 }
 
@@ -149,10 +150,15 @@ static int readVertices() {
 	int tc_sets = readInt();
 	int tc_size = readInt();
 
+	if (tc_sets < 0) tc_sets = 0;
+	else if (tc_sets > 8) tc_sets = 8;
+	if (tc_size < 0) tc_size = 0;
+	else if (tc_size > 4) tc_size = 4;
+
 	int vertex_size = 3 * sizeof(float); // coords
 	if (flags & 1) vertex_size += 3 * sizeof(float); // normal
 	if (flags & 2) vertex_size += 4 * sizeof(float); // color
-	vertex_size += tc_sets * tc_size * sizeof(float);
+	vertex_size += (int)(tc_sets * (long long)tc_size * sizeof(float));
 
 	int remaining = chunk_stack.back() - ftell(in);
 	int num_vertices = remaining / vertex_size;
@@ -182,7 +188,8 @@ static int readVertices() {
 			t.color = (unsigned(a * 255) << 24) | (unsigned(r * 255) << 16) | (unsigned(g * 255) << 8) | unsigned(b * 255);
 		}
 		for (int k = 0; k < tc_sets; ++k) {
-			memcpy(tc, ptr, tc_size * sizeof(float)); ptr += tc_size * sizeof(float);
+			int tc_copy = tc_size < 4 ? tc_size : 4;
+			memcpy(tc, ptr, tc_copy * sizeof(float)); ptr += tc_size * sizeof(float);
 			if (k < 2) memcpy(t.tex_coords[k], tc, 8);
 		}
 		MeshLoader::addVertex(t);

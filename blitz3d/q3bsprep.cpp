@@ -235,12 +235,18 @@ void Q3BSPRep::createLightMaps() {
 }
 
 void Q3BSPRep::createVis() {
+	if (!header.dir[16].lump) return;
+	int lump_len = header.dir[16].length;
+	if (lump_len < 8) return;
 	int* vis = (int*)header.dir[16].lump;
 	int n_vecs = *vis++;
 	vis_sz = *vis++;
+	if (n_vecs < 0 || vis_sz < 0) return;
+	long long need = (long long)n_vecs * vis_sz;
+	if (need > (long long)lump_len - 8) return;
 	log("vis: " + itoa(n_vecs) + "," + itoa(vis_sz));
-	vis_data = new char[n_vecs * vis_sz];
-	memcpy(vis_data, vis, n_vecs * vis_sz);
+	vis_data = new char[(size_t)need];
+	memcpy(vis_data, vis, (size_t)need);
 }
 
 void Q3BSPRep::createCollider() {
@@ -579,6 +585,9 @@ Q3BSPRep::Q3BSPRep(const std::string& f, float gam) :root_node(0), vis_sz(0), vi
 	gamma_adj = 1 - gam;
 
 	FILE* buf = _wfopen(UTF8::toWide(f).c_str(), L"rb"); if(!buf) return;
+	fseek(buf, 0, SEEK_END);
+	long long file_size = _ftelli64(buf);
+	fseek(buf, 0, SEEK_SET);
 
 	fread(&header, sizeof(header), 1, buf);
 	if(header.magic != 'PSBI' || header.version != 0x2e) {
@@ -591,6 +600,10 @@ Q3BSPRep::Q3BSPRep(const std::string& f, float gam) :root_node(0), vis_sz(0), vi
 	//load all lumps...
 	for(k = 0; k < 17; ++k) {
 		if(header.dir[k].offset && header.dir[k].length) {
+			if ((long long)header.dir[k].offset + header.dir[k].length > file_size) {
+				header.dir[k].lump = 0;
+				continue;
+			}
 			fseek(buf, header.dir[k].offset, SEEK_SET);
 			header.dir[k].lump = new char[header.dir[k].length];
 			fread(header.dir[k].lump, header.dir[k].length, 1, buf);

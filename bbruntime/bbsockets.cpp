@@ -483,6 +483,10 @@ BBStr* bbParseDomainTXT(BBStr* txt, BBStr* name) {
 BBStr* bbGetDomainTXT(BBStr* domain) {
 	PDNS_RECORD pResult = NULL;
 	DnsQuery_A(domain->c_str(), DNS_TYPE_TEXT, DNS_QUERY_BYPASS_CACHE, NULL, &pResult, NULL);
+	if (!pResult) {
+		delete domain;
+		return new BBStr("");
+	}
 	std::string record = pResult->Data.TXT.pStringArray[0];
 	delete domain;
 	DnsRecordListFree(pResult, DnsFreeRecordListDeep);
