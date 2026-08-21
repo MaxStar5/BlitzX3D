@@ -113,7 +113,7 @@ BBStr* bbGetEnv(BBStr* env_var) {
     if (len > 0) {
         std::wstring buf(len, 0);
         GetEnvironmentVariableW(name.c_str(), &buf[0], len);
-        val = UTF8::fromWide(buf);
+        val = UTF8::fromWide(std::wstring(buf.c_str()));
     }
     BBStr* result = new BBStr(val);
     delete env_var;
