@@ -1349,7 +1349,7 @@ static std::string toDir(std::string t) {
 }
 
 std::string gxRuntime::systemProperty(const std::string& p) {
-	char buff[MAX_PATH + 1];
+	wchar_t buff[MAX_PATH + 1];
 	std::string t = tolower(p);
 	if(t == "os") {
 		switch(osinfo.dwMajorVersion) {
@@ -1426,15 +1426,15 @@ std::string gxRuntime::systemProperty(const std::string& p) {
 		return itoa((int)osinfo.dwBuildNumber);
 	}
 	else if(t == "appdir") {
-		if(GetModuleFileName(0, buff, MAX_PATH)) {
-			std::string t = buff;
+		if(GetModuleFileNameW(0, buff, MAX_PATH)) {
+			std::string t = UTF8::fromWide(buff);
 			int n = t.find_last_of('\\');
 			if(n != std::string::npos) t = t.substr(0, n);
 			return toDir(t);
 		}
 	}
 	else if(t == "appfile") {
-		if(GetModuleFileName(0, buff, MAX_PATH)) return buff;
+		if(GetModuleFileNameW(0, buff, MAX_PATH)) return UTF8::fromWide(buff);
 	}
 	else if(t == "apphwnd") {
 		return itoa((int)hwnd);
@@ -1443,13 +1443,13 @@ std::string gxRuntime::systemProperty(const std::string& p) {
 		return itoa((int)hinst);
 	}
 	else if(t == "windowsdir") {
-		if(GetWindowsDirectory(buff, MAX_PATH)) return toDir(buff);
+		if(GetWindowsDirectoryW(buff, MAX_PATH)) return toDir(UTF8::fromWide(buff));
 	}
 	else if(t == "systemdir") {
-		if(GetSystemDirectory(buff, MAX_PATH)) return toDir(buff);
+		if(GetSystemDirectoryW(buff, MAX_PATH)) return toDir(UTF8::fromWide(buff));
 	}
 	else if(t == "tempdir") {
-		if(GetTempPath(MAX_PATH, buff)) return toDir(buff);
+		if(GetTempPathW(MAX_PATH, buff)) return toDir(UTF8::fromWide(buff));
 	}
 	else if(t == "direct3d8") {
 		if(graphics) return itoa((int)graphics->dir3d);

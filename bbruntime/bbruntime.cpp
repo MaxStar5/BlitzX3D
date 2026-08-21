@@ -107,15 +107,21 @@ BBStr* bbSystemProperty(BBStr* p) {
 }
 
 BBStr* bbGetEnv(BBStr* env_var) {
-    char* p = getenv(env_var->c_str());
-    BBStr* val = new BBStr(p ? p : "");
+    std::wstring name = UTF8::toWide(*env_var);
+    DWORD len = GetEnvironmentVariableW(name.c_str(), nullptr, 0);
+    std::string val;
+    if (len > 0) {
+        std::wstring buf(len, 0);
+        GetEnvironmentVariableW(name.c_str(), &buf[0], len);
+        val = UTF8::fromWide(buf);
+    }
+    BBStr* result = new BBStr(val);
     delete env_var;
-    return val;
+    return result;
 }
 
 void bbSetEnv(BBStr* env_var, BBStr* val) {
-    std::string t = *env_var + "=" + *val;
-    putenv(t.c_str());
+    SetEnvironmentVariableW(UTF8::toWide(*env_var).c_str(), val->c_str()[0] ? UTF8::toWide(*val).c_str() : nullptr);
     delete env_var;
     delete val;
 }
