@@ -972,9 +972,9 @@ void bbViewport(int x, int y, int w, int h)
     gx_canvas->setViewport(x, y, w, h);
 }
 
-void bbColor(int r, int g, int b)
+void bbColor(int r, int g, int b, int a = 255)
 {
-    gx_canvas->setColor(curr_color = (r << 16) | (g << 8) | b);
+    gx_canvas->setColor(curr_color = (a << 24) | (r << 16) | (g << 8) | b);
 }
 
 void bbGetColor(int x, int y)
@@ -1011,9 +1011,9 @@ gxEffect* bbGet2DEffect() {
     return gx_canvas ? gx_canvas->get2DEffect() : nullptr;
 }
 
-void bbClsColor(int r, int g, int b)
+void bbClsColor(int r, int g, int b, int a = 255)
 {
-    gx_canvas->setClsColor(curr_clsColor = (r << 16) | (g << 8) | b);
+    gx_canvas->setClsColor(curr_clsColor = (a << 24) | (r << 16) | (g << 8) | b);
 }
 
 void bbSetFont(gxFont* f)
@@ -2216,12 +2216,12 @@ void graphics_link(void (*rtSym)(const char* sym, void* pc))
     //rendering
     rtSym("Origin%x%y", bbOrigin);
     rtSym("Viewport%x%y%width%height", bbViewport);
-    rtSym("Color%red%green%blue", bbColor);
+    rtSym("Color%red%green%blue%alpha=255", bbColor);
     rtSym("GetColor%x%y", bbGetColor);
     rtSym("%ColorRed", bbColorRed);
     rtSym("%ColorGreen", bbColorGreen);
     rtSym("%ColorBlue", bbColorBlue);
-    rtSym("ClsColor%red%green%blue", bbClsColor);
+    rtSym("ClsColor%red%green%blue%alpha=255", bbClsColor);
     rtSym("SetFont%font", bbSetFont);
     rtSym("Cls", bbCls);
     rtSym("Plot%x%y", bbPlot);

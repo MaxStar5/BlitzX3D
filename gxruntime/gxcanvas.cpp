@@ -452,9 +452,9 @@ void gxCanvas::setFont(gxFont* f) { font = f; }
 
 void gxCanvas::setMask(unsigned argb) { mask_surf = format.fromARGB(argb); has_mask = true; }
 
-void gxCanvas::setColor(unsigned argb) { argb |= 0xff000000; color_argb = argb; color_surf = format.fromARGB(argb); }
+void gxCanvas::setColor(unsigned argb) { color_argb = argb; color_surf = format.fromARGB(argb); }
 
-void gxCanvas::setClsColor(unsigned argb) { argb |= 0xff000000; clsColor_surf = format.fromARGB(argb); }
+void gxCanvas::setClsColor(unsigned argb) { clsColor_surf = format.fromARGB(argb); }
 
 void gxCanvas::setOrigin(int x, int y) { origin_x = x; origin_y = y; }
 
