@@ -66,8 +66,8 @@ void	 bbWritePixelFast(int x, int y, int argb, gxCanvas* buff);
 //2d rendering functions
 void	 bbOrigin(int x, int y);
 void	 bbViewport(int x, int y, int w, int h);
-void	 bbColor(int r, int g, int b);
-void	 bbClsColor(int r, int g, int b);
+void	 bbColor(int r, int g, int b, int a = 255);
+void	 bbClsColor(int r, int g, int b, int a = 255);
 void	 bbCls();
 void	 bbPlot(int x, int y);
 void	 bbLine(int x1, int y1, int x2, int y2);

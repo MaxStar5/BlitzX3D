@@ -1,7 +1,7 @@
 #ifndef UPDATE_H
 #define UPDATE_H
 
-#define BLITZIDE_VERSION "V1.4.7"
+#define BLITZIDE_VERSION "V1.4.8"
 
 void checkForUpdate();
 

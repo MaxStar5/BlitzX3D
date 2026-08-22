@@ -972,7 +972,7 @@ void bbViewport(int x, int y, int w, int h)
     gx_canvas->setViewport(x, y, w, h);
 }
 
-void bbColor(int r, int g, int b, int a = 255)
+void bbColor(int r, int g, int b, int a)
 {
     gx_canvas->setColor(curr_color = (a << 24) | (r << 16) | (g << 8) | b);
 }
@@ -1011,7 +1011,7 @@ gxEffect* bbGet2DEffect() {
     return gx_canvas ? gx_canvas->get2DEffect() : nullptr;
 }
 
-void bbClsColor(int r, int g, int b, int a = 255)
+void bbClsColor(int r, int g, int b, int a)
 {
     gx_canvas->setClsColor(curr_clsColor = (a << 24) | (r << 16) | (g << 8) | b);
 }
