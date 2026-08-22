@@ -587,6 +587,7 @@ void App::drawTabs() {
 			Doc& requested = docs[currentIndex];
 			std::string label = requested.name;
 			if (requested.modified) label += '*';
+			label += "##doctab" + std::to_string(currentIndex);
 			ImGui::GetCurrentTabBar()->NextSelectedTabId = ImGui::GetID(label.c_str());
 			requestedIndex = -1;
 		}
@@ -594,6 +595,7 @@ void App::drawTabs() {
 			Doc& d = docs[k];
 			std::string label = d.name;
 			if (d.modified) label += "*";
+			label += "##doctab" + std::to_string(k);
 			bool open = true;
 			if (ImGui::BeginTabItem(label.c_str(), &open)) {
 				currentIndex = k;
@@ -1334,9 +1336,29 @@ void App::fileClose(int idx) {
 	if (docs[idx].modified) {
 		if (!docs[idx].path.empty()) fileSave(idx);
 	}
+	std::string closedPath = docs[idx].path;
 	docs.erase(docs.begin() + idx);
 	if (currentIndex >= (int)docs.size()) currentIndex = (int)docs.size() - 1;
 	if (docs.empty()) currentIndex = -1;
+
+	if (projectOpen && samePath(closedPath, projectMainPath)) {
+		bool anyProjectDocOpen = false;
+		for (auto& d : docs) {
+			if (std::find_if(projectFiles.begin(), projectFiles.end(),
+				[&](const std::string& f) { return samePath(f, d.path); }) != projectFiles.end()) {
+				anyProjectDocOpen = true;
+				break;
+			}
+		}
+		if (!anyProjectDocOpen) {
+			projectOpen = false;
+			projectPath.clear();
+			projectMainPath.clear();
+			projectFiles.clear();
+			projectIncludedDocs.clear();
+			projectNavigatorDocs.clear();
+		}
+	}
 	if (projectOpen) refreshProjectSymbols();
 }
 void App::fileExit() { requestQuit(); }
