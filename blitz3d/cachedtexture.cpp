@@ -1,7 +1,6 @@
 #include "std.h"
 #include "cachedtexture.h"
 #include "../gxruntime/gxgraphics.h"
-#include "../gxruntime/gxutf8.h"
 
 int active_texs;
 
@@ -20,7 +19,7 @@ void CachedTexture::setPathMutator(PathMutator m) {
 }
 
 static bool fileExists(const std::string& f) {
-	DWORD attrs = GetFileAttributesW(UTF8::toWide(f).c_str());
+	DWORD attrs = GetFileAttributesA(f.c_str());
 	return attrs != INVALID_FILE_ATTRIBUTES && !(attrs & FILE_ATTRIBUTE_DIRECTORY);
 }
 
