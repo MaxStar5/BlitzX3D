@@ -23,7 +23,7 @@ BlitzX3D is a community-maintained fork of Blitz3D TSS, originally based on Blit
 * [**SCP: Containment Breach 1.3.12.5 DX7**](https://github.com/SCP-CB-CPP/scpcb)
 * [**SCP: Containment Breach Faerov Mod**](https://www.moddb.com/mods/scp-containment-breach-faerov-mod)
 * [**SCP: Terror Hunt**](https://www.moddb.com/mods/scp-terror-hunt-mod)
-* **SCP: Containment Breach Amended** (ModDB TBD)
+* [**SCP: Containment Breach Amended**](https://www.moddb.com/mods/scp-amended1)
 * **YOU ARE NOT IMPORTANT** (ModDB TBD)
 
 <table>
