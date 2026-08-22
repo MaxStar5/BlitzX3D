@@ -195,21 +195,11 @@ std::string UTF8::substr(const std::string& str, int start, int length) {
 }
 
 std::wstring UTF8::convertToUtf16(const std::string& str) {
-	std::wstring result;
-	result.reserve(str.size());
+	std::wstring result = L"";
 
-	for (int i = 0; i < (int)str.size();) {
-		int codepoint = decodeCharacter(str.c_str(), i);
+	for (int i = 0; i < str.size();) {
+		result.push_back(decodeCharacter(str.c_str(), i));
 		i += measureCodepoint(str[i]);
-
-		if (codepoint > 0xFFFF) {
-			codepoint -= 0x10000;
-			result.push_back((wchar_t)(0xD800 + (codepoint >> 10)));
-			result.push_back((wchar_t)(0xDC00 + (codepoint & 0x3FF)));
-		}
-		else {
-			result.push_back((wchar_t)codepoint);
-		}
 	}
 
 	return result;
