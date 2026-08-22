@@ -450,7 +450,7 @@ static gxCanvas* tformCanvas(gxCanvas* c, float m[2][2], int x_handle, int y_han
 
 static bool saveCanvas(gxCanvas* c, const std::string& f)
 {
-    std::ofstream out(UTF8::toWide(f).c_str(), std::ios::binary);
+    std::ofstream out(f.c_str(), std::ios::binary);
     if (!out.good()) return false;
 
     int tempsize = (c->getWidth() * 3 + 3) & ~3;

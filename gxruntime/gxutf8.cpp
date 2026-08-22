@@ -205,24 +205,6 @@ std::wstring UTF8::convertToUtf16(const std::string& str) {
 	return result;
 }
 
-std::wstring UTF8::toWide(const std::string& str) {
-	if (str.empty()) return L"";
-	int len = MultiByteToWideChar(CP_UTF8, 0, str.c_str(), (int)str.size(), nullptr, 0);
-	if (len <= 0) return L"";
-	std::wstring out(len, 0);
-	MultiByteToWideChar(CP_UTF8, 0, str.c_str(), (int)str.size(), &out[0], len);
-	return out;
-}
-
-std::string UTF8::fromWide(const std::wstring& wstr) {
-	if (wstr.empty()) return "";
-	int len = WideCharToMultiByte(CP_UTF8, 0, wstr.c_str(), (int)wstr.size(), nullptr, 0, nullptr, nullptr);
-	if (len <= 0) return "";
-	std::string out(len, 0);
-	WideCharToMultiByte(CP_UTF8, 0, wstr.c_str(), (int)wstr.size(), &out[0], len, nullptr, nullptr);
-	return out;
-}
-
 std::string UTF8::replaceAll(const std::string_view& str, const std::string_view& pattern, const std::string_view& newpat) {
 	std::string result;
 	result.reserve(str.size());

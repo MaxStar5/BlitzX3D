@@ -3,7 +3,6 @@
 #include "meshmodel.h"
 #include "pivot.h"
 #include "meshutil.h"
-#include "../gxruntime/gxutf8.h"
 
 
 static FILE* in;
@@ -350,7 +349,7 @@ MeshModel* Loader_B3D::load(const std::string& f, const Transform& conv, int hin
 	collapse = !!(hint & MeshLoader::HINT_COLLAPSE);
 	animonly = !!(hint & MeshLoader::HINT_ANIMONLY);
 
-	in = _wfopen(UTF8::toWide(f).c_str(), L"rb");
+	in = fopen(f.c_str(), "rb");
 	if (!in) return 0;
 
 	::clear();

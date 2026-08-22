@@ -2,10 +2,7 @@
 #include "bbfilesystem.h"
 #include "bbstream.h"
 #include <fstream>
-#include <cwchar>
-#include <windows.h>
 #include "../MultiLang/MultiLang.h"
-#include "../gxruntime/gxutf8.h"
 #include "unzip.h"
 
 gxFileSystem* gx_filesys;
@@ -48,7 +45,7 @@ static inline void debugDir(gxDir* d, const char* function) {
 static bbFile* open(BBStr* f, int n) {
 	std::string t = *f;
 	std::filebuf* buf = new std::filebuf();
-	if (buf->open(UTF8::toWide(t).c_str(), n | std::ios_base::binary)) {
+	if (buf->open(t.c_str(), n | std::ios_base::binary)) {
 		bbFile* fl = new bbFile(buf);
 		file_set.insert(fl);
 		return fl;
@@ -116,13 +113,15 @@ void bbDeleteDir(BBStr* d) {
 	delete d;
 }
 
-inline bool IsDirectory(const std::wstring& wDir)
+inline bool IsDirectory(const char* pDir)
 {
-	std::wstring szCurPath = wDir + L"\\*";
-	WIN32_FIND_DATAW FindFileData;
-	ZeroMemory(&FindFileData, sizeof(WIN32_FIND_DATAW));
+	char szCurPath[500];
+	ZeroMemory(szCurPath, 500);
+	sprintf_s(szCurPath, 500, "%s//*", pDir);
+	WIN32_FIND_DATAA FindFileData;
+	ZeroMemory(&FindFileData, sizeof(WIN32_FIND_DATAA));
 
-	HANDLE hFile = FindFirstFileW(szCurPath.c_str(), &FindFileData);
+	HANDLE hFile = FindFirstFileA(szCurPath, &FindFileData);
 
 	if (hFile == INVALID_HANDLE_VALUE)
 	{
@@ -137,31 +136,34 @@ inline bool IsDirectory(const std::wstring& wDir)
 }
 
 void bbDeleteFolder(BBStr* d) {
-	std::wstring wDir = UTF8::toWide(*d);
-	std::wstring szCurPath = wDir + L"\\*.*";
-	WIN32_FIND_DATAW FindFileData;
-	ZeroMemory(&FindFileData, sizeof(WIN32_FIND_DATAW));
-	HANDLE hFile = FindFirstFileW(szCurPath.c_str(), &FindFileData);
+	char szCurPath[MAX_PATH];
+	_snprintf(szCurPath, MAX_PATH, "%s//*.*", d->c_str());
+	WIN32_FIND_DATAA FindFileData;
+	ZeroMemory(&FindFileData, sizeof(WIN32_FIND_DATAA));
+	HANDLE hFile = FindFirstFileA(szCurPath, &FindFileData);
 	bool IsFinded = true;
 	while (IsFinded)
 	{
-		IsFinded = FindNextFileW(hFile, &FindFileData) != 0;
-		if (wcscmp(FindFileData.cFileName, L".") && wcscmp(FindFileData.cFileName, L".."))
+		IsFinded = FindNextFile(hFile, &FindFileData);
+		if (strcmp(FindFileData.cFileName, ".") && strcmp(FindFileData.cFileName, ".."))
 		{
-			std::wstring strTemp = wDir + L"\\" + FindFileData.cFileName;
-			if (IsDirectory(strTemp))
+			std::string strFileName = "";
+			strFileName = strFileName + d->c_str() + "//"s + FindFileData.cFileName;
+			std::string strTemp;
+			strTemp = strFileName;
+			if (IsDirectory(strFileName.c_str()))
 			{
-				bbDeleteFolder(new BBStr(UTF8::fromWide(strTemp)));
+				bbDeleteFolder(new BBStr(strTemp));
 			}
 			else
 			{
-				DeleteFileW(strTemp.c_str());
+				DeleteFile(strTemp.c_str());
 			}
 		}
 	}
 	FindClose(hFile);
 
-	RemoveDirectoryW(wDir.c_str());
+	RemoveDirectory(d->c_str());
 	delete d;
 }
 
@@ -201,29 +203,24 @@ void bbDeleteFile(BBStr* f) {
 }
 
 void bbUnzip(BBStr* src, BBStr* dst, BBStr* password) {
-	HANDLE h = CreateFileW(UTF8::toWide(*src).c_str(), GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
-	HZIP hz = (h != INVALID_HANDLE_VALUE) ? OpenZipHandle(h, password->c_str()) : nullptr;
-	if (hz) {
-		SetUnzipBaseDir(hz, dst->c_str());
-		ZIPENTRY ze;
-		GetZipItem(hz, -1, &ze);
-		int numitems = ze.index; // no register :(
-		for (int zi = 0; zi < numitems; zi++)
-		{
-			GetZipItem(hz, zi, &ze);
-			UnzipItem(hz, zi, ze.name);
-		}
-		CloseZip(hz);
+	HZIP hz = OpenZip(src->c_str(), password->c_str());
+	SetUnzipBaseDir(hz, dst->c_str());
+	ZIPENTRY ze;
+	GetZipItem(hz, -1, &ze);
+	int numitems = ze.index; // no register :(
+	for (int zi = 0; zi < numitems; zi++)
+	{
+		GetZipItem(hz, zi, &ze);
+		UnzipItem(hz, zi, ze.name);
 	}
-	if (h != INVALID_HANDLE_VALUE) CloseHandle(h);
+	CloseZip(hz);
 	delete src; delete dst; delete password;
 }
 
 BBStr* bbAbsolutePath(BBStr* path) {
 	std::string file = path->c_str();
 	delete path;
-	std::filesystem::path p = std::filesystem::absolute(std::filesystem::path(UTF8::toWide(file)));
-	return new BBStr(UTF8::fromWide(p.wstring()));
+	return new BBStr(std::filesystem::absolute(file).generic_string());
 }
 
 bool filesystem_create() {

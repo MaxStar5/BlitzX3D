@@ -1,8 +1,7 @@
 #include "std.h"
 #include "gxdir.h"
-#include "gxutf8.h"
 
-gxDir::gxDir(HANDLE h, const WIN32_FIND_DATAW& f) :handle(h), findData(f) {
+gxDir::gxDir(HANDLE h, const WIN32_FIND_DATA& f) :handle(h), findData(f) {
 }
 
 gxDir::~gxDir() {
@@ -11,8 +10,8 @@ gxDir::~gxDir() {
 
 std::string gxDir::getNextFile() {
 	if(handle == INVALID_HANDLE_VALUE) return "";
-	std::string t = UTF8::fromWide(findData.cFileName);
-	if(!FindNextFileW(handle, &findData)) {
+	std::string t = findData.cFileName;
+	if(!FindNextFile(handle, &findData)) {
 		FindClose(handle);
 		handle = INVALID_HANDLE_VALUE;
 	}

@@ -73,7 +73,6 @@ private:
 	std::unordered_map<int, GlyphData> glyphData;
 	gxGraphics* graphics;
 	std::string filename;
-	std::vector<unsigned char> fontData;
 };
 
 #endif
