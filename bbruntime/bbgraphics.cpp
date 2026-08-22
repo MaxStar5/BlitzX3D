@@ -126,6 +126,9 @@ static std::unordered_set<bbImage*> image_set;
 static int curs_x, curs_y;
 static gxCanvas* p_canvas;
 
+static int fps_cap_ms = 0;
+static int last_flip_ms = 0;
+
 static gxFont* curr_font;
 static unsigned curr_color;
 static unsigned curr_clsColor;
@@ -915,8 +918,33 @@ void bbVWait(int n)
 
 void bbFlip(int vwait)
 {
+    if (fps_cap_ms > 0) {
+        int now = gx_runtime->getMilliSecs();
+        int elapsed = now - last_flip_ms;
+        int remaining = fps_cap_ms - elapsed;
+        if (remaining > 0) {
+            if (!gx_runtime->delay(remaining)) RTEX(0);
+        }
+    }
     gx_graphics->flip(vwait ? true : false);
     if (!gx_runtime->idle()) RTEX(0);
+    last_flip_ms = gx_runtime->getMilliSecs();
+}
+
+void bbCapFPS(int fps)
+{
+    if (fps <= 0) {
+        fps_cap_ms = 0;
+        return;
+    }
+    fps_cap_ms = 1000 / fps;
+    if (fps_cap_ms < 1) fps_cap_ms = 1;
+    last_flip_ms = gx_runtime->getMilliSecs();
+}
+
+void bbUncapFPS()
+{
+    fps_cap_ms = 0;
 }
 
 int bbGraphicsWidth()
@@ -2159,6 +2187,8 @@ void graphics_link(void (*rtSym)(const char* sym, void* pc))
     rtSym("%ScanLine", bbScanLine);
     rtSym("VWait%frames=1", bbVWait);
     rtSym("Flip%vwait=1", bbFlip);
+    rtSym("CapFPS%fps", bbCapFPS);
+    rtSym("UncapFPS", bbUncapFPS);
     rtSym("%GraphicsWidth", bbGraphicsWidth);
     rtSym("%GraphicsHeight", bbGraphicsHeight);
     rtSym("%GraphicsDepth", bbGraphicsDepth);
