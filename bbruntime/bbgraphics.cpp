@@ -20,6 +20,8 @@ class bbImage
 {
 public:
     int origWidth, origHeight;
+    float drawScaleX = 1.0f;
+    float drawScaleY = 1.0f;
     bbImage(const std::vector<gxCanvas*>& f, int origW = -1, int origH = -1) : frames(f) {
         if (origW == -1) {
             origWidth = frames[0]->getWidth();
@@ -46,6 +48,8 @@ public:
         gx_graphics->freeCanvas(frames[n]);
         frames[n] = c;
         savePixels();
+        drawScaleX = 1.0f;
+        drawScaleY = 1.0f;
     }
     void savePixels()
     {
@@ -1436,11 +1440,21 @@ gxCanvas* bbImageBuffer(bbImage* i, int n)
     return i->getFrames()[n];
 }
 
-void bbDrawImage(bbImage* i, int x, int y, int frame) 
+void bbDrawImage(bbImage* i, int x, int y, int frame)
 {
     debugImage(i, "DrawImage", frame);
     gxCanvas* c = i->getFrames()[frame];
     int w = c->getWidth(), h = c->getHeight();
+    if (i->drawScaleX != 1.0f || i->drawScaleY != 1.0f) {
+        int hx, hy; c->getHandle(&hx, &hy);
+        int dw = (int)(w * i->drawScaleX + 0.5f);
+        int dh = (int)(h * i->drawScaleY + 0.5f);
+        int shx = (int)(hx * i->drawScaleX + 0.5f);
+        int shy = (int)(hy * i->drawScaleY + 0.5f);
+        bool solid = !c->hasMask() && !((c->getFlags() & gxCanvas::CANVAS_TEX_ALPHA) || c->format.hasAlphaMask());
+        gx_canvas->blitstretch(x + hx - shx, y + hy - shy, dw, dh, c, 0, 0, w, h, solid);
+        return;
+    }
     if (c->hasMask()) {
         gx_canvas->blit(x, y, c, 0, 0, w, h, false);
     }
@@ -1498,10 +1512,20 @@ void bbTileBlock(bbImage* i, int x, int y, int frame)
     tile(i, x, y, frame, true);
 }
 
-void bbDrawImageRect(bbImage* i, int x, int y, int r_x, int r_y, int r_w, int r_h, int frame) 
+void bbDrawImageRect(bbImage* i, int x, int y, int r_x, int r_y, int r_w, int r_h, int frame)
 {
     debugImage(i, "DrawImageRect", frame);
     gxCanvas* c = i->getFrames()[frame];
+    if (i->drawScaleX != 1.0f || i->drawScaleY != 1.0f) {
+        int hx, hy; c->getHandle(&hx, &hy);
+        int dw = (int)(r_w * i->drawScaleX + 0.5f);
+        int dh = (int)(r_h * i->drawScaleY + 0.5f);
+        int shx = (int)(hx * i->drawScaleX + 0.5f);
+        int shy = (int)(hy * i->drawScaleY + 0.5f);
+        bool solid = !c->hasMask() && !((c->getFlags() & gxCanvas::CANVAS_TEX_ALPHA) || c->format.hasAlphaMask());
+        gx_canvas->blitstretch(x + hx - shx, y + hy - shy, dw, dh, c, r_x, r_y, r_w, r_h, solid);
+        return;
+    }
     if (c->hasMask()) {
         gx_canvas->blit(x, y, c, r_x, r_y, r_w, r_h, false);
     }
@@ -1559,7 +1583,7 @@ int bbImageWidth(bbImage* i)
     debugImage(i, "ImageWidth");
     gxCanvas* c = i->getFrames()[0];
     int hx, hy; c->getHandle(&hx, &hy);
-    return c->getWidth() - hx;
+    return (int)((c->getWidth() - hx) * i->drawScaleX + 0.5f);
 }
 
 int bbImageHeight(bbImage* i)
@@ -1567,7 +1591,7 @@ int bbImageHeight(bbImage* i)
     debugImage(i, "ImageHeight");
     gxCanvas* c = i->getFrames()[0];
     int hx, hy; c->getHandle(&hx, &hy);
-    return c->getHeight() - hy;
+    return (int)((c->getHeight() - hy) * i->drawScaleY + 0.5f);
 }
 
 int bbImageXHandle(bbImage* i)
@@ -1683,6 +1707,27 @@ void bbScaleImage(bbImage* i, float w, float h)
 {
     debugImage(i, "ScaleImage");
     bbTFormImage(i, w, 0, 0, h);
+}
+
+void bbScaleImageFast(bbImage* i, float xscale, float yscale)
+{
+    debugImage(i, "ScaleImageFast");
+    i->drawScaleX = xscale;
+    i->drawScaleY = yscale;
+}
+
+void bbResizeImageFast(bbImage* i, float w, float h)
+{
+    debugImage(i, "ResizeImageFast");
+    gxCanvas* c = i->getFrames()[0];
+    int cw = c->getWidth(), ch = c->getHeight();
+    if (cw < 1) cw = 1;
+    if (ch < 1) ch = 1;
+    int iw = (int)w, ih = (int)h;
+    if (iw < 1) iw = 1;
+    if (ih < 1) ih = 1;
+    i->drawScaleX = (float)iw / (float)cw;
+    i->drawScaleY = (float)ih / (float)ch;
 }
 
 static unsigned sampleOrigPixel(const std::vector<uint32_t>& src, int srcW, int srcH, float sx, float sy)
@@ -2213,7 +2258,9 @@ void graphics_link(void (*rtSym)(const char* sym, void* pc))
     rtSym("%ImageYHandle%image", bbImageYHandle);
 
     rtSym("ScaleImage%image#xscale#yscale", bbScaleImage);
+    rtSym("ScaleImageFast%image#xscale#yscale", bbScaleImageFast);
     rtSym("ResizeImage%image#width#height", bbResizeImage);
+    rtSym("ResizeImageFast%image#width#height", bbResizeImageFast);
     rtSym("RotateImage%image#angle", bbRotateImage);
     rtSym("TFormImage%image#a#b#c#d", bbTFormImage);
     rtSym("SetTFormMethod%method", bbSetTFormMethod);

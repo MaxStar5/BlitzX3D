@@ -116,7 +116,9 @@ void	 bbDrawBlockRect(bbImage* i, int x, int y, int r_x, int r_y, int r_w, int r
 void	 bbMaskImage(bbImage* i, int r, int g, int b);
 void	 bbHandleImage(bbImage* i, int x, int y);
 void	 bbScaleImage(bbImage* i, float w, float h);
+void	 bbScaleImageFast(bbImage* i, float xscale, float yscale);
 void	 bbResizeImage(bbImage* i, float w, float h);
+void	 bbResizeImageFast(bbImage* i, float w, float h);
 void	 bbRotateImage(bbImage* i, float angle);
 void	 bbTFormImage(bbImage* i, float a, float b, float c, float d);
 void	 bbTFormFilter(int enable);
