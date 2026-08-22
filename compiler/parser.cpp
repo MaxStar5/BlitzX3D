@@ -324,6 +324,11 @@ void Parser::parseStmtSeq(StmtSeqNode* stmts, int scope, bool debug, bool prepro
 			if (scope != STMTS_PROG) ex(MultiLang::type_can_only_appear_in_main);
 			toker->next(); structs->push_back(parseStructDecl());
 			break;
+		case ENUM:
+			if (scope != STMTS_PROG) ex("Enum can only appear in main");
+			toker->next();
+			enums->push_back(parseEnumDecl());
+			break;
 		case BBCONST:
 			if (scope != STMTS_PROG) ex(MultiLang::const_can_only_appear_in_main);
 			do {
@@ -367,12 +372,6 @@ void Parser::parseStmtSeq(StmtSeqNode* stmts, int scope, bool debug, bool prepro
 			result = new LabelNode(t, datas->size());
 		}
 		break;
-		case ENUM:
-		{
-			if (scope != STMTS_PROG) ex(MultiLang::enum_can_only_appear_in_main);
-			enums->push_back(parseEnumDecl());
-		}
-			break;
 		default:
 			return;
 		}
@@ -520,6 +519,7 @@ DeclNode* Parser::parseStructDecl() {
 
 DeclNode* Parser::parseEnumDecl() {
 	int pos = toker->pos();
+	while (toker->curr() == '\n') toker->next();
 	std::string name = parseIdent();
 	std::unique_ptr<EnumDeclNode> node(new EnumDeclNode(name));
 	node->pos = pos;
@@ -527,7 +527,24 @@ DeclNode* Parser::parseEnumDecl() {
 
 	while (toker->curr() == '\n') toker->next();
 
-	while (toker->curr() != ENDENUM) {
+	while (true) {
+		if (toker->curr() == IDENT && tolower(toker->text()) == "end") {
+			toker->next();
+			while (toker->curr() == '\n') toker->next();
+			if (toker->curr() == ENUM) {
+				toker->next();
+				break;
+			}
+			else {
+				ex("'End Enum' expected");
+			}
+		}
+
+		if (toker->curr() == ENDENUM) {
+			toker->next();
+			break;
+		}
+
 		std::string mem = parseIdent();
 		ExprNode* expr = nullptr;
 		if (toker->curr() == '=') {
@@ -539,7 +556,7 @@ DeclNode* Parser::parseEnumDecl() {
 		while (toker->curr() == '\n' || toker->curr() == ',')
 			toker->next();
 	}
-	toker->next();
+
 	return node.release();
 }
 
