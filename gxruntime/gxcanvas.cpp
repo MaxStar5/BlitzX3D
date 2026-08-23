@@ -1247,8 +1247,9 @@ void gxCanvas::blitAlpha(int x, int y, gxCanvas* src,
         dev->SetTextureStageState(0, D3DTSS_COLORARG1, D3DTA_TEXTURE);
         dev->SetTextureStageState(0, D3DTSS_COLORARG2, D3DTA_TFACTOR);
 
-        dev->SetTextureStageState(0, D3DTSS_ALPHAOP, D3DTOP_SELECTARG1);
+        dev->SetTextureStageState(0, D3DTSS_ALPHAOP, D3DTOP_MODULATE);
         dev->SetTextureStageState(0, D3DTSS_ALPHAARG1, D3DTA_TEXTURE);
+        dev->SetTextureStageState(0, D3DTSS_ALPHAARG2, D3DTA_TFACTOR);
 
         if (filter) {
             dev->SetSamplerState(0, D3DSAMP_MAGFILTER, D3DTEXF_LINEAR);
