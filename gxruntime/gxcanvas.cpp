@@ -1008,52 +1008,40 @@ void gxCanvas::blit(int x, int y, gxCanvas* src, int src_x, int src_y,
     IDirect3DDevice9* dev = graphics->dir3dDev;
     if (!dev) return;
 
-    if (effect2D) {
-        FillModeGuard guard(dev);
-        unsigned maskRGB = solid ? ~0u : (src->format.toARGB(src->mask_surf) & 0x00ffffffu);
-        IDirect3DTexture9* blitTex = getOrBuildBlitTex(dev, src, maskRGB);
+    unsigned maskRGB = solid ? ~0u : (src->format.toARGB(src->mask_surf) & 0x00ffffffu);
+    IDirect3DTexture9* blitTex = nullptr;
+    if (solid) {
+        IDirect3DBaseTexture9* tex = src->getTexture();
+        if (tex && !isBoundAsRenderTarget(dev, src->surf)) {
+            blitTex = (IDirect3DTexture9*)tex;
+        }
+    }
+    if (!blitTex) {
+        blitTex = getOrBuildBlitTex(dev, src, maskRGB);
         if (!blitTex) return;
+    }
 
-        SavedBlitState saved;
-        saveBlitState(dev, saved);
+    bool ownBatch = !blit_batch_active;
+    if (ownBatch) beginBlitBatch();
 
-        dev->SetRenderTarget(0, surf);
-        dev->SetDepthStencilSurface(nullptr);
-        D3DVIEWPORT9 vp = { 0, 0, (DWORD)clip_rect.right, (DWORD)clip_rect.bottom, 0.0f, 1.0f };
-        dev->SetViewport(&vp);
-
-        dev->BeginScene();
-        drawQuadWithEffect(dev, effect2D, blitTex, dest_r, src_r, src->clip_rect.right, src->clip_rect.bottom, false, 0);
-        dev->EndScene();
-
-        restoreBlitState(dev, saved);
-        damage(dest_r);
+    if (!blit_batch_active) {
+        endBlitBatch();
         return;
     }
 
     FillModeGuard guard(dev);
 
-    unsigned maskRGB = solid ? ~0u : (src->format.toARGB(src->mask_surf) & 0x00ffffffu);
-    IDirect3DTexture9* blitTex = getOrBuildBlitTex(dev, src, maskRGB);
-    if (!blitTex) return;
+    if (effect2D) {
+        drawQuadWithEffect(dev, effect2D, blitTex, dest_r, src_r, src->clip_rect.right, src->clip_rect.bottom, false, 0);
+    }
+    else {
+        setupBlitRenderState(dev, solid);
+        drawBlitQuad(dev, blitTex, dest_r, src_r, src->clip_rect.right, src->clip_rect.bottom);
+    }
 
-    SavedBlitState saved;
-    saveBlitState(dev, saved);
-
-    dev->SetRenderTarget(0, surf);
-    dev->SetDepthStencilSurface(nullptr);
-
-    D3DVIEWPORT9 vp = { 0, 0, (DWORD)clip_rect.right, (DWORD)clip_rect.bottom, 0.0f, 1.0f };
-    dev->SetViewport(&vp);
-
-    setupBlitRenderState(dev, solid);
-
-    dev->BeginScene();
-    drawBlitQuad(dev, blitTex, dest_r, src_r, src->clip_rect.right, src->clip_rect.bottom);
-    dev->EndScene();
-
-    restoreBlitState(dev, saved);
     damage(dest_r);
+
+    if (ownBatch) endBlitBatch();
 }
 
 void gxCanvas::blitstretch(int x, int y, int w, int h,
@@ -1109,8 +1097,13 @@ void gxCanvas::blitstretch(int x, int y, int w, int h,
     FillModeGuard guard(dev);
 
     unsigned maskRGB = useMask ? (src->format.toARGB(src->mask_surf) & 0x00ffffffu) : ~0u;
-    IDirect3DTexture9* blitTex = getOrBuildBlitTex(dev, src, maskRGB);
-    if (!blitTex) return;
+    IDirect3DBaseTexture9* tex = src->getTexture();
+    IDirect3DTexture9* builtTex = nullptr;
+    if (!tex || useMask || isBoundAsRenderTarget(dev, src->surf)) {
+        builtTex = getOrBuildBlitTex(dev, src, maskRGB);
+        if (!builtTex) return;
+        tex = builtTex;
+    }
 
     SavedBlitState saved;
     saveBlitState(dev, saved);
@@ -1151,7 +1144,7 @@ void gxCanvas::blitstretch(int x, int y, int w, int h,
     dev->SetSamplerState(0, D3DSAMP_MINFILTER, D3DTEXF_LINEAR);
 
     dev->BeginScene();
-    drawBlitQuad(dev, blitTex, dest_r, src_r, src->clip_rect.right, src->clip_rect.bottom);
+    drawBlitQuad(dev, (IDirect3DTexture9*)tex, dest_r, src_r, src->clip_rect.right, src->clip_rect.bottom);
     dev->EndScene();
 
     restoreBlitState(dev, saved);
