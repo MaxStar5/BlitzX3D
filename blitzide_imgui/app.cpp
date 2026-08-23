@@ -1340,12 +1340,12 @@ void App::fileClose(int idx) {
 	docs.erase(docs.begin() + idx);
 	if (currentIndex >= (int)docs.size()) currentIndex = (int)docs.size() - 1;
 	if (docs.empty()) currentIndex = -1;
-
-	if (projectOpen && samePath(closedPath, projectMainPath)) {
+	if (projectOpen) {
 		bool anyProjectDocOpen = false;
-		for (auto& d : docs) {
-			if (std::find_if(projectFiles.begin(), projectFiles.end(),
-				[&](const std::string& f) { return samePath(f, d.path); }) != projectFiles.end()) {
+		for (const auto& d : docs) {
+			if (!d.path.empty() &&
+				std::any_of(projectFiles.begin(), projectFiles.end(),
+					[&](const std::string& f) { return samePath(f, d.path); })) {
 				anyProjectDocOpen = true;
 				break;
 			}
@@ -1358,8 +1358,10 @@ void App::fileClose(int idx) {
 			projectIncludedDocs.clear();
 			projectNavigatorDocs.clear();
 		}
+		else {
+			refreshProjectSymbols();
+		}
 	}
-	if (projectOpen) refreshProjectSymbols();
 }
 void App::fileExit() { requestQuit(); }
 
@@ -1805,7 +1807,18 @@ void App::build(bool exec, bool publish) {
 		return;
 	}
 
-	std::string src_file = projectOpen && !projectMainPath.empty() ? projectMainPath : e->path;
+	std::string src_file = e->path;
+	if (projectOpen && !projectMainPath.empty()) {
+		bool mainOpen = false;
+		for (const auto& d : docs) {
+			if (samePath(d.path, projectMainPath)) {
+				mainOpen = true;
+				break;
+			}
+		}
+		if (mainOpen) src_file = projectMainPath;
+	}
+
 	std::vector<std::string> args;
 	args.push_back(prefs.homeDir + "/bin/blitzcc");
 	if (prefs.prg_dumpasm) args.push_back("-a");
