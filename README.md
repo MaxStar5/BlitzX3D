@@ -18,12 +18,13 @@ BlitzX3D is a community-maintained fork of Blitz3D TSS, originally based on Blit
 - Upgraded audio system now powered by BASS for improved compatibility, stability, and sound quality.
 
 ### Used in
-* [**SCP: Containment Breach Multiplayer**](https://store.steampowered.com/app/1782380/SCP_Containment_Breach_Multiplayer/)
-* [**SCP: Containment Breach Ultimate Edition Reborn 1.6**](https://github.com/Jabka666/scpcb-ue-my/tree/1.5.x)
-* [**SCP: Containment Breach 1.3.12.5 DX7**](https://github.com/SCP-CB-CPP/scpcb)
-* [**SCP: Containment Breach Faerov Mod**](https://www.moddb.com/mods/scp-containment-breach-faerov-mod)
-* [**SCP: Terror Hunt**](https://www.moddb.com/mods/scp-terror-hunt-mod)
-* [**SCP: Containment Breach Amended**](https://www.moddb.com/mods/scp-amended1)
+* [**SCP – Containment Breach Multiplayer**](https://store.steampowered.com/app/1782380/SCP_Containment_Breach_Multiplayer/)
+* [**SCP – Containment Breach Ultimate Edition Reborn 1.6**](https://github.com/Jabka666/scpcb-ue-my/tree/1.5.x)
+* [**SCP – Containment Breach 1.3.12.5 DX7**](https://github.com/SCP-CB-CPP/scpcb)
+* [**SCP – Containment Breach Faerov Mod**](https://www.moddb.com/mods/scp-containment-breach-faerov-mod)
+* [**SCP – Terror Hunt**](https://www.moddb.com/mods/scp-terror-hunt-mod)
+* [**SCP – Containment Breach Amended**](https://www.moddb.com/mods/scp-amended1)
+* [**SCP – Treachery**](https://www.moddb.com/mods/scp-amended1)
 * **YOU ARE NOT IMPORTANT** (ModDB TBD)
 
 <table>
@@ -36,7 +37,7 @@ BlitzX3D is a community-maintained fork of Blitz3D TSS, originally based on Blit
         style="object-fit: cover;"
       />
       <br />
-      <b>SCP: Containment Breach Ultimate Edition Reborn 1.6</b>
+      <b>SCP – Containment Breach Ultimate Edition Reborn 1.6</b>
     </td>
     <td align="center">
       <img
@@ -46,7 +47,7 @@ BlitzX3D is a community-maintained fork of Blitz3D TSS, originally based on Blit
         style="object-fit: cover;"
       />
       <br />
-      <b>SCP: Terror Hunt</b>
+      <b>SCP – Terror Hunt</b>
     </td>
     <td align="center">
       <img
@@ -56,7 +57,7 @@ BlitzX3D is a community-maintained fork of Blitz3D TSS, originally based on Blit
         style="object-fit: cover;"
       />
       <br />
-      <b>SCP: Containment Breach Amended</b>
+      <b>SCP – Containment Breach Amended</b>
     </td>
     <td align="center">
       <img
@@ -67,6 +68,21 @@ BlitzX3D is a community-maintained fork of Blitz3D TSS, originally based on Blit
       />
       <br />
       <b>YOU ARE NOT IMPORTANT</b>
+    </td>
+  </tr>
+</table>
+
+<table>
+  <tr>
+    <td align="center">
+      <img
+        src="https://github.com/user-attachments/assets/93e66689-5b9c-4c4f-a1c2-ebd72b11c68f"
+        width="400"
+        height="225"
+        style="object-fit: cover;"
+      />
+      <br />
+      <b>SCP – Treachery</b>
     </td>
   </tr>
 </table>
