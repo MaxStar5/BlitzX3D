@@ -744,6 +744,7 @@ void bbGraphics3D(int w, int h, int d, int mode)
     case 2:flags |= gxGraphics::GRAPHICS_WINDOWED; break;
     case 3:flags |= gxGraphics::GRAPHICS_WINDOWED | gxGraphics::GRAPHICS_SCALED; break;
     case 4:flags |= gxGraphics::GRAPHICS_WINDOWED | gxGraphics::GRAPHICS_BORDERLESS; break;
+    case 5:flags |= gxGraphics::GRAPHICS_WINDOWED | gxGraphics::GRAPHICS_BORDERLESS | gxGraphics::GRAPHICS_SCALED; break;
     case 6:flags |= gxGraphics::GRAPHICS_WINDOWED | gxGraphics::GRAPHICS_AUTOSUSPEND; break;
     case 7:flags |= gxGraphics::GRAPHICS_WINDOWED | gxGraphics::GRAPHICS_SCALED | gxGraphics::GRAPHICS_AUTOSUSPEND; break;
     default:RTEX(MultiLang::illegal_graphics3d_mode);

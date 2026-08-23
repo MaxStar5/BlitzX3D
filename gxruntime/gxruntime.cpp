@@ -333,7 +333,25 @@ void gxRuntime::paint() {
 	}
 
 	switch (gfx_mode) {
-	case GMODE_SCALED:
+	case GMODE_SCALED: {
+		if (!graphics) break;
+		gxCanvas* f = graphics->getFrontCanvas();
+		if (!f) break;
+		IDirect3DSurface9* canvasSurf = f->getSurface();
+		if (!canvasSurf) break;
+
+		D3DSURFACE_DESC desc;
+		canvasSurf->GetDesc(&desc);
+		POINT pt = { 0, 0 };
+		RECT full = { 0, 0, (LONG)desc.Width, (LONG)desc.Height };
+		d3dDevice->UpdateSurface(canvasSurf, &full, backBuffer, &pt);
+
+		HRESULT hr = d3dDevice->Present(NULL, NULL, NULL, NULL);
+		if (hr == D3DERR_DEVICELOST || hr == D3DERR_DEVICEHUNG || hr == D3DERR_DEVICEREMOVED) {
+			gfx_lost = true;
+		}
+		break;
+	}
 	case GMODE_FIXED: {
 		if (!graphics) break;
 		gxCanvas* f = graphics->getFrontCanvas();
@@ -344,32 +362,12 @@ void gxRuntime::paint() {
 		RECT src, dest;
 		GetClientRect(hwnd, &dest);
 		src.left = src.top = 0;
-		src.right = (gfx_mode == GMODE_SCALED) ? graphics->getWidth() : (dest.right - dest.left);
-		src.bottom = (gfx_mode == GMODE_SCALED) ? graphics->getHeight() : (dest.bottom - dest.top);
+		src.right = dest.right - dest.left;
+		src.bottom = dest.bottom - dest.top;
 
-		if (gfx_mode == GMODE_FIXED) {
-			POINT pt = { dest.left, dest.top };
-			d3dDevice->UpdateSurface(canvasSurf, &src, backBuffer, &pt);
-		}
-		else {
-			D3DSURFACE_DESC desc;
-			canvasSurf->GetDesc(&desc);
+		POINT pt = { dest.left, dest.top };
+		d3dDevice->UpdateSurface(canvasSurf, &src, backBuffer, &pt);
 
-			if (!stretchRT || stretchRT_w != (int)desc.Width || stretchRT_h != (int)desc.Height) {
-				if (stretchRT) { stretchRT->Release(); stretchRT = 0; }
-				if (SUCCEEDED(d3dDevice->CreateRenderTarget(desc.Width, desc.Height, desc.Format, D3DMULTISAMPLE_NONE, 0, FALSE, &stretchRT, nullptr))) {
-					stretchRT_w = (int)desc.Width;
-					stretchRT_h = (int)desc.Height;
-				}
-			}
-
-			if (stretchRT) {
-				POINT zero = { 0, 0 };
-				RECT full = { 0, 0, (LONG)desc.Width, (LONG)desc.Height };
-				d3dDevice->UpdateSurface(canvasSurf, &full, stretchRT, &zero);
-				d3dDevice->StretchRect(stretchRT, &src, backBuffer, &dest, D3DTEXF_LINEAR);
-			}
-		}
 		HRESULT hr = d3dDevice->Present(NULL, NULL, NULL, NULL);
 		if (hr == D3DERR_DEVICELOST || hr == D3DERR_DEVICEHUNG || hr == D3DERR_DEVICEREMOVED) {
 			gfx_lost = true;
@@ -1124,21 +1122,25 @@ gxGraphics* gxRuntime::openGraphics(int w, int h, int d, int driver, int flags) 
 			auto_suspend = (flags & gxGraphics::GRAPHICS_AUTOSUSPEND) != 0;
 			border_mode = (flags & gxGraphics::GRAPHICS_BORDERLESS) ? 1 : 0;
 
-			int ws = (gfx_mode == GMODE_SCALED) ? scaled_ws : static_ws;
-			if (border_mode == 1)
-				SetWindowLong(hwnd, GWL_STYLE, WS_POPUP | WS_VISIBLE);
+			if (border_mode == 0)
+				SetWindowLong(hwnd, GWL_STYLE, (gfx_mode == GMODE_SCALED) ? scaled_ws : static_ws);
 			else
-				SetWindowLong(hwnd, GWL_STYLE, ws);
+				SetWindowLong(hwnd, GWL_STYLE, WS_POPUP | WS_VISIBLE);
 			SetWindowPos(hwnd, 0, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_FRAMECHANGED);
 
-			RECT w_r, c_r;
-			GetWindowRect(hwnd, &w_r);
-			GetClientRect(hwnd, &c_r);
-			int tw = (w_r.right - w_r.left) - (c_r.right - c_r.left);
-			int th = (w_r.bottom - w_r.top) - (c_r.bottom - c_r.top);
-			int cx = (GetSystemMetrics(SM_CXSCREEN) - w) / 2;
-			int cy = (GetSystemMetrics(SM_CYSCREEN) - h) / 2;
-			MoveWindow(hwnd, cx, cy, w + tw, h + th, true);
+			if (border_mode == 1 && gfx_mode == GMODE_SCALED) {
+				MoveWindow(hwnd, 0, 0, GetSystemMetrics(SM_CXSCREEN), GetSystemMetrics(SM_CYSCREEN), true);
+			}
+			else {
+				RECT w_r, c_r;
+				GetWindowRect(hwnd, &w_r);
+				GetClientRect(hwnd, &c_r);
+				int tw = (w_r.right - w_r.left) - (c_r.right - c_r.left);
+				int th = (w_r.bottom - w_r.top) - (c_r.bottom - c_r.top);
+				int cx = (GetSystemMetrics(SM_CXSCREEN) - w) / 2;
+				int cy = (GetSystemMetrics(SM_CYSCREEN) - h) / 2;
+				MoveWindow(hwnd, cx, cy, w + tw, h + th, true);
+			}
 		}
 		else {
 			DebugMsg("openWindowedGraphics FAILED");
