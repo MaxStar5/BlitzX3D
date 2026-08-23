@@ -173,6 +173,8 @@ public:
 
 		bool mCaseSensitive;
 
+		std::unordered_map<std::string, std::string> mDisplayNames;
+
 		LanguageDefinition()
 			: mPreprocChar('#'), mAutoIndentation(true), mTokenize(nullptr), mCaseSensitive(true)
 		{
@@ -242,6 +244,9 @@ public:
 
 	void SetTabSize(int aValue);
 	inline int GetTabSize() const { return mTabSize; }
+
+	inline void SetAutocompleteEnabled(bool aValue) { mAutocompleteEnabled = aValue; if (!aValue) CloseAutocomplete(); }
+	inline bool IsAutocompleteEnabled() const { return mAutocompleteEnabled; }
 
 	void InsertText(const std::string& aValue);
 	void InsertText(const char* aValue);
@@ -363,6 +368,12 @@ private:
 	void HandleMouseInputs();
 	void Render();
 
+	void UpdateAutocomplete();
+	void CloseAutocomplete();
+	void AcceptAutocomplete(int aIndex);
+	void RenderAutocomplete();
+	void CollectDocumentWords();
+
 	float mLineSpacing;
 	Lines mLines;
 	EditorState mState;
@@ -410,4 +421,21 @@ private:
 	bool mRightClick = false;
 	int mRightClickLine = 0;
 	int mRightClickColumn = 0;
+
+	static const int kAutocompleteMinPrefix = 3;
+	static const int kAutocompleteMaxMatches = 128;
+	static const int kAutocompleteMaxVisible = 12;
+
+	bool mAutocompleteEnabled = true;
+	bool mAutocompleteActive = false;
+	bool mAutocompleteRequested = false;
+	int mAutocompleteIndex = 0;
+	int mAutocompleteScroll = 0;
+	Coordinates mAutocompleteWordStart;
+	std::vector<std::string> mAutocompleteMatches;
+	ImVec2 mAutocompleteRectMin{ 0.0f, 0.0f };
+	ImVec2 mAutocompleteRectMax{ 0.0f, 0.0f };
+	ImVec2 mLastRenderOrigin{ 0.0f, 0.0f };
+	std::unordered_map<std::string, std::string> mDocWordsCache;
+	bool mDocWordsCacheValid = false;
 };

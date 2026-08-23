@@ -43,6 +43,7 @@ struct Prefs {
 
 	int edit_tabs = 4;
 	int edit_backup = 2;
+	bool edit_autocomplete = true;
 	bool noBackup = false;
 	std::string img_toolbar = "toolbar.bmp";
 

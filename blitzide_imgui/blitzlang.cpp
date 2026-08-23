@@ -8,6 +8,12 @@ static bool isid(int c) {
 	return std::isalnum((unsigned char)c) || c == '_';
 }
 
+static std::string lowerCopy(const std::string& s) {
+	std::string t = s;
+	std::transform(t.begin(), t.end(), t.begin(), [](unsigned char c) { return std::tolower(c); });
+	return t;
+}
+
 static bool tokenizeBlitzString(const char* in_begin, const char* in_end, const char*& out_begin, const char*& out_end) {
 	const char* p = in_begin;
 	if (*p != '"') return false;
@@ -90,38 +96,34 @@ TextEditor::LanguageDefinition makeBlitzLangDef(const std::set<std::string>& key
 
 	std::set<std::string> all = builtinBlitzKeywords();
 	for (const auto& k : keywords) all.insert(k);
-	for (auto& k : all) {
-		std::string t = k;
-		std::transform(t.begin(), t.end(), t.begin(), [](unsigned char c) { return std::toupper(c); });
-		langDef.mKeywords.insert(t);
+	for (const auto& k : all) {
+		std::string low = lowerCopy(k);
+		langDef.mKeywords.insert(low);
+		langDef.mDisplayNames[low] = k;
 	}
 
 	for (const auto& f : engineFuncs) {
-		std::string t = f;
-		std::transform(t.begin(), t.end(), t.begin(), [](unsigned char c) { return std::toupper(c); });
 		TextEditor::Identifier id;
 		id.mDeclaration = "Function";
-		langDef.mIdentifiers.insert(std::make_pair(t, id));
+		langDef.mIdentifiers[lowerCopy(f)] = id;
+		langDef.mDisplayNames[lowerCopy(f)] = f;
 	}
 
 	for (const auto& f : customFuncs) {
-		std::string t = f;
-		std::transform(t.begin(), t.end(), t.begin(), [](unsigned char c) { return std::toupper(c); });
 		TextEditor::Identifier id;
 		id.mDeclaration = "Function";
-		langDef.mIdentifiers.insert(std::make_pair(t, id));
+		langDef.mIdentifiers[lowerCopy(f)] = id;
+		langDef.mDisplayNames[lowerCopy(f)] = f;
 	}
 
 	for (const auto& g : globals) {
-		std::string t = g;
-		std::transform(t.begin(), t.end(), t.begin(), [](unsigned char c) { return std::toupper(c); });
-		langDef.mGlobals.insert(t);
+		langDef.mGlobals.insert(lowerCopy(g));
+		langDef.mDisplayNames[lowerCopy(g)] = g;
 	}
 
 	for (const auto& c : consts) {
-		std::string t = c;
-		std::transform(t.begin(), t.end(), t.begin(), [](unsigned char c) { return std::toupper(c); });
-		langDef.mConsts.insert(t);
+		langDef.mConsts.insert(lowerCopy(c));
+		langDef.mDisplayNames[lowerCopy(c)] = c;
 	}
 
 	langDef.mTokenize = [](const char* in_begin, const char* in_end, const char*& out_begin, const char*& out_end, TextEditor::PaletteIndex& paletteIndex) -> bool {

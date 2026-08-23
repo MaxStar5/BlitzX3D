@@ -23,6 +23,22 @@ bool equals(InputIt1 first1, InputIt1 last1,
 	return first1 == last1 && first2 == last2;
 }
 
+static bool IsIdentChar(char aChar)
+{
+	return (aChar >= 'A' && aChar <= 'Z') || (aChar >= 'a' && aChar <= 'z') || (aChar >= '0' && aChar <= '9') || aChar == '_';
+}
+
+static std::string ToLowerCopy(const std::string& aValue)
+{
+	std::string r(aValue);
+	for (auto& c : r)
+	{
+		if (c >= 'A' && c <= 'Z') 
+			c = (char)(c - 'A' + 'a');
+	}
+	return r;
+}
+
 TextEditor::TextEditor()
 	: mLineSpacing(1.0f)
 	, mUndoIndex(0)
@@ -226,6 +242,8 @@ void TextEditor::DeleteRange(const Coordinates & aStart, const Coordinates & aEn
 	if (aEnd == aStart)
 		return;
 
+	mDocWordsCacheValid = false;
+
 	auto start = GetCharacterIndex(aStart);
 	auto end = GetCharacterIndex(aEnd);
 
@@ -304,6 +322,7 @@ int TextEditor::InsertTextAt(Coordinates& /* inout */ aWhere, const char * aValu
 		}
 
 		mTextChanged = true;
+		mDocWordsCacheValid = false;
 	}
 
 	return totalLines;
@@ -698,6 +717,281 @@ ImU32 TextEditor::GetGlyphColor(const Glyph & aGlyph) const
 	return color;
 }
 
+void TextEditor::CloseAutocomplete()
+{
+	mAutocompleteActive = false;
+	mAutocompleteMatches.clear();
+	mAutocompleteIndex = 0;
+	mAutocompleteScroll = 0;
+	mAutocompleteRectMin = mAutocompleteRectMax = ImVec2(0.0f, 0.0f);
+}
+
+void TextEditor::CollectDocumentWords()
+{
+	mDocWordsCache.clear();
+
+	std::string word;
+	for (const auto& line : mLines)
+	{
+		word.clear();
+		for (const auto& glyph : line)
+		{
+			if (glyph.mComment || glyph.mMultiLineComment || glyph.mColorIndex == PaletteIndex::String || !IsIdentChar(glyph.mChar))
+			{
+				if (!word.empty())
+				{
+					if (word.size() >= kAutocompleteMinPrefix && !isdigit((unsigned char)word[0]))
+					{
+						std::string lower = ToLowerCopy(word);
+						mDocWordsCache.emplace(std::move(lower), std::move(word));
+						word.clear();
+					}
+					else
+						word.clear();
+				}
+			}
+			else
+				word.push_back(glyph.mChar);
+		}
+
+		if (word.size() >= kAutocompleteMinPrefix && !isdigit((unsigned char)word[0]))
+		{
+			std::string lower = ToLowerCopy(word);
+			mDocWordsCache.emplace(std::move(lower), std::move(word));
+		}
+	}
+
+	mDocWordsCacheValid = true;
+}
+
+void TextEditor::UpdateAutocomplete()
+{
+	const bool forceOpen = mAutocompleteRequested;
+	mAutocompleteRequested = false;
+
+	if (!mAutocompleteEnabled || mReadOnly || mLines.empty() || !ImGui::IsWindowFocused())
+	{
+		CloseAutocomplete();
+		return;
+	}
+
+	const auto cur = GetActualCursorCoordinates();
+	if (cur.mLine < 0 || cur.mLine >= (int)mLines.size() || HasSelection())
+	{
+		CloseAutocomplete();
+		return;
+	}
+
+	const auto& line = mLines[cur.mLine];
+	int cindex = GetCharacterIndex(cur);
+	int start = cindex;
+	while (start > 0 && IsIdentChar(line[start - 1].mChar))
+		--start;
+
+	std::string prefix;
+	prefix.reserve(cindex - start);
+	for (int i = start; i < cindex; ++i)
+		prefix.push_back(line[i].mChar);
+
+	if (prefix.empty())
+	{
+		CloseAutocomplete();
+		return;
+	}
+
+	bool badContext = false;
+	for (int i = start; i < cindex; ++i)
+	{
+		const auto& glyph = line[i];
+		if (glyph.mComment || glyph.mMultiLineComment || glyph.mColorIndex == PaletteIndex::String)
+		{
+			badContext = true;
+			break;
+		}
+	}
+	if (badContext)
+	{
+		CloseAutocomplete();
+		return;
+	}
+
+	if (!mAutocompleteActive && !forceOpen && prefix.size() < kAutocompleteMinPrefix)
+		return;
+
+	if (!mDocWordsCacheValid || !mAutocompleteActive)
+		CollectDocumentWords();
+
+	const std::string prefixLower = ToLowerCopy(prefix);
+
+	std::vector<std::pair<int, std::string>> ranked;
+	std::unordered_set<std::string> seenLower;
+
+	auto consider = [&](const std::string& aCandidate, int aPriority)
+	{
+		std::string lower = ToLowerCopy(aCandidate);
+		if (lower.size() <= prefixLower.size())
+			return;
+		if (lower.compare(0, prefixLower.size(), prefixLower) != 0)
+			return;
+		if (!seenLower.insert(lower).second)
+			return;
+		ranked.emplace_back(aPriority, std::move(aCandidate));
+	};
+
+	auto displayName = [&](const std::string& aKey) -> const std::string&
+	{
+		auto it = mLanguageDefinition.mDisplayNames.find(aKey);
+		return it != mLanguageDefinition.mDisplayNames.end() ? it->second : aKey;
+	};
+
+	for (const auto& k : mLanguageDefinition.mKeywords)
+		consider(displayName(k), 0);
+	for (const auto& f : mLanguageDefinition.mIdentifiers)
+		consider(displayName(f.first), 1);
+	for (const auto& p : mLanguageDefinition.mPreprocIdentifiers)
+		consider(displayName(p.first), 1);
+	for (const auto& g : mLanguageDefinition.mGlobals)
+		consider(displayName(g), 1);
+	for (const auto& c : mLanguageDefinition.mConsts)
+		consider(displayName(c), 1);
+	for (const auto& w : mDocWordsCache)
+		consider(w.second, 2);
+
+	if (ranked.empty())
+	{
+		CloseAutocomplete();
+		return;
+	}
+
+	std::stable_sort(ranked.begin(), ranked.end(), [](const std::pair<int, std::string>& aA, const std::pair<int, std::string>& aB)
+	{
+		if (aA.first != aB.first)
+			return aA.first < aB.first;
+		return ToLowerCopy(aA.second) < ToLowerCopy(aB.second);
+	});
+
+	if ((int)ranked.size() > kAutocompleteMaxMatches)
+		ranked.resize(kAutocompleteMaxMatches);
+
+	Coordinates wordStart(cur.mLine, GetCharacterColumn(cur.mLine, start));
+	if (!mAutocompleteActive || !(wordStart == mAutocompleteWordStart))
+	{
+		mAutocompleteIndex = 0;
+		mAutocompleteScroll = 0;
+	}
+	else if (mAutocompleteIndex >= (int)ranked.size())
+		mAutocompleteIndex = (int)ranked.size() - 1;
+
+	mAutocompleteWordStart = wordStart;
+	mAutocompleteMatches.clear();
+	mAutocompleteMatches.reserve(ranked.size());
+	for (auto& r : ranked)
+		mAutocompleteMatches.push_back(std::move(r.second));
+	mAutocompleteActive = true;
+}
+
+void TextEditor::AcceptAutocomplete(int aIndex)
+{
+	if (!mAutocompleteActive || aIndex < 0 || aIndex >= (int)mAutocompleteMatches.size())
+		return;
+
+	std::string replacement = mAutocompleteMatches[aIndex];
+	const auto start = mAutocompleteWordStart;
+	auto end = GetActualCursorCoordinates();
+
+	CloseAutocomplete();
+
+	if (!(start <= end))
+		return;
+
+	UndoRecord u;
+	u.mBefore = mState;
+	u.mRemoved = GetText(start, end);
+	u.mRemovedStart = start;
+	u.mRemovedEnd = end;
+
+	DeleteRange(start, end);
+	Coordinates where = SanitizeCoordinates(start);
+	int totalLines = InsertTextAt(where, replacement.c_str());
+
+	SetSelection(where, where);
+	SetCursorPosition(where);
+
+	u.mAdded = replacement;
+	u.mAddedStart = start;
+	u.mAddedEnd = where;
+	u.mAfter = mState;
+
+	AddUndo(u);
+	Colorize(start.mLine - 1, totalLines + 2);
+	EnsureCursorVisible();
+}
+
+void TextEditor::RenderAutocomplete()
+{
+	if (!mAutocompleteActive || mAutocompleteMatches.empty())
+		return;
+
+	ImGuiIO& io = ImGui::GetIO();
+	const float pad = 6.0f;
+	const float itemH = ImGui::GetTextLineHeightWithSpacing();
+	const int count = (int)mAutocompleteMatches.size();
+	const int visible = std::min(count, kAutocompleteMaxVisible);
+
+	float width = pad * 2.0f;
+	for (int i = 0; i < count; ++i)
+		width = std::max(width, ImGui::CalcTextSize(mAutocompleteMatches[i].c_str()).x + pad * 2.0f);
+	float height = visible * itemH + pad * 2.0f;
+
+	float bx = mLastRenderOrigin.x + mTextStart + TextDistanceToLineStart(mAutocompleteWordStart);
+	float by = mLastRenderOrigin.y + (mAutocompleteWordStart.mLine + 1) * mCharAdvance.y;
+
+	const ImVec2 wpos = ImGui::GetWindowPos();
+	const ImVec2 wsz = ImGui::GetWindowSize();
+	if (by + height > wpos.y + wsz.y)
+		by -= height + mCharAdvance.y;
+	if (by < wpos.y)
+		by = wpos.y;
+	bx = std::max(bx, wpos.x);
+	bx = std::min(bx, wpos.x + std::max(0.0f, wsz.x - width));
+
+	ImVec2 p0(bx, by);
+	ImVec2 p1(bx + width, by + height);
+	mAutocompleteRectMin = p0;
+	mAutocompleteRectMax = p1;
+
+	ImDrawList* dl = ImGui::GetForegroundDrawList();
+	dl->AddRectFilled(p0, p1, ImGui::GetColorU32(ImGuiCol_PopupBg));
+	dl->AddRect(p0, p1, ImGui::GetColorU32(ImGuiCol_Border));
+
+	const bool hoveredPopup = ImGui::IsMouseHoveringRect(p0, p1);
+	if (hoveredPopup && io.MouseWheel != 0.0f)
+		mAutocompleteScroll = std::max(0, std::min(count - visible, mAutocompleteScroll - (int)io.MouseWheel));
+
+	int hovered = -1;
+	for (int row = 0; row < visible; ++row)
+	{
+		const int idx = mAutocompleteScroll + row;
+		ImVec2 a(p0.x, p0.y + pad + row * itemH);
+		ImVec2 b(p1.x, a.y + itemH);
+
+		if (ImGui::IsMouseHoveringRect(a, b))
+		{
+			hovered = idx;
+			mAutocompleteIndex = idx;
+		}
+
+		if (idx == mAutocompleteIndex)
+			dl->AddRectFilled(a, b, ImGui::GetColorU32(ImGuiCol_Header));
+
+		dl->AddText(ImVec2(a.x + pad, a.y + (itemH - ImGui::GetTextLineHeight()) * 0.5f),
+			ImGui::GetColorU32(ImGuiCol_Text), mAutocompleteMatches[idx].c_str());
+	}
+
+	if (hovered >= 0 && ImGui::IsMouseClicked(0))
+		AcceptAutocomplete(hovered);
+}
+
 void TextEditor::HandleKeyboardInputs()
 {
 	ImGuiIO& io = ImGui::GetIO();
@@ -713,6 +1007,46 @@ void TextEditor::HandleKeyboardInputs()
 
 		io.WantCaptureKeyboard = true;
 		io.WantTextInput = true;
+
+		bool acConsumedKey = true;
+		if (mAutocompleteActive)
+		{
+			const int count = (int)mAutocompleteMatches.size();
+			if (!ctrl && !alt && ImGui::IsKeyPressed(ImGuiKey_UpArrow))
+			{
+				mAutocompleteIndex = (mAutocompleteIndex - 1 + count) % count;
+				int s = std::min(mAutocompleteScroll, mAutocompleteIndex);
+				s = std::max(s, mAutocompleteIndex - kAutocompleteMaxVisible + 1);
+				mAutocompleteScroll = std::max(0, s);
+			}
+			else if (!ctrl && !alt && ImGui::IsKeyPressed(ImGuiKey_DownArrow))
+			{
+				mAutocompleteIndex = (mAutocompleteIndex + 1) % count;
+				int s = std::max(mAutocompleteScroll, mAutocompleteIndex - kAutocompleteMaxVisible + 1);
+				s = std::min(s, mAutocompleteIndex);
+				mAutocompleteScroll = std::max(0, s);
+			}
+			else if (!IsReadOnly() && !ctrl && !shift && !alt &&
+				(ImGui::IsKeyPressed(ImGuiKey_Enter) || ImGui::IsKeyPressed(ImGuiKey_KeypadEnter)))
+				AcceptAutocomplete(mAutocompleteIndex);
+			else if (!IsReadOnly() && !ctrl && !shift && !alt && ImGui::IsKeyPressed(ImGuiKey_Tab))
+				AcceptAutocomplete(mAutocompleteIndex);
+			else if (!ctrl && !alt && ImGui::IsKeyPressed(ImGuiKey_Escape))
+				CloseAutocomplete();
+			else
+				acConsumedKey = false;
+
+			if (acConsumedKey)
+			{
+				io.InputQueueCharacters.resize(0);
+				return;
+			}
+		}
+		else if (!IsReadOnly() && ctrl && !shift && !alt && ImGui::IsKeyPressed(ImGuiKey_Space))
+		{
+			mAutocompleteRequested = true;
+			io.InputQueueCharacters.resize(0);
+		}
 
 		if (!IsReadOnly() && ctrl && !shift && !alt && ImGui::IsKeyPressed(ImGuiKey_Z))
 			Undo();
@@ -800,6 +1134,9 @@ void TextEditor::HandleMouseInputs()
 	auto ctrl = io.ConfigMacOSXBehaviors ? io.KeySuper : io.KeyCtrl;
 	auto alt = io.ConfigMacOSXBehaviors ? io.KeyCtrl : io.KeyAlt;
 
+	if (mAutocompleteActive && ImGui::IsMouseHoveringRect(mAutocompleteRectMin, mAutocompleteRectMax))
+		return;
+
 	if (ImGui::IsWindowHovered())
 	{
 		if (ctrl && !alt && !GetWordAt(ScreenPosToCoordinates(ImGui::GetMousePos())).empty())
@@ -851,6 +1188,7 @@ void TextEditor::HandleMouseInputs()
 			*/
 			else if (click)
 			{
+				CloseAutocomplete();
 				mState.mCursorPosition = mInteractiveStart = mInteractiveEnd = ScreenPosToCoordinates(ImGui::GetMousePos());
 				if (ctrl)
 					mSelectionMode = SelectionMode::Word;
@@ -878,6 +1216,7 @@ void TextEditor::HandleMouseInputs()
 
 			if (ImGui::IsMouseClicked(1))
 			{
+				CloseAutocomplete();
 				Coordinates rc = ScreenPosToCoordinates(ImGui::GetMousePos());
 				mRightClick = true;
 				mRightClickLine = rc.mLine;
@@ -919,6 +1258,7 @@ void TextEditor::Render()
 	}
 
 	ImVec2 cursorScreenPos = ImGui::GetCursorScreenPos();
+	mLastRenderOrigin = cursorScreenPos;
 	auto scrollX = ImGui::GetScrollX();
 	auto scrollY = ImGui::GetScrollY();
 
@@ -1140,6 +1480,8 @@ void TextEditor::Render()
 			{
 				if (!id.empty() && (id.back() == '$' || id.back() == '#' || id.back() == '%'))
 					id.pop_back();
+				if (!mLanguageDefinition.mCaseSensitive)
+					std::transform(id.begin(), id.end(), id.begin(), ::tolower);
 				auto it = mLanguageDefinition.mIdentifiers.find(id);
 				if (it != mLanguageDefinition.mIdentifiers.end())
 				{
@@ -1163,6 +1505,8 @@ void TextEditor::Render()
 
 
 	ImGui::Dummy(ImVec2((longest + 2), mLines.size() * mCharAdvance.y));
+
+	RenderAutocomplete();
 
 	if (mScrollToCursor)
 	{
@@ -1191,6 +1535,8 @@ void TextEditor::Render(const char* aTitle, const ImVec2& aSize, bool aBorder)
 
 	if (mHandleMouseInputs)
 		HandleMouseInputs();
+
+	UpdateAutocomplete();
 
 	ColorizeInternal();
 	Render();
@@ -1231,6 +1577,9 @@ void TextEditor::SetText(const std::string & aText)
 	mUndoBuffer.clear();
 	mUndoIndex = 0;
 
+	mDocWordsCacheValid = false;
+	CloseAutocomplete();
+
 	Colorize();
 }
 
@@ -1261,6 +1610,9 @@ void TextEditor::SetTextLines(const std::vector<std::string> & aLines)
 
 	mUndoBuffer.clear();
 	mUndoIndex = 0;
+
+	mDocWordsCacheValid = false;
+	CloseAutocomplete();
 
 	Colorize();
 }
@@ -1356,6 +1708,7 @@ void TextEditor::EnterCharacter(ImWchar aChar, bool aShift)
 				AddUndo(u);
 
 				mTextChanged = true;
+				mDocWordsCacheValid = false;
 
 				EnsureCursorVisible();
 			}
@@ -1428,6 +1781,7 @@ void TextEditor::EnterCharacter(ImWchar aChar, bool aShift)
 	}
 
 	mTextChanged = true;
+	mDocWordsCacheValid = false;
 
 	u.mAddedEnd = GetActualCursorCoordinates();
 	u.mAfter = mState;
@@ -1441,6 +1795,8 @@ void TextEditor::EnterCharacter(ImWchar aChar, bool aShift)
 void TextEditor::SetReadOnly(bool aValue)
 {
 	mReadOnly = aValue;
+	if (aValue)
+		CloseAutocomplete();
 }
 
 void TextEditor::SetColorizerEnable(bool aValue)
@@ -1859,6 +2215,7 @@ void TextEditor::Delete()
 		}
 
 		mTextChanged = true;
+		mDocWordsCacheValid = false;
 
 		Colorize(pos.mLine, 1);
 	}
@@ -1938,6 +2295,7 @@ void TextEditor::Backspace()
 		}
 
 		mTextChanged = true;
+		mDocWordsCacheValid = false;
 
 		EnsureCursorVisible();
 		Colorize(mState.mCursorPosition.mLine, 1);
@@ -2035,6 +2393,8 @@ void TextEditor::Paste()
 		u.mAddedEnd = insertedEnd;
 		u.mAfter = mState;
 		AddUndo(u);
+		mDocWordsCacheValid = false;
+		CloseAutocomplete();
 		mTextChanged = true;
 		Colorize(u.mAddedStart.mLine, changedLines + 1);
 		EnsureCursorVisible();
@@ -2157,6 +2517,7 @@ void TextEditor::ToggleComment()
 	u.mAddedEnd = cend;
 	u.mAfter = mState;
 	AddUndo(u);
+	mDocWordsCacheValid = false;
 	mTextChanged = true;
 	Colorize(firstLine - 1, lastLine - firstLine + 3);
 }
@@ -2234,12 +2595,16 @@ void TextEditor::Undo(int aSteps)
 {
 	while (CanUndo() && aSteps-- > 0)
 		mUndoBuffer[--mUndoIndex].Undo(this);
+	mDocWordsCacheValid = false;
+	CloseAutocomplete();
 }
 
 void TextEditor::Redo(int aSteps)
 {
 	while (CanRedo() && aSteps-- > 0)
 		mUndoBuffer[mUndoIndex++].Redo(this);
+	mDocWordsCacheValid = false;
+	CloseAutocomplete();
 }
 
 const TextEditor::Palette & TextEditor::GetDarkPalette()
@@ -2501,9 +2866,8 @@ void TextEditor::ColorizeRange(int aFromLine, int aToLine)
 				{
 					id.assign(token_begin, token_end);
 
-					// todo : allmost all language definitions use lower case to specify keywords, so shouldn't this use ::tolower ?
 					if (!mLanguageDefinition.mCaseSensitive)
-						std::transform(id.begin(), id.end(), id.begin(), ::toupper);
+						std::transform(id.begin(), id.end(), id.begin(), ::tolower);
 
 					if (!line[first - bufferBegin].mPreprocessor)
 					{

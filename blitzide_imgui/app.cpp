@@ -532,6 +532,11 @@ void App::menuBar() {
 		ImGui::Separator();
 		if (ImGui::MenuItem("Find / Replace...", "Ctrl+F")) editFind();
 		if (ImGui::MenuItem("Find Next", "F3")) editFindNext();
+		ImGui::Separator();
+		if (ImGui::MenuItem("Auto Complete", nullptr, &prefs.edit_autocomplete)) {
+			for (auto& doc : docs)
+				doc.editor.SetAutocompleteEnabled(prefs.edit_autocomplete);
+		}
 		ImGui::EndMenu();
 	}
 
@@ -634,6 +639,7 @@ void App::drawEditorPane() {
 	}
 
 	applyPalette(*d);
+	d->editor.SetAutocompleteEnabled(prefs.edit_autocomplete);
 	bool textChanged = d->editor.IsTextChanged();
 
 	ImVec2 avail = ImGui::GetContentRegionAvail();
