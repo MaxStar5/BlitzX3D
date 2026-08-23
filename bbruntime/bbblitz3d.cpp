@@ -1117,9 +1117,9 @@ float bbGetCameraRangeFar(Camera* c) {
 	return c->getFrustumFar();
 }
 
-void  bbCameraClsColor(Camera* c, float r, float g, float b) {
+void  bbCameraClsColor(Camera* c, float r, float g, float b, float a) {
 	debugCamera(c, "CameraClsColor");
-	c->setClsColor(Vector(r * ctof, g * ctof, b * ctof));
+	c->setClsColor(Vector(r * ctof, g * ctof, b * ctof), a);
 }
 
 void  bbCameraClsMode(Camera* c, int cls_color, int cls_zbuffer) {
@@ -2475,7 +2475,7 @@ void blitz3d_link(void (*rtSym)(const char* sym, void* pc)) {
 	rtSym("CameraRange%camera#near#far", bbCameraRange);
 	rtSym("#GetCameraRangeNear%camera", bbGetCameraRangeNear);
 	rtSym("#GetCameraRangeFar%camera", bbGetCameraRangeFar);
-	rtSym("CameraClsColor%camera#red#green#blue", bbCameraClsColor);
+	rtSym("CameraClsColor%camera#red#green#blue#alpha=1", bbCameraClsColor);
 	rtSym("CameraClsMode%camera%cls_color%cls_zbuffer", bbCameraClsMode);
 	rtSym("CameraProjMode%camera%mode", bbCameraProjMode);
 	rtSym("CameraViewport%camera%x%y%width%height", bbCameraViewport);

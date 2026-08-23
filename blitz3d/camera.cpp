@@ -7,7 +7,7 @@ Camera::Camera() {
 	setZoom(1);
 	setRange(1, 1000);
 	setViewport(0, 0, 0, 0);
-	setClsColor(Vector());
+	setClsColor(Vector(), 1.0f);
 	setClsMode(true, true);
 	setProjMode(PROJ_PERSP);
 	setFogRange(1, 1000);
@@ -30,8 +30,9 @@ void Camera::setViewport(int x, int y, int w, int h) {
 	local_valid = false;
 }
 
-void Camera::setClsColor(const Vector& v) {
+void Camera::setClsColor(const Vector& v, float alpha) {
 	cls_color = v;
+	cls_alpha = alpha;
 }
 
 void Camera::setClsMode(bool c, bool z) {
@@ -101,7 +102,7 @@ bool Camera::beginRenderFrame() {
 	if (!proj_mode) return false;
 	getFrustum();
 	gx_scene->setViewport(vp_x, vp_y, vp_w, vp_h);
-	gx_scene->clear(&(cls_color.x), 1, 1, cls_argb, cls_z);
+	gx_scene->clear(&(cls_color.x), cls_alpha, 1, cls_argb, cls_z);
 	if (proj_mode == PROJ_ORTHO) {
 		gx_scene->setOrthoProj(frustum_nr, frustum_fr, frustum_w, frustum_h);
 	}

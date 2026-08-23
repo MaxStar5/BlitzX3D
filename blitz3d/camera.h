@@ -18,7 +18,7 @@ public:
 	void setZoom(float z);
 	void setRange(float nr, float fr);
 	void setViewport(int x, int y, int w, int h);
-	void setClsColor(const Vector& v);
+	void setClsColor(const Vector& v, float alpha = 1.0f);
 	void setClsMode(bool cls_argb, bool cls_z);
 	void setProjMode(int mode);
 	void setFogColor(const Vector& v);
@@ -44,6 +44,7 @@ private:
 	float zoom;
 	int vp_x, vp_y, vp_w, vp_h;
 	Vector cls_color;
+	float cls_alpha;
 	bool cls_argb, cls_z;
 	int proj_mode;
 	Vector fog_color;
