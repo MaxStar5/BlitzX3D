@@ -1514,6 +1514,12 @@ void TextEditor::Render()
 		ImGui::SetWindowFocus();
 		mScrollToCursor = false;
 	}
+
+	if (mRequestFocus)
+	{
+		ImGui::SetWindowFocus();
+		mRequestFocus = false;
+	}
 }
 
 void TextEditor::Render(const char* aTitle, const ImVec2& aSize, bool aBorder)

@@ -229,6 +229,7 @@ public:
 
 	Coordinates GetCursorPosition() const { return GetActualCursorCoordinates(); }
 	void SetCursorPosition(const Coordinates& aPosition);
+	Coordinates GetSelectionStart() const { return mState.mSelectionStart; }
 
 	inline void SetHandleMouseInputs    (bool aValue){ mHandleMouseInputs    = aValue;}
 	inline bool IsHandleMouseInputsEnabled() const { return mHandleKeyboardInputs; }
@@ -247,6 +248,8 @@ public:
 
 	inline void SetAutocompleteEnabled(bool aValue) { mAutocompleteEnabled = aValue; if (!aValue) CloseAutocomplete(); }
 	inline bool IsAutocompleteEnabled() const { return mAutocompleteEnabled; }
+
+	void RequestWindowFocus() { mRequestFocus = true; }
 
 	void InsertText(const std::string& aValue);
 	void InsertText(const char* aValue);
@@ -438,4 +441,5 @@ private:
 	ImVec2 mLastRenderOrigin{ 0.0f, 0.0f };
 	std::unordered_map<std::string, std::string> mDocWordsCache;
 	bool mDocWordsCacheValid = false;
+	bool mRequestFocus = false;
 };

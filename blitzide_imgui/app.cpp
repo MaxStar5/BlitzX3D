@@ -278,10 +278,9 @@ static void applyCurrentTheme() {
 App::App() {}
 App::~App() {}
 
-int App::run(int argc, char* argv[], bool skipPicker) {
+int App::run(int argc, char* argv[]) {
 	App app;
 	g_app = &app;
-	app.skipPicker = skipPicker;
 	if (!app.init(argc, argv)) return 1;
 	app.mainloop();
 	app.shutdown();
@@ -296,7 +295,6 @@ bool App::init(int argc, char* argv[]) {
 	applyEditorColorsToPrefs(prefs.theme);
 
 	windowW = prefs.win_w; windowH = prefs.win_h;
-	if (!skipPicker) { windowW = 320; windowH = 140; }
 
 	SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
 	SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 0);
@@ -315,9 +313,7 @@ bool App::init(int argc, char* argv[]) {
 			int x = bounds.x + (bounds.w - windowW) / 2;
 			int y = bounds.y + (bounds.h - windowH) / 2;
 			SDL_SetWindowPosition(window, x, y);
-			if (skipPicker) {
-				SDL_MaximizeWindow(window);
-			}
+			SDL_MaximizeWindow(window);
 		}
 	}
 
@@ -342,11 +338,10 @@ bool App::init(int argc, char* argv[]) {
 
 	for (int k = 1; k < argc; ++k) {
 		std::string a = argv[k];
-		if (a == "--imgui") continue;
 		if (a.size() && a[0] == '-') continue;
 		openPath(a);
 	}
-	if (skipPicker && docs.empty()) fileNew();
+	if (docs.empty()) fileNew();
 
 	return true;
 }
@@ -355,7 +350,7 @@ void App::shutdown() {
 	if (compileThread.joinable()) compileThread.join();
 	if (keywordThread.joinable()) keywordThread.join();
 
-	if (currentIndex >= 0 && pickerDone) {
+	if (currentIndex >= 0) {
 		SDL_GetWindowSize(window, &windowW, &windowH);
 		prefs.win_w = windowW;
 		prefs.win_h = windowH;
@@ -391,38 +386,21 @@ void App::frame() {
 	ImGui_ImplSDL3_NewFrame();
 	ImGui::NewFrame();
 
-	if (skipPicker || pickerDone) {
-		setupDockLayout();
-		ImGui::DockSpaceOverViewport(ImHashStr("BlitzX3DDockSpaceV5"));
+	setupDockLayout();
+	ImGui::DockSpaceOverViewport(ImHashStr("BlitzX3DDockSpaceV5"));
 
-		ImGuiIO& kio = ImGui::GetIO();
-		bool ctrl = kio.KeyCtrl;
-		bool shift = kio.KeyShift;
-		if (!kio.WantTextInput && ctrl && ImGui::IsKeyPressed(ImGuiKey_F)) editFind();
-		if (!kio.WantTextInput && ctrl && ImGui::IsKeyPressed(ImGuiKey_H)) editReplace();
-		if (ImGui::IsKeyPressed(ImGuiKey_F3)) editFindNext();
-		if (ctrl && ImGui::IsKeyPressed(ImGuiKey_S)) { if (currentIndex >= 0) fileSave(currentIndex); }
-		if (ctrl && ImGui::IsKeyPressed(ImGuiKey_N)) fileNew();
-		if (ctrl && ImGui::IsKeyPressed(ImGuiKey_O)) fileOpen();
-		if (ctrl && ImGui::IsKeyPressed(ImGuiKey_F5)) programCompile();
-		if (!ctrl && ImGui::IsKeyPressed(ImGuiKey_F5)) programExecute();
-		(void)shift;
-	}
-
-	if (!skipPicker && !pickerDone) {
-		drawPicker();
-		ImGui::Render();
-		ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
-		ImGuiIO& pio = ImGui::GetIO();
-		if (pio.ConfigFlags & ImGuiConfigFlags_ViewportsEnable) {
-			SDL_GLContext pbackup = SDL_GL_GetCurrentContext();
-			ImGui::UpdatePlatformWindows();
-			ImGui::RenderPlatformWindowsDefault();
-			SDL_GL_MakeCurrent(window, pbackup);
-		}
-		SDL_GL_SwapWindow(window);
-		return;
-	}
+	ImGuiIO& kio = ImGui::GetIO();
+	bool ctrl = kio.KeyCtrl;
+	bool shift = kio.KeyShift;
+	if (!kio.WantTextInput && ctrl && ImGui::IsKeyPressed(ImGuiKey_F)) editFind();
+	if (!kio.WantTextInput && ctrl && ImGui::IsKeyPressed(ImGuiKey_H)) editReplace();
+	if (!kio.WantTextInput && ImGui::IsKeyPressed(ImGuiKey_F3)) editFindNext(shift);
+	if (ctrl && ImGui::IsKeyPressed(ImGuiKey_S)) { if (currentIndex >= 0) fileSave(currentIndex); }
+	if (ctrl && ImGui::IsKeyPressed(ImGuiKey_N)) fileNew();
+	if (ctrl && ImGui::IsKeyPressed(ImGuiKey_O)) fileOpen();
+	if (ctrl && ImGui::IsKeyPressed(ImGuiKey_F5)) programCompile();
+	if (!ctrl && ImGui::IsKeyPressed(ImGuiKey_F5)) programExecute();
+	(void)shift;
 
 	if (keywordsLoaded) {
 		keywordsLoaded = false;
@@ -532,6 +510,7 @@ void App::menuBar() {
 		ImGui::Separator();
 		if (ImGui::MenuItem("Find / Replace...", "Ctrl+F")) editFind();
 		if (ImGui::MenuItem("Find Next", "F3")) editFindNext();
+		if (ImGui::MenuItem("Find Previous", "Shift+F3")) editFindNext(true);
 		ImGui::Separator();
 		if (ImGui::MenuItem("Auto Complete", nullptr, &prefs.edit_autocomplete)) {
 			for (auto& doc : docs)
@@ -882,29 +861,49 @@ void App::drawFindReplace() {
 	ImGui::SetNextWindowPos(ImVec2(windowW / 2.0f - 200, 40), ImGuiCond_Appearing);
 	if (ImGui::Begin("Find / Replace", &showFind, flags)) {
 		ImGui::BringWindowToDisplayFront(ImGui::GetCurrentWindow());
-		bool doFind = false, doReplace = false, doReplaceAll = false;
+		ImGuiIO& fio = ImGui::GetIO();
+		bool doFind = false, doFindPrev = false, doReplace = false, doReplaceAll = false;
+		bool focusFind = false, focusReplace = false;
 		if (findFocusPending) {
 			strcpy(findBuf, findStr.c_str());
 			strcpy(replaceBuf, replaceStr.c_str());
 			findFocusPending = false;
+			focusFind = !findFocusReplace;
+			focusReplace = findFocusReplace;
+			findFocusReplace = false;
 		}
 		ImGui::SetNextItemWidth(300);
-		if (ImGui::IsWindowAppearing()) ImGui::SetKeyboardFocusHere();
-		ImGui::InputText("Find text", findBuf, sizeof(findBuf));
+		if (focusFind) ImGui::SetKeyboardFocusHere();
+		bool findEnter = ImGui::InputText("Find text", findBuf, sizeof(findBuf), ImGuiInputTextFlags_EnterReturnsTrue);
 		ImGui::SameLine();
-		if (ImGui::Button("Find")) doFind = true;
+		if (ImGui::Button("Find Next")) doFind = true;
+		if (findEnter) {
+			if (fio.KeyShift) doFindPrev = true; else doFind = true;
+		}
 		ImGui::Checkbox("Match case", &matchCase);
 		ImGui::Checkbox("Search all open files", &findAllFiles);
+		ImGui::SameLine();
 		ImGui::SetNextItemWidth(300);
-		ImGui::InputText("Replace text", replaceBuf, sizeof(replaceBuf));
+		if (focusReplace) ImGui::SetKeyboardFocusHere();
+		bool replaceEnter = ImGui::InputText("Replace text", replaceBuf, sizeof(replaceBuf), ImGuiInputTextFlags_EnterReturnsTrue);
 		ImGui::SameLine();
 		if (ImGui::Button("Replace")) doReplace = true;
+		if (replaceEnter) doReplace = true;
 		if (ImGui::Button("Replace All")) doReplaceAll = true;
+
+		if (ImGui::IsWindowFocused() && ImGui::IsKeyPressed(ImGuiKey_Escape)) {
+			showFind = showReplace = false;
+			if (Doc* d = currentDoc())
+				d->editor.RequestWindowFocus();
+			ImGui::End();
+			return;
+		}
+
 		findStr = findBuf;
 		replaceStr = replaceBuf;
-		if (doFind || doReplace || doReplaceAll) {
+		if ((doFind || doFindPrev || doReplace || doReplaceAll) && currentDoc()) {
 			Doc* d = currentDoc();
-			if (d && !findStr.empty()) {
+			if (!findStr.empty()) {
 				if (doReplaceAll) {
 					std::string text = d->editor.GetText();
 					size_t pos = 0;
@@ -923,10 +922,11 @@ void App::drawFindReplace() {
 							d->modified = true;
 						}
 					}
-					if (doFind) editFindNext();
+					if (doFind) editFindNext(false);
+					if (doFindPrev) editFindNext(true);
+					if (doReplace) editFindNext(false);
 				}
 			}
-			if (!doFind || findStatus.empty()) showFind = showReplace = false;
 		}
 		if (!findStatus.empty()) {
 			ImGui::TextColored(ImVec4(1.0f, 0.35f, 0.35f, 1.0f), "%s", findStatus.c_str());
@@ -1423,15 +1423,37 @@ void App::editCut() { if (Doc* d = currentDoc()) d->editor.Cut(); }
 void App::editCopy() { if (Doc* d = currentDoc()) d->editor.Copy(); }
 void App::editPaste() { if (Doc* d = currentDoc()) d->editor.Paste(); }
 void App::editSelectAll() { if (Doc* d = currentDoc()) d->editor.SelectAll(); }
-void App::editFind() { showFind = true; showReplace = true; findFocusPending = true; findStatus.clear(); }
-void App::editReplace() { showReplace = true; showFind = true; findFocusPending = true; findStatus.clear(); }
+void App::editFind() {
+	showFind = true;
+	findFocusReplace = false;
+	findFocusPending = true;
+	findStatus.clear();
+}
 
-void App::editFindNext() {
+void App::editReplace() {
+	if (!showFind) {
+		showFind = true;
+		showReplace = true;
+		findFocusReplace = true;
+	}
+	else if (!findFocusReplace) {
+		showReplace = true;
+		findFocusReplace = true;
+	}
+	else {
+		findFocusReplace = false;
+	}
+	findFocusPending = true;
+	findStatus.clear();
+}
+
+void App::editFindNext(bool aBackwards) {
 	if (findStr.empty()) { editFind(); return; }
 	if (docs.empty()) return;
 	bool ic = !matchCase;
 	std::string needle = ic ? toLower(findStr) : findStr;
-	auto searchDoc = [&](Doc& d, int startLine, int startCol) -> bool {
+
+	auto searchDocFwd = [&](Doc& d, int startLine, int startCol) -> bool {
 		std::vector<std::string> lines;
 		std::stringstream ss(d.editor.GetText());
 		std::string line;
@@ -1452,29 +1474,85 @@ void App::editFindNext() {
 		return false;
 	};
 
+	auto searchDocBack = [&](Doc& d, int startLine, int startCol) -> bool {
+		std::vector<std::string> lines;
+		std::stringstream ss(d.editor.GetText());
+		std::string line;
+		while (std::getline(ss, line, '\n')) lines.push_back(line);
+		int last = (int)lines.size() - 1;
+		if (startLine > last) { startLine = last; startCol = INT_MAX; }
+		for (int row = startLine; row >= 0; --row) {
+			std::string hay = ic ? toLower(lines[row]) : lines[row];
+			size_t limit = row == startLine ? (startCol > 0 ? (size_t)startCol : 0) : std::string::npos;
+			size_t best = std::string::npos;
+			size_t pos = 0;
+			while ((pos = hay.find(needle, pos)) != std::string::npos) {
+				if (limit != std::string::npos && pos >= limit) break;
+				best = pos;
+				pos += needle.size();
+			}
+			if (best == std::string::npos) continue;
+			size_t endPos = best + findStr.size();
+			int startColumn = editorColumn(lines[row], best);
+			int endColumn = editorColumn(lines[row], endPos);
+			d.editor.SetCursorPosition(TextEditor::Coordinates(row, endColumn));
+			d.editor.SetSelection(TextEditor::Coordinates(row, startColumn),
+				TextEditor::Coordinates(row, endColumn));
+			return true;
+		}
+		return false;
+	};
+
 	int first = currentIndex >= 0 ? currentIndex : 0;
 	Doc& current = docs[first];
-	TextEditor::Coordinates cur = current.editor.GetCursorPosition();
-	if (searchDoc(current, cur.mLine, cur.mColumn)) {
-		findStatus.clear();
-		return;
-	}
 
-	if (findAllFiles) {
-		for (int offset = 1; offset < (int)docs.size(); ++offset) {
-			int index = (first + offset) % (int)docs.size();
-			if (searchDoc(docs[index], 0, 0)) {
-				currentIndex = index;
-				requestedIndex = index;
-				findStatus.clear();
-				return;
+	if (!aBackwards) {
+		TextEditor::Coordinates cur = current.editor.GetCursorPosition();
+		if (searchDocFwd(current, cur.mLine, cur.mColumn)) {
+			findStatus.clear();
+			return;
+		}
+
+		if (findAllFiles) {
+			for (int offset = 1; offset < (int)docs.size(); ++offset) {
+				int index = (first + offset) % (int)docs.size();
+				if (searchDocFwd(docs[index], 0, 0)) {
+					currentIndex = index;
+					requestedIndex = index;
+					findStatus.clear();
+					return;
+				}
 			}
 		}
-	}
 
-	if (searchDoc(current, 0, 0)) {
-		findStatus.clear();
-		return;
+		if (searchDocFwd(current, 0, 0)) {
+			findStatus.clear();
+			return;
+		}
+	}
+	else {
+		TextEditor::Coordinates selStart = current.editor.GetSelectionStart();
+		if (searchDocBack(current, selStart.mLine, selStart.mColumn)) {
+			findStatus.clear();
+			return;
+		}
+
+		if (findAllFiles) {
+			for (int offset = (int)docs.size() - 1; offset >= 1; --offset) {
+				int index = (first + offset) % (int)docs.size();
+				if (searchDocBack(docs[index], INT_MAX, INT_MAX)) {
+					currentIndex = index;
+					requestedIndex = index;
+					findStatus.clear();
+					return;
+				}
+			}
+		}
+
+		if (searchDocBack(current, INT_MAX, INT_MAX)) {
+			findStatus.clear();
+			return;
+		}
 	}
 	findStatus = "Failed to find text in \"" + findStr + "\"";
 }
@@ -1512,51 +1590,6 @@ void App::helpHome() {
 	App::openUrl("https://kippykip.com/b3ddocs/commands/index.htm");
 }
 void App::helpAbout() { aboutOpen = true; }
-
-void App::launchLegacyIDE() {
-#if defined(_WIN32)
-	const char* bp = std::getenv("blitzpath");
-	if (bp && *bp) {
-		std::vector<std::string> args = { std::string(bp) + "\\bin\\ide.exe" };
-		std::string cmdline = buildWindowsCommandLine(args);
-		STARTUPINFOA si = { sizeof(si) };
-		PROCESS_INFORMATION pi = { 0 };
-		std::vector<char> mutableCmd(cmdline.begin(), cmdline.end());
-		mutableCmd.push_back('\0');
-		if (CreateProcessA(NULL, mutableCmd.data(), NULL, NULL, FALSE, 0, NULL, NULL, &si, &pi)) {
-			CloseHandle(pi.hThread);
-			CloseHandle(pi.hProcess);
-		}
-	}
-#endif
-	requestQuit();
-}
-
-void App::drawPicker() {
-	ImGui::SetNextWindowSize(ImVec2(300, 0), ImGuiCond_Always);
-	ImGuiViewport* vp = ImGui::GetMainViewport();
-	ImVec2 center = ImVec2(vp->WorkPos.x + vp->WorkSize.x * 0.5f, vp->WorkPos.y + vp->WorkSize.y * 0.5f);
-	ImGui::SetNextWindowPos(center, ImGuiCond_Always, ImVec2(0.5f, 0.5f));
-	ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0.0f);
-	if (ImGui::Begin("BlitzX3D IDE", nullptr,
-		ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoDocking | ImGuiWindowFlags_NoSavedSettings)) {
-		ImGui::TextWrapped("Choose your IDE:");
-		ImGui::Spacing();
-		ImGui::Spacing();
-		if (ImGui::Button("New BlitzX3D IDE", ImVec2(-1, 0))) {
-			SDL_MaximizeWindow(window);
-			windowW = prefs.win_w; windowH = prefs.win_h;
-			if (docs.empty()) fileNew();
-			pickerDone = true;
-		}
-		ImGui::Spacing();
-		if (ImGui::Button("Legacy IDE", ImVec2(-1, 0))) {
-			launchLegacyIDE();
-		}
-	}
-	ImGui::End();
-	ImGui::PopStyleVar();
-}
 
 void App::drawCommandLine() {
 	if (!showCommandLine) return;

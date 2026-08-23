@@ -30,7 +30,7 @@ struct Doc {
 
 class App {
 public:
-	static int run(int argc, char* argv[], bool skipPicker);
+	static int run(int argc, char* argv[]);
 	static void openUrl(const std::string& url);
 
 private:
@@ -41,8 +41,6 @@ private:
 	void shutdown();
 	void frame();
 	void mainloop();
-	void launchLegacyIDE();
-	void drawPicker();
 
 	void fileNew();
 	void fileOpen();
@@ -62,7 +60,7 @@ private:
 	void editPaste();
 	void editSelectAll();
 	void editFind();
-	void editFindNext();
+	void editFindNext(bool aBackwards = false);
 	void editReplace();
 
 	void programExecute();
@@ -129,6 +127,7 @@ private:
 	char findBuf[512] = {};
 	char replaceBuf[512] = {};
 	bool findFocusPending = false;
+	bool findFocusReplace = false;
 	bool findAllFiles = false;
 	std::string findStatus;
 	int requestedIndex = -1;
@@ -150,10 +149,6 @@ private:
 	std::thread keywordThread;
 	std::mutex keywordMutex;
 	std::atomic<bool> keywordsLoaded = false;
-
-	bool skipPicker = false;
-	bool pickerDone = false;
-	bool pickLegacy = false;
 
 	float editorFontScale = 1.0f;
 
