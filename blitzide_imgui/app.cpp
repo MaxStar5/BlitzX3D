@@ -1138,22 +1138,28 @@ bool App::openBlitzProject(const std::string& path) {
 
 bool App::openPath(const std::string& path) {
 	std::string extension = toLower(fs::path(path).extension().string());
-	bool alreadyOpen = false;
-	for (const auto& d : docs)
-		if (samePath(d.path, path)) { alreadyOpen = true; break; }
 	bool opened = extension == ".ipf"
 		? openProject(path)
 		: extension == ".bxp"
 		? openBlitzProject(path)
 		: openFile(path);
 	if (!opened) { removeRecent(path); return opened; }
-	if (extension != ".ipf" && extension != ".bxp" && !projectOpen && !alreadyOpen)
-		autoSetupProjectFromIncludes(path);
+	if (extension != ".ipf" && extension != ".bxp") {
+		bool inProject = false;
+		if (projectOpen) {
+			std::string np = normalizePath(path);
+			if (samePath(np, projectMainPath)) inProject = true;
+			else for (const auto& f : projectFiles)
+				if (samePath(f, np)) { inProject = true; break; }
+		}
+		if (!inProject)
+			autoSetupProjectFromIncludes(path);
+	}
 	return opened;
 }
 
 void App::autoSetupProjectFromIncludes(const std::string& path) {
-	if (projectOpen) return;
+	if (projectOpen && !projectPath.empty()) return;
 	if (!fs::exists(path)) return;
 
 	std::vector<std::string> visited;
