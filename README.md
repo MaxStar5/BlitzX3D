@@ -1,11 +1,20 @@
- <p align="center">
+<p align="center">
   <img width="1920" height="600" alt="banner" src="https://github.com/user-attachments/assets/b02c6fe2-f50d-480f-92ef-936bd5d42227" />
 </p>
 
 BlitzX3D is a community-maintained fork of Blitz3D TSS, originally based on Blitz3D. It focuses on maintaining and extending the Blitz3D engine while preserving compatibility with existing projects and libraries.
 
-### Features
+### Support
 
+Need help, have a question, or found a problem?
+
+- [**Join the BlitzX3D Support Discord**](https://discord.gg/S7MXjp6ejW)
+- [**Open a GitHub Issue**](https://github.com/krimbopple/BlitzX3D/issues) for bugs, feature requests, or other issues.
+
+---
+
+### Features
+- DirectX 9 rendering support, with [SDL GPU](https://wiki.libsdl.org/SDL3/CategoryGPU) support coming soon!
 - New ImGui-based IDE & Debugger replacing the legacy editors.
 - Debugger runs as a separate process for better performance, and now has expandable arrays in variable trees.
 - Built-in profiler with per-function timing, call counts, memory statistics, and a flame graph for identifying performance bottlenecks.
