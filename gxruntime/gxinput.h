@@ -4,29 +4,12 @@
 #define DIRECTINPUT_VERSION 0x0800
 
 #include <dinput.h>
-#include <xinput.h>
 
 #include "gxdevice.h"
 #include <vector>
 
-// Messy order, messy problem;
-typedef DWORD(WINAPI* XInputGetStatePtr)(DWORD, XINPUT_STATE*);
-typedef DWORD(WINAPI* XInputSetStatePtr)(DWORD, XINPUT_VIBRATION*);
-extern XInputGetStatePtr XInputGetStateFunc;
-extern XInputSetStatePtr XInputSetStateFunc;
-extern HMODULE xinputLibrary;
-
 class gxRuntime;
-
-class XInputController : public gxDevice {
-public:
-	int index;
-	XINPUT_STATE state;
-	XINPUT_STATE prev_state;
-
-	XInputController(int index);
-	void update();
-};
+class SDLInputDevice;
 
 class gxInput {
 public:
@@ -48,6 +31,8 @@ public:
 	void wm_mousewheel(int dz);
 	void wm_char(int wParam, int lParam);
 
+	bool rumble(int port, float left, float right);
+
 private:
 
 	/***** GX INTERFACE *****/
@@ -58,7 +43,17 @@ public:
 		ASC_UP = 28, ASC_DOWN = 29, ASC_RIGHT = 30, ASC_LEFT = 31
 	};
 
-	std::vector<XInputController*> xinput_controllers;
+	std::vector<SDLInputDevice*> sdl_devices;
+	int gamepad_count;
+	bool sdl_ok;
+	unsigned last_pump;
+
+	SDLInputDevice* findDevice(int port);
+	SDLInputDevice* findByInstance(unsigned id);
+	SDLInputDevice* addGamepad(unsigned id);
+	SDLInputDevice* addJoystick(unsigned id);
+	void disconnectDevice(unsigned id);
+	void pumpEvents(bool force);
 
 	void moveMouse(int x, int y);
 

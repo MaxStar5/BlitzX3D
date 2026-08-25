@@ -284,14 +284,7 @@ int	bbJoyVDir(int port) {
 
 void bbJoyVibrate(int port, float left, float right) {
 	if (port < 0 || port >= gx_joysticks.size()) return;
-	if (gx_input->getJoystickType(port) == 3) {
-		if (XInputSetStateFunc) {
-			XINPUT_VIBRATION vibration;
-			vibration.wLeftMotorSpeed = static_cast<WORD>(left * 65535);
-			vibration.wRightMotorSpeed = static_cast<WORD>(right * 65535);
-			XInputSetStateFunc(port, &vibration);
-		}
-	}
+	gx_input->rumble(port, left, right);
 }
 
 void bbStopJoyVibrate(int port) {

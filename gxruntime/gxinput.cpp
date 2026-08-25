@@ -3,44 +3,29 @@
 #include "gxruntime.h"
 
 #include <dinput.h>
-#include <xinput.h>
+#include <SDL3/SDL.h>
 
-static const int QUE_SIZE = 32;
+struct SDLGamepadBit {
+	SDL_GamepadButton button;
+	int bit;
+};
 
-XInputGetStatePtr XInputGetStateFunc = nullptr;
-XInputSetStatePtr XInputSetStateFunc = nullptr;
-HMODULE xinputLibrary = nullptr;
-
-void UnloadXInput() {
-    if (xinputLibrary) {
-        FreeLibrary(xinputLibrary);
-        xinputLibrary = nullptr;
-        XInputGetStateFunc = nullptr;
-        XInputSetStateFunc = nullptr;
-    }
-}
-
-bool LoadXInput() {
-    // Try to load xinput1_4.dll (Windows 8 and later) for analysis
-    xinputLibrary = LoadLibraryW(L"xinput1_4.dll");
-    if (!xinputLibrary) {
-        // Fall back to xinput9_1_0.dll (Windows 7 and earlier) for analysis
-        xinputLibrary = LoadLibraryW(L"xinput9_1_0.dll");
-    }
-
-    // Once we're able to get the dll loaded, check for specific function pointer addresses
-    if (xinputLibrary) {
-        XInputGetStateFunc = (XInputGetStatePtr)GetProcAddress(xinputLibrary, "XInputGetState");
-        XInputSetStateFunc = (XInputSetStatePtr)GetProcAddress(xinputLibrary, "XInputSetState");
-        if (XInputGetStateFunc && XInputSetStateFunc) {
-            // All good and defined, return success
-            return true;
-        }
-        // Only unload here since it wouldn't succeed it if we didn't get here in the first place
-        UnloadXInput();
-    }
-    return false;
-}
+static const SDLGamepadBit gamepad_bits[] = {
+	{ SDL_GAMEPAD_BUTTON_DPAD_UP, 0 },
+	{ SDL_GAMEPAD_BUTTON_DPAD_DOWN, 1 },
+	{ SDL_GAMEPAD_BUTTON_DPAD_LEFT, 2 },
+	{ SDL_GAMEPAD_BUTTON_DPAD_RIGHT, 3 },
+	{ SDL_GAMEPAD_BUTTON_START, 4 },
+	{ SDL_GAMEPAD_BUTTON_BACK, 5 },
+	{ SDL_GAMEPAD_BUTTON_LEFT_STICK, 6 },
+	{ SDL_GAMEPAD_BUTTON_RIGHT_STICK, 7 },
+	{ SDL_GAMEPAD_BUTTON_LEFT_SHOULDER, 8 },
+	{ SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER, 9 },
+	{ SDL_GAMEPAD_BUTTON_SOUTH, 12 },
+	{ SDL_GAMEPAD_BUTTON_EAST, 13 },
+	{ SDL_GAMEPAD_BUTTON_WEST, 14 },
+	{ SDL_GAMEPAD_BUTTON_NORTH, 15 }
+};
 
 class Device : public gxDevice {
 public:
@@ -117,94 +102,143 @@ public:
     }
 };
 
-class Joystick : public Device {
+class SDLInputDevice : public gxDevice {
 public:
-    int type, poll_time;
-    int mins[12], maxs[12];
-    Joystick(gxInput* i, IDirectInputDevice8* d, int t) :Device(i, d), type(t), poll_time(0) {
-        for (int k = 0; k < 12; ++k) {
-            //initialize joystick axis ranges (d'oh!)
-            DIPROPRANGE range;
-            range.diph.dwSize = sizeof(DIPROPRANGE);
-            range.diph.dwHeaderSize = sizeof(DIPROPHEADER);
-            range.diph.dwObj = k * 4 + 12;
-            range.diph.dwHow = DIPH_BYOFFSET;
-            if (d->GetProperty(DIPROP_RANGE, &range.diph) < 0) {
-                mins[k] = 0;
-                maxs[k] = 65535;
-                continue;
-            }
-            mins[k] = range.lMin;
-            maxs[k] = range.lMax - range.lMin;
+    gxInput* input;
+    int type;
+    bool connected;
+    bool is_gamepad;
+    unsigned instance_id;
+    unsigned poll_time;
+    SDL_Gamepad* gamepad;
+    SDL_Joystick* joystick;
+
+    SDLInputDevice(gxInput* i, SDL_Gamepad* gp) :input(i), type(3), connected(true), is_gamepad(true),
+        instance_id(SDL_GetGamepadID(gp)), poll_time(0), gamepad(gp), joystick(0) {
+        reset();
+    }
+    SDLInputDevice(gxInput* i, SDL_Joystick* js) :input(i), type(SDL_GetJoystickType(js) == SDL_JOYSTICK_TYPE_GAMEPAD ? 1 : 2),
+        connected(true), is_gamepad(false), instance_id(SDL_GetJoystickID(js)), poll_time(0), gamepad(0), joystick(js) {
+        reset();
+    }
+    virtual ~SDLInputDevice() {
+        close();
+    }
+    void close() {
+        if (gamepad) { SDL_CloseGamepad(gamepad); gamepad = 0; }
+        if (joystick) { SDL_CloseJoystick(joystick); joystick = 0; }
+    }
+    void clearState() {
+        if (is_gamepad) {
+            for (int k = 0; k < 23; ++k) setDownState(k, false);
         }
+        else {
+            for (int k = 0; k < 31; ++k) setDownState(k + 1, false);
+        }
+        for (int k = 0; k < 9; ++k) axis_states[k] = 0;
+        axis_states[8] = -1;
+    }
+    void disconnect() {
+        if (!connected) return;
+        connected = false;
+        clearState();
+        close();
     }
     void update() {
+        if (is_gamepad) updateGamepad();
+        else updateJoystick();
+    }
+    void updateGamepad() {
+        input->pumpEvents(false);
+        if (!connected || !gamepad) return;
+        float lx = SDL_GetGamepadAxis(gamepad, SDL_GAMEPAD_AXIS_LEFTX) / 32767.0f;
+        float ly = -(float)SDL_GetGamepadAxis(gamepad, SDL_GAMEPAD_AXIS_LEFTY) / 32767.0f;
+        float rx = SDL_GetGamepadAxis(gamepad, SDL_GAMEPAD_AXIS_RIGHTX) / 32767.0f;
+        float ry = -(float)SDL_GetGamepadAxis(gamepad, SDL_GAMEPAD_AXIS_RIGHTY) / 32767.0f;
+        float lt = (SDL_GetGamepadAxis(gamepad, SDL_GAMEPAD_AXIS_LEFT_TRIGGER) + 32768) / 65535.0f;
+        float rt = (SDL_GetGamepadAxis(gamepad, SDL_GAMEPAD_AXIS_RIGHT_TRIGGER) + 32768) / 65535.0f;
+        axis_states[0] = lx;
+        axis_states[1] = ly;
+        axis_states[2] = lt - rt;
+        axis_states[3] = rx;
+        axis_states[4] = ry;
+        axis_states[5] = lt;
+        axis_states[6] = rt;
+        Uint16 buttons = 0;
+        for (size_t k = 0; k < sizeof(gamepad_bits) / sizeof(gamepad_bits[0]); ++k) {
+            if (SDL_GetGamepadButton(gamepad, gamepad_bits[k].button)) buttons |= 1 << gamepad_bits[k].bit;
+        }
+        for (int k = 0; k < 23; ++k) {
+            setDownState(k, (buttons & (1 << k)) ? true : false);
+        }
+        bool up = SDL_GetGamepadButton(gamepad, SDL_GAMEPAD_BUTTON_DPAD_UP);
+        bool down = SDL_GetGamepadButton(gamepad, SDL_GAMEPAD_BUTTON_DPAD_DOWN);
+        bool left = SDL_GetGamepadButton(gamepad, SDL_GAMEPAD_BUTTON_DPAD_LEFT);
+        bool right = SDL_GetGamepadButton(gamepad, SDL_GAMEPAD_BUTTON_DPAD_RIGHT);
+        int pov = -1;
+        if (up) {
+            if (right) pov = 45;
+            else if (left) pov = 315;
+            else pov = 0;
+        }
+        else if (down) {
+            if (right) pov = 135;
+            else if (left) pov = 225;
+            else pov = 180;
+        }
+        else if (right) {
+            pov = 90;
+        }
+        else if (left) {
+            pov = 270;
+        }
+        axis_states[8] = pov;
+    }
+    void updateJoystick() {
         unsigned tm = timeGetTime();
         if (tm - poll_time < 3) return;
-        if (device->Poll() < 0) {
-            acquired = false;
-            input->runtime->idle();
-            acquire(); if (device->Poll() < 0) return;
-        }
         poll_time = tm;
-        DIJOYSTATE state;
-        if (device->GetDeviceState(sizeof(state), &state) < 0) return;
-        axis_states[0] = (state.lX - mins[0]) / (float)maxs[0] * 2 - 1;
-        axis_states[1] = (state.lY - mins[1]) / (float)maxs[1] * 2 - 1;
-        axis_states[2] = (state.lZ - mins[2]) / (float)maxs[2] * 2 - 1;
-        axis_states[3] = (state.rglSlider[0] - mins[6]) / (float)maxs[6] * 2 - 1;
-        axis_states[4] = (state.rglSlider[1] - mins[7]) / (float)maxs[7] * 2 - 1;
-        axis_states[5] = (state.lRx - mins[3]) / (float)maxs[3] * 2 - 1;
-        axis_states[6] = (state.lRy - mins[4]) / (float)maxs[4] * 2 - 1;
-        axis_states[7] = (state.lRz - mins[5]) / (float)maxs[5] * 2 - 1;
-        if ((state.rgdwPOV[0] & 0xffff) == 0xffff) axis_states[8] = -1;
-        else axis_states[8] = floor(state.rgdwPOV[0] / 100.0f + .5f);
-
-        for (int k = 0; k < 31; ++k) {
-            setDownState(k + 1, state.rgbButtons[k] & 0x80 ? true : false);
+        input->pumpEvents(false);
+        if (!connected || !joystick) return;
+        int axes = SDL_GetNumJoystickAxes(joystick);
+        if (axes > 8) axes = 8;
+        for (int k = 0; k < axes; ++k) {
+            float t = SDL_GetJoystickAxis(joystick, k) / 32767.5f;
+            if (t < -1) t = -1;
+            else if (t > 1) t = 1;
+            axis_states[k] = t;
+        }
+        if (SDL_GetNumJoystickHats(joystick) > 0) {
+            switch (SDL_GetJoystickHat(joystick, 0)) {
+            case SDL_HAT_UP: axis_states[8] = 0; break;
+            case SDL_HAT_RIGHTUP: axis_states[8] = 45; break;
+            case SDL_HAT_RIGHT: axis_states[8] = 90; break;
+            case SDL_HAT_RIGHTDOWN: axis_states[8] = 135; break;
+            case SDL_HAT_DOWN: axis_states[8] = 180; break;
+            case SDL_HAT_LEFTDOWN: axis_states[8] = 225; break;
+            case SDL_HAT_LEFT: axis_states[8] = 270; break;
+            case SDL_HAT_LEFTUP: axis_states[8] = 315; break;
+            default: axis_states[8] = -1; break;
+            }
+        }
+        else {
+            axis_states[8] = -1;
+        }
+        int buttons = SDL_GetNumJoystickButtons(joystick);
+        if (buttons > 31) buttons = 31;
+        for (int k = 0; k < buttons; ++k) {
+            setDownState(k + 1, SDL_GetJoystickButton(joystick, k) ? true : false);
         }
     }
 };
 
 static Keyboard* keyboard;
 static Mouse* mouse;
-static std::vector<Joystick*> joysticks;
 static std::vector<int> chars;
 
 static Keyboard* createKeyboard(gxInput* input) {
 
     return new Keyboard(input, 0);
-
-    IDirectInputDevice8* dev;
-    if (input->dirInput->CreateDevice(GUID_SysKeyboard, (IDirectInputDevice8**)&dev, 0) >= 0) {
-
-        if (dev->SetCooperativeLevel(input->runtime->hwnd, DISCL_FOREGROUND | DISCL_EXCLUSIVE) >= 0) {
-
-            if (dev->SetDataFormat(&c_dfDIKeyboard) >= 0) {
-                DIPROPDWORD dword;
-                memset(&dword, 0, sizeof(dword));
-                dword.diph.dwSize = sizeof(DIPROPDWORD);
-                dword.diph.dwHeaderSize = sizeof(DIPROPHEADER);
-                dword.diph.dwObj = 0;
-                dword.diph.dwHow = DIPH_DEVICE;
-                dword.dwData = 32;
-                if (dev->SetProperty(DIPROP_BUFFERSIZE, &dword.diph) >= 0) {
-                    return new Keyboard(input, dev);
-                }
-            }
-
-            return new Keyboard(input, dev);
-
-        }
-        else {
-            input->runtime->debugInfo("keyboard: SetCooperativeLevel failed");
-        }
-        dev->Release();
-    }
-    else {
-        input->runtime->debugInfo("keyboard: CreateDevice failed");
-    }
-    return 0;
 }
 
 static Mouse* createMouse(gxInput* input) {
@@ -220,62 +254,104 @@ static Mouse* createMouse(gxInput* input) {
     return new Mouse(input, 0);
 }
 
-static Joystick* createJoystick(gxInput* input, LPCDIDEVICEINSTANCE devinst) {
-    IDirectInputDevice8* dev;
-    if (input->dirInput->CreateDevice(devinst->guidInstance, (IDirectInputDevice8**)&dev, 0) >= 0) {
-        if (dev->SetCooperativeLevel(input->runtime->hwnd, DISCL_FOREGROUND | DISCL_EXCLUSIVE) >= 0) {
-            if (dev->SetDataFormat(&c_dfDIJoystick) >= 0) {
-                int t = ((devinst->dwDevType >> 8) & 0xff) == DI8DEVTYPE_GAMEPAD ? 1 : 2;
-                return new Joystick(input, dev, t);
-            }
-        }
-        dev->Release();
+SDLInputDevice* gxInput::findDevice(int port) {
+    return port >= 0 && port < (int)sdl_devices.size() ? sdl_devices[port] : 0;
+}
+
+SDLInputDevice* gxInput::findByInstance(unsigned id) {
+    for (size_t k = 0; k < sdl_devices.size(); ++k) {
+        if (sdl_devices[k]->connected && sdl_devices[k]->instance_id == id) return sdl_devices[k];
     }
     return 0;
 }
 
-static BOOL CALLBACK enumJoystick(LPCDIDEVICEINSTANCE devinst, LPVOID pvRef) {
-
-    if ((devinst->dwDevType & 0xff) != DI8DEVTYPE_JOYSTICK) return DIENUM_CONTINUE;
-
-    if (Joystick* joy = createJoystick((gxInput*)pvRef, devinst)) {
-        joysticks.push_back(joy);
-    }
-    return DIENUM_CONTINUE;
+SDLInputDevice* gxInput::addGamepad(unsigned id) {
+    if (!sdl_ok || findByInstance(id)) return 0;
+    SDL_Gamepad* gp = SDL_OpenGamepad(id);
+    if (!gp) return 0;
+    SDLInputDevice* d = new SDLInputDevice(this, gp);
+    sdl_devices.insert(sdl_devices.begin() + gamepad_count, d);
+    ++gamepad_count;
+    return d;
 }
 
-gxInput::gxInput(gxRuntime* rt, IDirectInput8* di) :
-    runtime(rt), dirInput(di) {
-    keyboard = createKeyboard(this);
-    mouse = createMouse(this);
-    joysticks.clear();
-    dirInput->EnumDevices(DI8DEVTYPE_JOYSTICK, enumJoystick, this, DIEDFL_ATTACHEDONLY);
+SDLInputDevice* gxInput::addJoystick(unsigned id) {
+    if (!sdl_ok || findByInstance(id)) return 0;
+    SDL_Joystick* js = SDL_OpenJoystick(id);
+    if (!js) return 0;
+    SDLInputDevice* d = new SDLInputDevice(this, js);
+    sdl_devices.push_back(d);
+    return d;
+}
 
-    if (LoadXInput()) {
-        for (int i = 0; i < XUSER_MAX_COUNT; i++) {
-            if (XInputGetStateFunc) {
-                XINPUT_STATE state;
-                if (XInputGetStateFunc(i, &state) == ERROR_SUCCESS) {
-                    xinput_controllers.push_back(new XInputController(i));
-                }
-            }
+void gxInput::disconnectDevice(unsigned id) {
+    SDLInputDevice* d = findByInstance(id);
+    if (d) d->disconnect();
+}
+
+void gxInput::pumpEvents(bool force) {
+    if (!sdl_ok) return;
+    unsigned tm = timeGetTime();
+    if (!force && tm - last_pump < 3) return;
+    last_pump = tm;
+    SDL_PumpEvents();
+    SDL_Event ev;
+    while (SDL_PollEvent(&ev)) {
+        switch (ev.type) {
+        case SDL_EVENT_GAMEPAD_ADDED:
+            addGamepad(ev.gdevice.which);
+            break;
+        case SDL_EVENT_JOYSTICK_ADDED:
+            if (!SDL_IsGamepad(ev.jdevice.which)) addJoystick(ev.jdevice.which);
+            break;
+        case SDL_EVENT_GAMEPAD_REMOVED:
+            disconnectDevice(ev.gdevice.which);
+            break;
+        case SDL_EVENT_JOYSTICK_REMOVED:
+            disconnectDevice(ev.jdevice.which);
+            break;
         }
     }
 }
 
-gxInput::~gxInput() {
-    for (size_t i = 0; i < xinput_controllers.size(); ++i) {
-        delete xinput_controllers[i];
-    }
-    xinput_controllers.clear();
+gxInput::gxInput(gxRuntime* rt, IDirectInput8* di) :
+    runtime(rt), dirInput(di), gamepad_count(0), sdl_ok(false), last_pump(0) {
+    keyboard = createKeyboard(this);
+    mouse = createMouse(this);
 
-    for (int k = 0; k < joysticks.size(); ++k) delete joysticks[k];
-    joysticks.clear();
+    SDL_SetHint(SDL_HINT_JOYSTICK_ALLOW_BACKGROUND_EVENTS, "1");
+    sdl_ok = SDL_Init(SDL_INIT_GAMEPAD);
+    if (!sdl_ok) {
+        runtime->debugLog("Failed to initialize SDL input.");
+        return;
+    }
+
+    int n = 0;
+    SDL_JoystickID* pads = SDL_GetGamepads(&n);
+    for (int k = 0; pads && k < n; ++k) addGamepad(pads[k]);
+    SDL_free(pads);
+
+    SDL_JoystickID* sticks = SDL_GetJoysticks(&n);
+    for (int k = 0; sticks && k < n; ++k) {
+        if (!findByInstance(sticks[k])) addJoystick(sticks[k]);
+    }
+    SDL_free(sticks);
+}
+
+gxInput::~gxInput() {
+    for (size_t i = 0; i < sdl_devices.size(); ++i) delete sdl_devices[i];
+    sdl_devices.clear();
+    gamepad_count = 0;
+
+    if (sdl_ok) {
+        SDL_QuitSubSystem(SDL_INIT_GAMEPAD);
+        sdl_ok = false;
+    }
+
     delete mouse;
     delete keyboard;
 
     dirInput->Release();
-    UnloadXInput();
 }
 
 void gxInput::wm_keydown(int key) {
@@ -315,7 +391,7 @@ void gxInput::wm_char(int wParam, int lParam) {
 void gxInput::reset() {
     if (mouse) mouse->reset();
     if (keyboard) keyboard->reset();
-    for (int k = 0; k < joysticks.size(); ++k) joysticks[k]->reset();
+    for (size_t k = 0; k < sdl_devices.size(); ++k) sdl_devices[k]->reset();
 }
 
 bool gxInput::acquire() {
@@ -348,24 +424,13 @@ gxDevice* gxInput::getKeyboard()const {
 }
 
 bool gxInput::getControllerConnected(int port) {
-    if (port < xinput_controllers.size()) {
-        XINPUT_STATE state;
-        if (XInputGetStateFunc) {
-            return XInputGetStateFunc(xinput_controllers[port]->index, &state) == ERROR_SUCCESS;
-        }
-    }
-
-    port -= xinput_controllers.size();
-    if (port >= 0 && port < joysticks.size()) {
-        return true;
-    }
-    return false;
+    pumpEvents(false);
+    SDLInputDevice* d = findDevice(port);
+    return d && d->connected;
 }
 
 gxDevice* gxInput::getJoystick(int n)const {
-    if (n < xinput_controllers.size()) return xinput_controllers[n];
-    n -= xinput_controllers.size();
-    return n >= 0 && n < joysticks.size() ? joysticks[n] : 0;
+    return n >= 0 && n < (int)sdl_devices.size() ? sdl_devices[n] : 0;
 }
 
 std::vector<int> gxInput::getChars() {
@@ -375,13 +440,24 @@ std::vector<int> gxInput::getChars() {
 }
 
 int gxInput::getJoystickType(int n)const {
-    if (n < xinput_controllers.size()) return 3;
-    n -= xinput_controllers.size();
-    return n >= 0 && n < joysticks.size() ? joysticks[n]->type : 0;
+    return n >= 0 && n < (int)sdl_devices.size() ? sdl_devices[n]->type : 0;
 }
 
 int gxInput::numJoysticks()const {
-    return (xinput_controllers.size() + joysticks.size());
+    return (int)sdl_devices.size();
+}
+
+bool gxInput::rumble(int port, float left, float right) {
+    SDLInputDevice* d = findDevice(port);
+    if (!d || !d->connected) return false;
+    if (left < 0) left = 0;
+    else if (left > 1) left = 1;
+    if (right < 0) right = 0;
+    else if (right > 1) right = 1;
+    Uint16 lo = (Uint16)(left * 65535.0f);
+    Uint16 hi = (Uint16)(right * 65535.0f);
+    if (d->is_gamepad) return SDL_RumbleGamepad(d->gamepad, lo, hi, 0xFFFFFFFF);
+    return SDL_RumbleJoystick(d->joystick, lo, hi, 0xFFFFFFFF);
 }
 
 int gxInput::toAscii(int scan)const {
@@ -415,60 +491,4 @@ int gxInput::toAscii(int scan)const {
     WORD ch;
     if (ToAscii(virt, scan, mat, &ch, 0) != 1) return 0;
     return ch & 255;
-}
-
-XInputController::XInputController(int idx) : index(idx) {
-    memset(&state, 0, sizeof(XINPUT_STATE));
-    memset(&prev_state, 0, sizeof(XINPUT_STATE));
-    reset();
-}
-
-void XInputController::update() {
-    prev_state = state;
-    if (XInputGetStateFunc) {
-        if (XInputGetStateFunc(index, &state) != ERROR_SUCCESS) {
-            memset(&state, 0, sizeof(XINPUT_STATE));
-            return;
-        }
-    }
-
-    // This based off mapping Xbox One Controller keys, unsure if 1:1 to other controllers
-    // For Thumbstick support
-    axis_states[0] = state.Gamepad.sThumbLX / 32767.0f;  // Left Thumbstick X
-    axis_states[1] = state.Gamepad.sThumbLY / 32767.0f;  // Left Thumbstick Y
-    axis_states[3] = state.Gamepad.sThumbRX / 32767.0f;  // Right Thumbstick X
-    axis_states[4] = state.Gamepad.sThumbRY / 32767.0f;  // Right Thumbstick Y
-
-    //Controller Triggers
-    axis_states[5] = state.Gamepad.bLeftTrigger / 255.0f;   // Left Trigger, goes from (0 to 1) based on controller pressure
-    axis_states[6] = state.Gamepad.bRightTrigger / 255.0f;  // Right Trigger, goes from (0 to 1) based on controller pressure
-
-    // Differential Trigger (for backward compatibility :P with Z)
-    axis_states[2] = axis_states[5] - axis_states[6];  // -1 to 1 range
-
-    // Update button states
-    const WORD buttons = state.Gamepad.wButtons;
-    for (int i = 0; i < 23; ++i) {
-        setDownState(i, (buttons & (1 << i)) ? true : false);
-    }
-
-    // D-PAD/POV Hat hook
-    int pov = -1;
-    if (buttons & XINPUT_GAMEPAD_DPAD_UP) {
-        if (buttons & XINPUT_GAMEPAD_DPAD_RIGHT) pov = 45;
-        else if (buttons & XINPUT_GAMEPAD_DPAD_LEFT) pov = 315;
-        else pov = 0;
-    }
-    else if (buttons & XINPUT_GAMEPAD_DPAD_DOWN) {
-        if (buttons & XINPUT_GAMEPAD_DPAD_RIGHT) pov = 135;
-        else if (buttons & XINPUT_GAMEPAD_DPAD_LEFT) pov = 225;
-        else pov = 180;
-    }
-    else if (buttons & XINPUT_GAMEPAD_DPAD_RIGHT) {
-        pov = 90;
-    }
-    else if (buttons & XINPUT_GAMEPAD_DPAD_LEFT) {
-        pov = 270;
-    }
-    axis_states[8] = pov; // Store for JoyHat support later
 }
