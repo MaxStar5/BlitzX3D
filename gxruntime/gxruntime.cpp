@@ -993,7 +993,7 @@ gxGraphics* gxRuntime::openWindowedGraphics(int w, int h, int d, bool d3d) {
 	d3dpp.BackBufferCount = 1;
 	d3dpp.BackBufferWidth = w;
 	d3dpp.BackBufferHeight = h;
-	d3dpp.PresentationInterval = D3DPRESENT_INTERVAL_IMMEDIATE;
+	d3dpp.PresentationInterval = D3DPRESENT_INTERVAL_ONE;
 
 	D3DDISPLAYMODE mode;
 	if (FAILED(this->d3d->GetAdapterDisplayMode(curr_driver->adapter, &mode))) return 0;
@@ -1046,7 +1046,7 @@ gxGraphics* gxRuntime::openExclusiveGraphics(int w, int h, int d, bool d3d) {
 	d3dpp.BackBufferWidth = w;
 	d3dpp.BackBufferHeight = h;
 	d3dpp.BackBufferFormat = format;
-	d3dpp.PresentationInterval = D3DPRESENT_INTERVAL_IMMEDIATE;
+	d3dpp.PresentationInterval = D3DPRESENT_INTERVAL_ONE;
 	d3dpp.SwapEffect = D3DSWAPEFFECT_DISCARD;
 	d3dpp.BackBufferCount = 1;
 	d3dpp.EnableAutoDepthStencil = FALSE;
