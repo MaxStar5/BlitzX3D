@@ -66,7 +66,6 @@ private:
 	void programExecute();
 	void programCompile();
 	void programPublish();
-	void programPreprocess();
 	void programDebug();
 	void programNoLAA();
 

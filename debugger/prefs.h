@@ -3,7 +3,6 @@
 
 class Prefs {
 public:
-	bool prg_preprocess;
 	bool prg_debug;
 	bool prg_nolaa;
 	std::string prg_lastbuild;

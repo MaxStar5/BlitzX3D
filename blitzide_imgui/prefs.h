@@ -5,7 +5,6 @@
 #include <vector>
 
 struct Prefs {
-	bool prg_preprocess = true;
 	bool prg_debug = true;
 	bool prg_nolaa = false;
 	bool prg_dumpasm = false;

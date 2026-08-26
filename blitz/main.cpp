@@ -37,7 +37,7 @@ static void showInfo() {
 }
 
 static void showUsage() {
-	std::cout << "Usage: blitzcc [-h|-q|+q|-c|-d|-k|+k|-nlaa|-v|-p|-o exefile] [sourcefile.bb]" << std::endl;
+	std::cout << "Usage: blitzcc [-h|-q|+q|-c|-d|-k|+k|-nlaa|-v|-o exefile] [sourcefile.bb]" << std::endl;
 }
 
 static void showHelp() {
@@ -51,7 +51,6 @@ static void showHelp() {
 	std::cout << "+k         : dump keywords and syntax" << std::endl;
 	std::cout << "-v		 : version info" << std::endl;
 	std::cout << "-nlaa      : disables large address awareness for the output executable" << std::endl;
-	std::cout << "-p         : enabling preprocessor" << std::endl;
 	std::cout << "-o exefile : generate executable" << std::endl;
 }
 
@@ -136,7 +135,7 @@ int _cdecl main(int argc, char* argv[]) {
 	bool debug = false, quiet = false, veryquiet = false, compileonly = false;
 	bool dumpkeys = false, dumphelp = false, showhelp = false, dumpasm = false;
 	bool versinfo = false;
-	bool preprocess = false, nolaa = false;
+	bool nolaa = false;
 	bool encrypt = false;
 
 	for (int k = 1; k < argc; ++k) {
@@ -170,9 +169,6 @@ int _cdecl main(int argc, char* argv[]) {
 		}
 		else if (t == "-v") {
 			versinfo = true;
-		}
-		else if (t == "-p") {
-			preprocess = true;
 		}
 		else if (t == "-o") {
 			if (out_file.size() || k == argc - 1) usageErr();
@@ -253,9 +249,9 @@ int _cdecl main(int argc, char* argv[]) {
 	try {
 		//parse
 		if (!veryquiet) std::cout << "Parsing..." << std::endl;
-		Toker toker(in_file, in, debug, preprocess);
+		Toker toker(in_file, in, debug);
 		Parser parser(toker);
-		prog = parser.parse(in_file, debug, preprocess);
+		prog = parser.parse(in_file, debug);
 
 		//semant
 		if (!veryquiet) std::cout << "Generating..." << std::endl;

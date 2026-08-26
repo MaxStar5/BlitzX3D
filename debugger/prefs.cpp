@@ -46,7 +46,6 @@ void Prefs::open() {
 	inipp::Ini<char> ini;
 	ini.parse(in);
 
-	inipp::get_value(ini.sections["COMPILER"], "Preprocess", prg_preprocess);
 	inipp::get_value(ini.sections["COMPILER"], "Debug", prg_debug);
 	inipp::get_value(ini.sections["COMPILER"], "NoLAA", prg_nolaa);
 	inipp::get_value(ini.sections["COMPILER"], "LastBuild", prg_lastbuild);
@@ -110,7 +109,6 @@ void Prefs::open() {
 }
 
 void Prefs::setDefault() {
-	prg_preprocess = false;
 	prg_debug = true;
 	prg_nolaa = false;
 

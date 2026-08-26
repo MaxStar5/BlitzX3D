@@ -534,7 +534,6 @@ void App::menuBar() {
 		if (ImGui::MenuItem("Publish...")) programPublish();
 		if (ImGui::MenuItem("Command Line...")) showCommandLine = true;
 		ImGui::Separator();
-		if (ImGui::MenuItem("Preprocess", nullptr, &prefs.prg_preprocess)) {}
 		if (ImGui::MenuItem("Debug", nullptr, &prefs.prg_debug)) {}
 		if (ImGui::MenuItem("No LAA", nullptr, &prefs.prg_nolaa)) {}
 		ImGui::Separator();
@@ -1588,7 +1587,7 @@ void App::programPublish() {
 		publishIconPath = iconPath;
 	}
 	build(true, true);
-}void App::programPreprocess() { prefs.prg_preprocess = !prefs.prg_preprocess; }
+}
 void App::programDebug() { prefs.prg_debug = !prefs.prg_debug; }
 void App::programNoLAA() { prefs.prg_nolaa = !prefs.prg_nolaa; }
 
@@ -1872,7 +1871,6 @@ void App::build(bool exec, bool publish) {
 	if (!publish && !exec) args.push_back("-c");
 	if (prefs.prg_debug) args.push_back("-d");
 	if (prefs.prg_dumpkeys) args.push_back("-k");
-	if (prefs.prg_preprocess) args.push_back("-p");
 	if (prefs.prg_nolaa) args.push_back("-nlaa");
 	if (prefs.prg_encrypt) args.push_back("-encrypt");
 
