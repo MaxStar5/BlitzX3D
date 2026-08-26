@@ -377,6 +377,13 @@ void App::mainloop() {
 				(event.type == SDL_EVENT_WINDOW_CLOSE_REQUESTED && event.window.windowID == SDL_GetWindowID(window))) requestQuit();
 			if (event.type == SDL_EVENT_DROP_FILE && event.drop.data) openPath(event.drop.data);
 		}
+
+		const bool focused = (SDL_GetWindowFlags(window) & SDL_WINDOW_INPUT_FOCUS) != 0;
+		if (!focused) {
+			SDL_WaitEventTimeout(nullptr, 16);
+			continue;
+		}
+
 		frame();
 	}
 }
