@@ -75,6 +75,7 @@ private:
 	void drawUpdateDialog();
 
 	void build(bool exec, bool publish);
+	Prefs::CompileOptions effectiveCompileOptions();
 	void compile(const std::vector<std::string>& args);
 	void appendOutput(const std::string& text);
 	void parseOutputLine(const std::string& line);

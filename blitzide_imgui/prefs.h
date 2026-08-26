@@ -5,6 +5,11 @@
 #include <vector>
 
 struct Prefs {
+	struct CompileOptions {
+		bool noautodecl = false;
+		bool encrypt = false;
+	};
+
 	bool prg_debug = true;
 	bool prg_nolaa = false;
 	bool prg_noautodecl = false;
@@ -53,6 +58,9 @@ struct Prefs {
 
 	std::string configDir;
 
+	CompileOptions projectOptions;
+	bool projectOptionsActive = false;
+
 	std::vector<std::string> recentFiles;
 	std::string ignore_version_update;
 
@@ -60,6 +68,11 @@ struct Prefs {
 
 	void open();
 	void close();
+
+	bool loadProjectOptions(const std::string& path);
+	bool saveProjectOptions(const std::string& path) const;
+	void clearProjectOptions();
+	std::string compileOptionsXml() const;
 };
 
 extern Prefs prefs;

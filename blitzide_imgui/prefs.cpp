@@ -87,6 +87,36 @@ static std::string boolToString(bool value) {
 	return value ? "true" : "false";
 }
 
+static std::string xmlElement(const std::string& text, const std::string& tag) {
+	size_t pos = text.find("<" + tag);
+	if (pos == std::string::npos) return "";
+	size_t end = text.find('>', pos);
+	if (end == std::string::npos) return "";
+	return text.substr(pos, end - pos + 1);
+}
+
+static std::string xmlAttr(const std::string& elem, const std::string& name) {
+	std::string needle = name + "=\"";
+	size_t pos = 0;
+	while ((pos = elem.find(needle, pos)) != std::string::npos) {
+		char prev = pos > 0 ? elem[pos - 1] : ' ';
+		bool boundary = !(std::isalnum((unsigned char)prev) || prev == '_');
+		size_t start = pos + needle.size();
+		size_t end = elem.find('"', start);
+		if (boundary && end != std::string::npos) return elem.substr(start, end - start);
+		pos = start;
+	}
+	return "";
+}
+
+static bool parseBoolValue(const std::string& s, bool def) {
+	std::string t;
+	for (char c : s) t += (char)std::tolower((unsigned char)c);
+	if (t == "true" || t == "1" || t == "yes") return true;
+	if (t == "false" || t == "0" || t == "no") return false;
+	return def;
+}
+
 static void migrateLegacyConfig() {
 	if (prefs.homeDir.empty() || prefs.configDir == prefs.homeDir + "/cfg") return;
 	for (const char* name : { "blitzide.ini", "imgui.ini", "themes.ini" }) {
@@ -268,4 +298,60 @@ void Prefs::close() {
 	}
 
 	ini.generate(out);
+}
+
+bool Prefs::loadProjectOptions(const std::string& path) {
+	projectOptionsActive = false;
+	projectOptions = CompileOptions{};
+	if (path.empty()) return false;
+	std::ifstream in(path, std::ios::binary);
+	if (!in.good()) return false;
+	std::stringstream ss;
+	ss << in.rdbuf();
+	in.close();
+	std::string elem = xmlElement(ss.str(), "CompileOptions");
+	if (elem.empty()) return false;
+	projectOptions.noautodecl = parseBoolValue(xmlAttr(elem, "NoAutoDecl"), projectOptions.noautodecl);
+	projectOptions.encrypt = parseBoolValue(xmlAttr(elem, "Encrypt"), projectOptions.encrypt);
+	projectOptionsActive = true;
+	return true;
+}
+
+bool Prefs::saveProjectOptions(const std::string& path) const {
+	if (path.empty()) return false;
+	std::ifstream in(path, std::ios::binary);
+	if (!in.good()) return false;
+	std::stringstream ss;
+	ss << in.rdbuf();
+	in.close();
+	std::string text = ss.str();
+
+	std::string elem = "<CompileOptions " + compileOptionsXml() + "/>";
+	size_t pos = text.find("<CompileOptions");
+	if (pos != std::string::npos) {
+		size_t end = text.find('>', pos);
+		if (end == std::string::npos) return false;
+		text.replace(pos, end - pos + 1, elem);
+	}
+	else {
+		size_t close = text.rfind("</BlitzX3DProject>");
+		if (close == std::string::npos) return false;
+		text.insert(close, "  " + elem + "\r\n");
+	}
+
+	std::ofstream out(path, std::ios::binary | std::ios::trunc);
+	if (!out.good()) return false;
+	out << text;
+	out.close();
+	return out.good();
+}
+
+void Prefs::clearProjectOptions() {
+	projectOptionsActive = false;
+	projectOptions = CompileOptions{};
+}
+
+std::string Prefs::compileOptionsXml() const {
+	return std::string("NoAutoDecl=\"") + boolToString(projectOptions.noautodecl) +
+		"\" Encrypt=\"" + boolToString(projectOptions.encrypt) + "\"";
 }

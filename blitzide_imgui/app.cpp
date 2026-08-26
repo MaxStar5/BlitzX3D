@@ -534,9 +534,17 @@ void App::menuBar() {
 		if (ImGui::MenuItem("Publish...")) programPublish();
 		if (ImGui::MenuItem("Command Line...")) showCommandLine = true;
 		ImGui::Separator();
+		bool* optNoAutoDecl = &prefs.prg_noautodecl;
+		bool* optEncrypt = &prefs.prg_encrypt;
+		if (prefs.projectOptionsActive) {
+			optNoAutoDecl = &prefs.projectOptions.noautodecl;
+			optEncrypt = &prefs.projectOptions.encrypt;
+		}
+		auto persistOpts = [&]() { if (prefs.projectOptionsActive) prefs.saveProjectOptions(projectPath); };
+		bool optsChanged = false;
 		if (ImGui::MenuItem("Debug", nullptr, &prefs.prg_debug)) {}
 		if (ImGui::MenuItem("No LAA", nullptr, &prefs.prg_nolaa)) {}
-		if (ImGui::MenuItem("No Auto Declaration ", nullptr, &prefs.prg_noautodecl)) {}
+		if (ImGui::MenuItem("No Auto Declaration ", nullptr, optNoAutoDecl)) optsChanged = true;
 		ImGui::Separator();
 		if (ImGui::BeginMenu("Compile Options")) {
 			ImGui::MenuItem("Dump assembly", nullptr, &prefs.prg_dumpasm);
@@ -545,9 +553,10 @@ void App::menuBar() {
 			if (ImGui::MenuItem("Very quiet", nullptr, &prefs.prg_veryquiet) && prefs.prg_veryquiet)
 				prefs.prg_quiet = true;
 			ImGui::MenuItem("Dump keys", nullptr, &prefs.prg_dumpkeys);
-			ImGui::MenuItem("Encrypt", nullptr, &prefs.prg_encrypt);
+			if (ImGui::MenuItem("Encrypt", nullptr, optEncrypt)) optsChanged = true;
 			ImGui::EndMenu();
 		}
+		if (optsChanged) persistOpts();
 		ImGui::EndMenu();
 	}
 
@@ -996,6 +1005,7 @@ bool App::openProject(const std::string& path) {
 	if (!fs::exists(p)) return false;
 	projectOpen = false;
 	projectPath.clear();
+	prefs.clearProjectOptions();
 	projectMainPath.clear();
 	projectFiles.clear();
 	projectIncludedDocs.clear();
@@ -1068,6 +1078,7 @@ bool App::openProject(const std::string& path) {
 bool App::openBlitzProject(const std::string& path) {
 	fs::path projectFile(path);
 	if (!fs::exists(projectFile)) return false;
+	prefs.clearProjectOptions();
 
 	std::ifstream in(path, std::ios::binary);
 	if (!in.good()) return false;
@@ -1132,6 +1143,7 @@ bool App::openBlitzProject(const std::string& path) {
 		}
 	}
 	refreshProjectSymbols();
+	prefs.loadProjectOptions(projectPath);
 	addRecent(path);
 	return true;
 }
@@ -1178,6 +1190,7 @@ void App::autoSetupProjectFromIncludes(const std::string& path) {
 		if (!samePath(r, path)) others.push_back(r);
 	if (others.empty()) return;
 
+	prefs.clearProjectOptions();
 	projectOpen = true;
 	projectPath.clear();
 	projectMainPath = normalizePath(path);
@@ -1277,6 +1290,8 @@ bool App::saveProjectFile(const std::string& path) {
 	out << "<BlitzX3DProject MainFile=\"" << escape(relativePath(mainPath)) << "\">\r\n";
 	for (const auto& file : files)
 		out << "  <File Path=\"" << escape(relativePath(file)) << "\"/>\r\n";
+	if (prefs.projectOptionsActive)
+		out << "  <CompileOptions " << prefs.compileOptionsXml() << "/>\r\n";
 	out << "</BlitzX3DProject>\r\n";
 	out.close();
 	if (!out) return false;
@@ -1365,6 +1380,7 @@ void App::fileClose(int idx) {
 		if (!anyProjectDocOpen) {
 			projectOpen = false;
 			projectPath.clear();
+			prefs.clearProjectOptions();
 			projectMainPath.clear();
 			projectFiles.clear();
 			projectIncludedDocs.clear();
@@ -1842,6 +1858,21 @@ void App::drawPaneBackground() {
 	ImGui::PopStyleColor();
 }
 
+Prefs::CompileOptions App::effectiveCompileOptions() {
+	Prefs::CompileOptions co;
+	co.noautodecl = prefs.prg_noautodecl;
+	co.encrypt = prefs.prg_encrypt;
+	if (projectOpen && !projectPath.empty()) {
+		if (!prefs.projectOptionsActive) {
+			prefs.projectOptions = co;
+			prefs.projectOptionsActive = true;
+			prefs.saveProjectOptions(projectPath);
+		}
+		return prefs.projectOptions;
+	}
+	return co;
+}
+
 void App::build(bool exec, bool publish) {
 	if (compiling) return;
 	Doc* e = currentDoc();
@@ -1866,6 +1897,7 @@ void App::build(bool exec, bool publish) {
 
 	std::vector<std::string> args;
 	args.push_back(prefs.homeDir + "/bin/blitzcc");
+	Prefs::CompileOptions co = effectiveCompileOptions();
 	if (prefs.prg_dumpasm) args.push_back("-a");
 	if (prefs.prg_veryquiet) args.push_back("+q");
 	else if (prefs.prg_quiet) args.push_back("-q");
@@ -1873,8 +1905,8 @@ void App::build(bool exec, bool publish) {
 	if (prefs.prg_debug) args.push_back("-d");
 	if (prefs.prg_dumpkeys) args.push_back("-k");
 	if (prefs.prg_nolaa) args.push_back("-nlaa");
-	if (prefs.prg_noautodecl) args.push_back("-noautodecl");
-	if (prefs.prg_encrypt) args.push_back("-encrypt");
+	if (co.noautodecl) args.push_back("-noautodecl");
+	if (co.encrypt) args.push_back("-encrypt");
 
 	if (publish) {
 		std::string exe = publishExePath.empty() ? src_file : publishExePath;
