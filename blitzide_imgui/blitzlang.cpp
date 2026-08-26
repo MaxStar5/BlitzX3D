@@ -98,8 +98,11 @@ TextEditor::LanguageDefinition makeBlitzLangDef(const std::set<std::string>& key
 	for (const auto& k : keywords) all.insert(k);
 	for (const auto& k : all) {
 		std::string low = lowerCopy(k);
+		std::string disp = k;
+		if (!disp.empty())
+			disp[0] = (char)std::toupper((unsigned char)disp[0]);
 		langDef.mKeywords.insert(low);
-		langDef.mDisplayNames[low] = k;
+		langDef.mDisplayNames[low] = disp;
 	}
 
 	for (const auto& f : engineFuncs) {

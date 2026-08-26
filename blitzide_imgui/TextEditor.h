@@ -432,6 +432,7 @@ private:
 	bool mAutocompleteEnabled = true;
 	bool mAutocompleteActive = false;
 	bool mAutocompleteRequested = false;
+	bool mAutocompleteDismissed = false;
 	int mAutocompleteIndex = 0;
 	int mAutocompleteScroll = 0;
 	Coordinates mAutocompleteWordStart;
