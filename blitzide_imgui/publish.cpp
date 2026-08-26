@@ -43,6 +43,25 @@ typedef struct {
 } GRPICONDIRENTRY;
 #pragma pack(pop)
 
+static BOOL CALLBACK EnumLangDeleteCb(HMODULE, LPCSTR aType, LPCSTR aName, LANGID aLang, LONG_PTR aParam) {
+	HANDLE hUpdate = (HANDLE)aParam;
+	UpdateResourceA(hUpdate, aType, aName, aLang, NULL, 0);
+	return TRUE;
+}
+
+static BOOL CALLBACK EnumNameDeleteCb(HMODULE aModule, LPCSTR aType, LPSTR aName, LONG_PTR aParam) {
+	EnumResourceLanguagesA(aModule, aType, aName, EnumLangDeleteCb, aParam);
+	return TRUE;
+}
+
+static void RemoveExistingIcons(HANDLE aUpdate, const std::string& aExePath) {
+	HMODULE hMod = LoadLibraryExA(aExePath.c_str(), NULL, LOAD_LIBRARY_AS_DATAFILE);
+	if (!hMod) return;
+	EnumResourceNamesA(hMod, RT_ICON, EnumNameDeleteCb, (LONG_PTR)aUpdate);
+	EnumResourceNamesA(hMod, RT_GROUP_ICON, EnumNameDeleteCb, (LONG_PTR)aUpdate);
+	FreeLibrary(hMod);
+}
+
 bool applyIconToExe(const std::string& exePath, const std::string& icoPath) {
 	HANDLE hFile = CreateFileA(icoPath.c_str(), GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
 	if (hFile == INVALID_HANDLE_VALUE) return false;
@@ -67,7 +86,7 @@ bool applyIconToExe(const std::string& exePath, const std::string& icoPath) {
 
 	std::vector<std::vector<BYTE>> images(dir.idCount);
 	for (WORD i = 0; i < dir.idCount; ++i) {
-		if (SetFilePointer(hFile, entries[i].dwImageOffset, NULL, FILE_BEGIN) == INVALID_SET_FILE_POINTER) {
+		if (SetFilePointer(hFile, (LONG)entries[i].dwImageOffset, NULL, FILE_BEGIN) == INVALID_SET_FILE_POINTER) {
 			CloseHandle(hFile);
 			return false;
 		}
@@ -82,12 +101,14 @@ bool applyIconToExe(const std::string& exePath, const std::string& icoPath) {
 	HANDLE hUpdate = BeginUpdateResourceA(exePath.c_str(), FALSE);
 	if (!hUpdate) return false;
 
+	RemoveExistingIcons(hUpdate, exePath);
+
+	const LANGID lang = MAKELANGID(LANG_NEUTRAL, SUBLANG_NEUTRAL);
 	bool success = true;
 
 	for (WORD i = 0; i < dir.idCount; ++i) {
 		WORD iconId = i + 1;
-		if (!UpdateResourceA(hUpdate, RT_ICON, MAKEINTRESOURCEA(iconId),
-			MAKELANGID(LANG_CHINESE, SUBLANG_CHINESE_SIMPLIFIED),
+		if (!UpdateResourceA(hUpdate, RT_ICON, MAKEINTRESOURCEA(iconId), lang,
 			images[i].data(), (DWORD)images[i].size())) {
 			success = false;
 		}
@@ -113,8 +134,7 @@ bool applyIconToExe(const std::string& exePath, const std::string& icoPath) {
 		grpEntries[i].nID = i + 1;
 	}
 
-	if (!UpdateResourceA(hUpdate, RT_GROUP_ICON, MAKEINTRESOURCEA(1),
-		MAKELANGID(LANG_NEUTRAL, SUBLANG_NEUTRAL),
+	if (!UpdateResourceA(hUpdate, RT_GROUP_ICON, MAKEINTRESOURCEA(1), lang,
 		groupData.data(), (DWORD)groupData.size())) {
 		success = false;
 	}
