@@ -536,6 +536,7 @@ void App::menuBar() {
 		ImGui::Separator();
 		if (ImGui::MenuItem("Debug", nullptr, &prefs.prg_debug)) {}
 		if (ImGui::MenuItem("No LAA", nullptr, &prefs.prg_nolaa)) {}
+		if (ImGui::MenuItem("No Auto Declaration ", nullptr, &prefs.prg_noautodecl)) {}
 		ImGui::Separator();
 		if (ImGui::BeginMenu("Compile Options")) {
 			ImGui::MenuItem("Dump assembly", nullptr, &prefs.prg_dumpasm);
@@ -1872,6 +1873,7 @@ void App::build(bool exec, bool publish) {
 	if (prefs.prg_debug) args.push_back("-d");
 	if (prefs.prg_dumpkeys) args.push_back("-k");
 	if (prefs.prg_nolaa) args.push_back("-nlaa");
+	if (prefs.prg_noautodecl) args.push_back("-noautodecl");
 	if (prefs.prg_encrypt) args.push_back("-encrypt");
 
 	if (publish) {

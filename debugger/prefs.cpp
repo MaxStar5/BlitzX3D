@@ -48,6 +48,7 @@ void Prefs::open() {
 
 	inipp::get_value(ini.sections["COMPILER"], "Debug", prg_debug);
 	inipp::get_value(ini.sections["COMPILER"], "NoLAA", prg_nolaa);
+	inipp::get_value(ini.sections["COMPILER"], "NoAutoDecl", prg_noautodecl);
 	inipp::get_value(ini.sections["COMPILER"], "LastBuild", prg_lastbuild);
 	inipp::get_value(ini.sections["COMPILER"], "CommandLine", cmd_line);
 
@@ -111,6 +112,7 @@ void Prefs::open() {
 void Prefs::setDefault() {
 	prg_debug = true;
 	prg_nolaa = false;
+	prg_noautodecl = false;
 
 	win_rect.left = win_rect.top = 0;
 	win_rect.right = 800; win_rect.bottom = 600;

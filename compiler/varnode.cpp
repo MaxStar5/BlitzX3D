@@ -62,6 +62,7 @@ void IdentVarNode::semant(Environ* e) {
 	}
 	else {
 		//ugly auto decl!
+		if (!autoDeclEnabled) ex(std::format("Variable \"{}\" not declared", ident));
 		sem_decl = e->decls->insertDecl(ident, t, DECL_LOCAL);
 	}
 	sem_type = sem_decl->type;

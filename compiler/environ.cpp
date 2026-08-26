@@ -2,6 +2,8 @@
 #include "environ.h"
 #include <algorithm>
 
+bool autoDeclEnabled = true;
+
 Environ::Environ(const std::string& f, Type* r, int l, Environ* gs)
     :funcLabel(f), returnType(r), level(l), globals(gs) {
     decls = new DeclSeq();

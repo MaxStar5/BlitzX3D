@@ -9,6 +9,8 @@
 #include "decl.h"
 #include "label.h"
 
+extern bool autoDeclEnabled;
+
 class Environ {
 public:
 	int level;
