@@ -5,6 +5,8 @@
 #include "gxshadercompat.h"
 #include "../gxruntime/gxutf8.h"
 #include <cstring>
+#pragma comment (lib, "Dwmapi")
+#include <dwmapi.h>
 
 extern gxRuntime* gx_runtime;
 static Debugger* debugger;
@@ -332,6 +334,15 @@ bool gxGraphics::changeDisplayMode(int width, int height, bool fullscreen, bool 
 
 	InvalidateRect(hwnd, nullptr, FALSE);
 
+	return true;
+}
+
+bool gxGraphics::setDarkMode(bool mode) {
+	HWND hwnd = runtime->hwnd;
+
+	BOOL DARK_MODE = mode ? TRUE : FALSE;
+	if (DwmSetWindowAttribute(hwnd, 20, &DARK_MODE, sizeof(DARK_MODE)) != S_OK) return false;
+	if (DwmSetWindowAttribute(hwnd, 19, &DARK_MODE, sizeof(DARK_MODE)) != S_OK) return false;
 	return true;
 }
 

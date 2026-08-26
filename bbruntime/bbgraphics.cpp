@@ -793,6 +793,16 @@ int bbInFocus()
     return gx_runtime->focus();
 }
 
+void bbSetDarkMode(int dark_mode) {
+    if (!gx_graphics) {
+        ErrorLog("SetDarkMode", MultiLang::graphics_not_set);
+        return;
+    }
+    if (!gx_graphics->setDarkMode(dark_mode)) {
+        ErrorLog("SetDarkMode", "Failed to set dark mode");
+    }
+}
+
 int bbDesktopWidth()
 {
     return gx_runtime->desktopWidth();
@@ -2176,6 +2186,7 @@ void graphics_link(void (*rtSym)(const char* sym, void* pc))
     rtSym("SetGraphicsMode%width%height%fullscreen", bbSetGraphicsMode);
     rtSym("%GraphicsLost", bbGraphicsLost);
     rtSym("%InFocus", bbInFocus);
+    rtSym("SetDarkMode%dark_mode", bbSetDarkMode);
 
     rtSym("SetGamma%src_red%src_green%src_blue#dest_red#dest_green#dest_blue", bbSetGamma);
     rtSym("UpdateGamma%calibrate=0", bbUpdateGamma);
