@@ -178,8 +178,16 @@ static bool soundFileExists(const std::string& f) {
 	return attrs != INVALID_FILE_ATTRIBUTES && !(attrs & FILE_ATTRIBUTE_DIRECTORY);
 }
 
+static bool isAudioFile(const std::string& f) {
+	HSTREAM probe = BASS_StreamCreateFile(FALSE, f.c_str(), 0, 0, 0);
+	if (!probe) return false;
+	BASS_StreamFree(probe);
+	return true;
+}
+
 gxSound* gxAudio::loadSound(const std::string& f, bool use3d) {
 	if (!soundFileExists(f)) return 0;
+	if (!isAudioFile(f)) return 0;
 
 	std::shared_ptr<AsyncSoundLoader::Job> job = AsyncSoundLoader::instance().load(f);
 	gxSound* sound = new gxSound(this, job, use3d);

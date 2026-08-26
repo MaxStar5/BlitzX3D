@@ -81,6 +81,7 @@ bool gxSound::materialize(bool blocking) {
 		}
 		if (!sample) {
 			failed = true;
+			cancelJob();
 			materialized = true;
 			return false;
 		}
@@ -150,13 +151,9 @@ void gxSound::setPan(float pan) {
 }
 
 void gxSound::flushAll() {
-	for (size_t idx = 0; idx < pending.size(); ) {
-		gxSound* s = pending[idx];
-		s->materialize(false);
-		if (s->materialized) {
-		}
-		else {
-			++idx;
-		}
+	if (pending.empty()) return;
+	std::vector<gxSound*> snapshot(pending.begin(), pending.end());
+	for (size_t idx = 0; idx < snapshot.size(); ++idx) {
+		snapshot[idx]->materialize(false);
 	}
 }
