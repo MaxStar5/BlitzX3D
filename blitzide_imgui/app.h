@@ -79,6 +79,7 @@ private:
 	void compile(const std::vector<std::string>& args);
 	void appendOutput(const std::string& text);
 	void parseOutputLine(const std::string& line);
+	void processPendingGoto();
 
 	int current() const { return currentIndex; }
 	Doc* doc(int idx) { return idx >= 0 && idx < (int)docs.size() ? &docs[idx] : nullptr; }
@@ -136,10 +137,16 @@ private:
 
 	std::string output;
 	std::vector<std::string> outputLines;
+	std::string outputView;
 	std::thread compileThread;
 	std::atomic<bool> compiling{ false };
 	std::mutex outputMutex;
 	bool compileOK = false;
+
+	std::string pendingGotoPath;
+	int pendingGotoRow = 0;
+	int pendingGotoCol = 0;
+	bool pendingGoto = false;
 
 	std::string publishExePath;
 	std::string publishIconPath;

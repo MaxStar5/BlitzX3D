@@ -44,6 +44,7 @@ class App {
 	std::vector<LogEntry> log;
 	int m_currentFilter;
 	bool logPendingScroll;
+	std::string logView;
 
 	std::vector<DbgTreeNode> constsNodes, globalsNodes, localsNodes;
 	std::vector<DbgProfilerRow> profilerRows;

@@ -427,6 +427,8 @@ void App::frame() {
 
 	drawPaneBackground();
 
+	processPendingGoto();
+
 	drawEditorPane();
 
 	if (showFuncList) drawFuncList();
@@ -846,20 +848,32 @@ void App::setupDockLayout() {
 	ImGui::DockBuilderFinish(dockspace);
 }
 
+static int OutputTextResizeCallback(ImGuiInputTextCallbackData* data) {
+	if (data->EventFlag == ImGuiInputTextFlags_CallbackResize) {
+		std::string* str = (std::string*)data->UserData;
+		str->resize(data->BufTextLen);
+		data->Buf = (char*)str->c_str();
+	}
+	return 0;
+}
+
 void App::drawOutput() {
 	ImGui::SetNextWindowSize(ImVec2(900, 220), ImGuiCond_FirstUseEver);
 	ImGui::Begin("Output");
 	constrainFloatingWindow();
-	ImGui::BeginChild("##outlines", ImVec2(0, -ImGui::GetFrameHeightWithSpacing() - 4), false);
 	{
 		std::lock_guard<std::mutex> lock(outputMutex);
-		ImGui::PushStyleColor(ImGuiCol_Text, compileOK ? IM_COL32(200, 255, 200, 255) : IM_COL32(255, 200, 200, 255));
-		for (const auto& line : outputLines) {
-			ImGui::TextWrapped("%s", line.c_str());
-		}
-		ImGui::PopStyleColor();
+		outputView = output;
 	}
-	ImGui::EndChild();
+	if (outputView.empty())
+		outputView.push_back('\n');
+
+	ImGui::PushStyleColor(ImGuiCol_Text, compileOK ? IM_COL32(200, 255, 200, 255) : IM_COL32(255, 200, 200, 255));
+	ImGui::InputTextMultiline("##output", (char*)outputView.c_str(), (int)outputView.capacity() + 1,
+		ImVec2(0, -ImGui::GetFrameHeightWithSpacing() - 4),
+		ImGuiInputTextFlags_ReadOnly | ImGuiInputTextFlags_NoUndoRedo | ImGuiInputTextFlags_CallbackResize,
+		OutputTextResizeCallback, (void*)&outputView);
+	ImGui::PopStyleColor();
 
 	if (ImGui::Button(compiling ? "Compiling..." : "Clear")) {
 		if (!compiling) {
@@ -2007,11 +2021,31 @@ void App::parseOutputLine(const std::string& line) {
 	std::string rest = line.substr(n + 2);
 	int row1 = 0, col1 = 0, row2 = 0, col2 = 0;
 	if (sscanf(rest.c_str(), "%d:%d:%d:%d", &row1, &col1, &row2, &col2) == 4) {
-		openFile(file);
-		Doc* d = currentDoc();
-		if (d && row1 >= 1) {
-			d->editor.SetCursorPosition(TextEditor::Coordinates(row1 - 1, col1 - 1));
-		}
+		std::lock_guard<std::mutex> lock(outputMutex);
+		pendingGotoPath = file;
+		pendingGotoRow = row1;
+		pendingGotoCol = col1;
+		pendingGoto = true;
+	}
+}
+
+void App::processPendingGoto() {
+	std::string path;
+	int row = 0, col = 0;
+	{
+		std::lock_guard<std::mutex> lock(outputMutex);
+		if (!pendingGoto) return;
+		pendingGoto = false;
+		path = std::move(pendingGotoPath);
+		row = pendingGotoRow;
+		col = pendingGotoCol;
+	}
+	openFile(path);
+	Doc* d = currentDoc();
+	if (d && row >= 1) {
+		TextEditor::Coordinates pos(row - 1, (std::max)(0, col - 1));
+		d->editor.SetCursorPosition(pos);
+		d->editor.SetSelection(pos, pos);
 	}
 }
 

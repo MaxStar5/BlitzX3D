@@ -1073,15 +1073,28 @@ void TextEditor::HandleKeyboardInputs()
 			Redo();
 		else if (!IsReadOnly() && ctrl && !shift && !alt && ImGui::IsKeyPressed(ImGuiKey_Backspace))
 		{
+			UndoRecord u;
+			u.mBefore = mState;
 			if (HasSelection())
+			{
+				u.mRemoved = GetSelectedText();
+				u.mRemovedStart = mState.mSelectionStart;
+				u.mRemovedEnd = mState.mSelectionEnd;
 				DeleteSelection();
+			}
 			else
 			{
 				auto end = GetActualCursorCoordinates();
 				MoveLeft(1, false, true);
 				SetSelection(GetActualCursorCoordinates(), end);
+				u.mRemoved = GetSelectedText();
+				u.mRemovedStart = mState.mSelectionStart;
+				u.mRemovedEnd = mState.mSelectionEnd;
 				DeleteSelection();
 			}
+			u.mAfter = mState;
+			if (!u.mRemoved.empty())
+				AddUndo(u);
 		}
 		else if (!ctrl && !alt && ImGui::IsKeyPressed(ImGuiKey_UpArrow))
 			MoveUp(1, shift);
@@ -1703,71 +1716,6 @@ void TextEditor::EnterCharacter(ImWchar aChar, bool aShift)
 		Colorize(line - 1, 3);
 		EnsureCursorVisible();
 		return;
-	}
-
-	if (aChar == '\t' && aShift && HasSelection())
-	{
-		if (mState.mSelectionStart.mLine != mState.mSelectionEnd.mLine)
-		{
-			EnterCharacter('\t', true);
-			return;
-		}
-		else
-		{
-			auto start = mState.mSelectionStart;
-			auto end = mState.mSelectionEnd;
-			if (start > end)
-				std::swap(start, end);
-			start.mColumn = 0;
-			end.mColumn = GetLineMaxColumn(end.mLine);
-
-			u.mRemovedStart = start;
-			u.mRemovedEnd = end;
-			u.mRemoved = GetText(start, end);
-
-			bool modified = false;
-			for (int i = start.mLine; i <= end.mLine; i++)
-			{
-				auto& line = mLines[i];
-				if (!line.empty())
-				{
-					if (line.front().mChar == '\t')
-					{
-						line.erase(line.begin());
-						modified = true;
-					}
-					else
-					{
-						for (int j = 0; j < mTabSize && !line.empty() && line.front().mChar == ' '; j++)
-						{
-							line.erase(line.begin());
-							modified = true;
-						}
-					}
-				}
-			}
-
-			if (modified)
-			{
-				start = Coordinates(start.mLine, GetCharacterColumn(start.mLine, 0));
-				Coordinates rangeEnd(end.mLine, GetLineMaxColumn(end.mLine));
-				u.mAdded = GetText(start, rangeEnd);
-
-				u.mAddedStart = start;
-				u.mAddedEnd = rangeEnd;
-				u.mAfter = mState;
-
-				mState.mSelectionStart = start;
-				mState.mSelectionEnd = rangeEnd;
-				AddUndo(u);
-
-				mTextChanged = true;
-				mDocWordsCacheValid = false;
-
-				EnsureCursorVisible();
-			}
-			return;
-		}
 	}
 
 	if (HasSelection())
