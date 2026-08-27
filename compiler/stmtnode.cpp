@@ -325,6 +325,7 @@ ForNode::~ForNode() {
 }
 
 void ForNode::semant(Environ* e) {
+	if(IdentVarNode* iv = dynamic_cast<IdentVarNode*>(var)) iv->forceDecl = true;
 	var->semant(e);
 	Type* ty = var->sem_type;
 	if(ty->constType()) ex(MultiLang::index_variable_can_not_constant);
@@ -380,6 +381,7 @@ void ForNode::translate(Codegen* g) {
 // For each object of a type //
 ///////////////////////////////
 void ForEachNode::semant(Environ* e) {
+	if(IdentVarNode* iv = dynamic_cast<IdentVarNode*>(var)) iv->forceDecl = true;
 	var->semant(e);
 	Type* ty = var->sem_type;
 

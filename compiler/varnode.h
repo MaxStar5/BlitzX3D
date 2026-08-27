@@ -31,6 +31,7 @@ struct DeclVarNode : public VarNode {
 
 struct IdentVarNode : public DeclVarNode {
 	std::string ident, tag;
+	bool forceDecl = false;
 	IdentVarNode(const std::string& i, const std::string& t) :ident(i), tag(t) {}
 	void semant(Environ* e);
 };
