@@ -464,7 +464,7 @@ Texture* bbLoadTexture(BBStr* file, int flags) {
 	debug3d("LoadTexture");
 	std::string path = *file;
 	if (g_texturePathMutator) {
-		BBStr* newPath = g_texturePathMutator(file);
+		BBStr* newPath = bbInvokeTexturePathMutator(file);
 		if (newPath) {
 			path = *newPath;
 			delete newPath;

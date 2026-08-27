@@ -16,6 +16,8 @@ void bbSetTextureLoadPathMutator(TexturePathMutator mutator);
 extern TexturePathMutator g_texturePathMutator;
 BBStr* bbGetTextureLoadError();
 
+BBStr* bbInvokeTexturePathMutator(BBStr* path);
+
 //general graphics functions
 int		 bbCountGfxDrivers();
 BBStr* bbGfxDriverName(int n);

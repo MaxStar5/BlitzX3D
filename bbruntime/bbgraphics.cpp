@@ -1212,7 +1212,7 @@ bbImage* bbLoadImage(BBStr* s)
 {
     std::string path = *s;
     if (g_texturePathMutator) {
-        BBStr* newPath = g_texturePathMutator(s);
+        BBStr* newPath = bbInvokeTexturePathMutator(s);
         if (newPath) {
             path = *newPath;
             delete newPath;
@@ -1239,7 +1239,7 @@ bbImage* bbLoadImageFlag(BBStr* s, int flags)
 {
     std::string path = *s;
     if (g_texturePathMutator) {
-        BBStr* newPath = g_texturePathMutator(s);
+        BBStr* newPath = bbInvokeTexturePathMutator(s);
         if (newPath) {
             path = *newPath;
             delete newPath;
@@ -1265,7 +1265,7 @@ bbImage* bbLoadImageFlag(BBStr* s, int flags)
 bbImage* bbLoadAnimImage(BBStr* s, int w, int h, int first, int cnt) {
     std::string path = *s;
     if (g_texturePathMutator) {
-        BBStr* newPath = g_texturePathMutator(s);
+        BBStr* newPath = bbInvokeTexturePathMutator(s);
         if (newPath) {
             path = *newPath;
             delete newPath;
@@ -1320,7 +1320,7 @@ bbImage* bbLoadAnimImage(BBStr* s, int w, int h, int first, int cnt) {
 Texture* bbLoadAnimTextureGrid(BBStr* file, int flags, int fw, int fh, int first, int cnt) {
     std::string path = *file;
     if (g_texturePathMutator) {
-        BBStr* newPath = g_texturePathMutator(file);
+        BBStr* newPath = bbInvokeTexturePathMutator(file);
         if (newPath) {
             path = *newPath;
             delete newPath;
@@ -1727,10 +1727,16 @@ void bbSetTFormMethod(int method) {
     tform_method = method;
 }
 
+BBStr* bbInvokeTexturePathMutator(BBStr* path) {
+    if (!g_texturePathMutator) return nullptr;
+    BBStr* arg = new BBStr(*path);
+    return g_texturePathMutator(arg);
+}
+
 static std::string cachedTexturePathAdapter(const std::string& f) {
     if (!g_texturePathMutator) return "";
     BBStr in(f);
-    BBStr* out = g_texturePathMutator(&in);
+    BBStr* out = bbInvokeTexturePathMutator(&in);
     if (!out) return "";
     std::string result = *out;
     delete out;
