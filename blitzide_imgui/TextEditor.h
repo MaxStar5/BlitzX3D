@@ -425,7 +425,7 @@ private:
 	int mRightClickLine = 0;
 	int mRightClickColumn = 0;
 
-	static const int kAutocompleteMinPrefix = 3;
+	static const int kAutocompleteMinPrefix = 1;
 	static const int kAutocompleteMaxMatches = 128;
 	static const int kAutocompleteMaxVisible = 12;
 

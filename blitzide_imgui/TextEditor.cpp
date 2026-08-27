@@ -809,25 +809,35 @@ void TextEditor::UpdateAutocomplete()
 
 	const std::string prefixLower = ToLowerCopy(prefix);
 
+	auto displayName = [&](const std::string& aKey) -> const std::string&
+	{
+		auto it = mLanguageDefinition.mDisplayNames.find(aKey);
+		return it != mLanguageDefinition.mDisplayNames.end() ? it->second : aKey;
+	};
+
+	for (const auto& k : mLanguageDefinition.mKeywords)
+	{
+		std::string lower = ToLowerCopy(displayName(k));
+		if (lower == prefixLower)
+		{
+			CloseAutocomplete();
+			return;
+		}
+	}
+
 	std::vector<std::pair<int, std::string>> ranked;
 	std::unordered_set<std::string> seenLower;
 
 	auto consider = [&](const std::string& aCandidate, int aPriority)
 	{
 		std::string lower = ToLowerCopy(aCandidate);
-		if (lower.size() <= prefixLower.size())
+		if (lower.size() < prefixLower.size())
 			return;
 		if (lower.compare(0, prefixLower.size(), prefixLower) != 0)
 			return;
 		if (!seenLower.insert(lower).second)
 			return;
 		ranked.emplace_back(aPriority, std::move(aCandidate));
-	};
-
-	auto displayName = [&](const std::string& aKey) -> const std::string&
-	{
-		auto it = mLanguageDefinition.mDisplayNames.find(aKey);
-		return it != mLanguageDefinition.mDisplayNames.end() ? it->second : aKey;
 	};
 
 	for (const auto& k : mLanguageDefinition.mKeywords)
@@ -1000,17 +1010,35 @@ void TextEditor::HandleKeyboardInputs()
 			const int count = (int)mAutocompleteMatches.size();
 			if (!ctrl && !alt && ImGui::IsKeyPressed(ImGuiKey_UpArrow))
 			{
-				mAutocompleteIndex = (mAutocompleteIndex - 1 + count) % count;
-				int s = std::min(mAutocompleteScroll, mAutocompleteIndex);
-				s = std::max(s, mAutocompleteIndex - kAutocompleteMaxVisible + 1);
-				mAutocompleteScroll = std::max(0, s);
+				if (mAutocompleteIndex == 0)
+				{
+					mAutocompleteDismissed = true;
+					CloseAutocomplete();
+					acConsumedKey = false;
+				}
+				else
+				{
+					mAutocompleteIndex = (mAutocompleteIndex - 1 + count) % count;
+					int s = std::min(mAutocompleteScroll, mAutocompleteIndex);
+					s = std::max(s, mAutocompleteIndex - kAutocompleteMaxVisible + 1);
+					mAutocompleteScroll = std::max(0, s);
+				}
 			}
 			else if (!ctrl && !alt && ImGui::IsKeyPressed(ImGuiKey_DownArrow))
 			{
-				mAutocompleteIndex = (mAutocompleteIndex + 1) % count;
-				int s = std::max(mAutocompleteScroll, mAutocompleteIndex - kAutocompleteMaxVisible + 1);
-				s = std::min(s, mAutocompleteIndex);
-				mAutocompleteScroll = std::max(0, s);
+				if (mAutocompleteIndex == count - 1)
+				{
+					mAutocompleteDismissed = true;
+					CloseAutocomplete();
+					acConsumedKey = false;
+				}
+				else
+				{
+					mAutocompleteIndex = (mAutocompleteIndex + 1) % count;
+					int s = std::max(mAutocompleteScroll, mAutocompleteIndex - kAutocompleteMaxVisible + 1);
+					s = std::min(s, mAutocompleteIndex);
+					mAutocompleteScroll = std::max(0, s);
+				}
 			}
 			else if (!IsReadOnly() && !ctrl && !shift && !alt &&
 				(ImGui::IsKeyPressed(ImGuiKey_Enter) || ImGui::IsKeyPressed(ImGuiKey_KeypadEnter)))
@@ -1677,6 +1705,71 @@ void TextEditor::EnterCharacter(ImWchar aChar, bool aShift)
 		return;
 	}
 
+	if (aChar == '\t' && aShift && HasSelection())
+	{
+		if (mState.mSelectionStart.mLine != mState.mSelectionEnd.mLine)
+		{
+			EnterCharacter('\t', true);
+			return;
+		}
+		else
+		{
+			auto start = mState.mSelectionStart;
+			auto end = mState.mSelectionEnd;
+			if (start > end)
+				std::swap(start, end);
+			start.mColumn = 0;
+			end.mColumn = GetLineMaxColumn(end.mLine);
+
+			u.mRemovedStart = start;
+			u.mRemovedEnd = end;
+			u.mRemoved = GetText(start, end);
+
+			bool modified = false;
+			for (int i = start.mLine; i <= end.mLine; i++)
+			{
+				auto& line = mLines[i];
+				if (!line.empty())
+				{
+					if (line.front().mChar == '\t')
+					{
+						line.erase(line.begin());
+						modified = true;
+					}
+					else
+					{
+						for (int j = 0; j < mTabSize && !line.empty() && line.front().mChar == ' '; j++)
+						{
+							line.erase(line.begin());
+							modified = true;
+						}
+					}
+				}
+			}
+
+			if (modified)
+			{
+				start = Coordinates(start.mLine, GetCharacterColumn(start.mLine, 0));
+				Coordinates rangeEnd(end.mLine, GetLineMaxColumn(end.mLine));
+				u.mAdded = GetText(start, rangeEnd);
+
+				u.mAddedStart = start;
+				u.mAddedEnd = rangeEnd;
+				u.mAfter = mState;
+
+				mState.mSelectionStart = start;
+				mState.mSelectionEnd = rangeEnd;
+				AddUndo(u);
+
+				mTextChanged = true;
+				mDocWordsCacheValid = false;
+
+				EnsureCursorVisible();
+			}
+			return;
+		}
+	}
+
 	if (HasSelection())
 	{
 		if (aChar == '\t' && mState.mSelectionStart.mLine != mState.mSelectionEnd.mLine)
@@ -2029,35 +2122,71 @@ void TextEditor::MoveLeft(int aAmount, bool aSelect, bool aWordMode)
 
 	while (aAmount-- > 0)
 	{
-		if (cindex == 0)
+		if (aWordMode)
 		{
-			if (line > 0)
+			auto curPos = mState.mCursorPosition;
+			auto curCindex = GetCharacterIndex(curPos);
+			auto& curLine = mLines[curPos.mLine];
+
+			if (curPos.mColumn == 0)
 			{
-				--line;
-				if ((int)mLines.size() > line)
-					cindex = (int)mLines[line].size();
+				if (curPos.mLine > 0)
+				{
+					auto prevLine = curPos.mLine - 1;
+					auto prevLineMaxCol = GetLineMaxColumn(prevLine);
+					mState.mCursorPosition = Coordinates(prevLine, prevLineMaxCol);
+					line = prevLine;
+					cindex = (int)mLines[prevLine].size();
+				}
 				else
+				{
+					break;
+				}
+			}
+			else
+			{
+				auto np = FindWordStart(curPos);
+				if (np == curPos)
+				{
+					mState.mCursorPosition = Coordinates(curPos.mLine, 0);
+					line = curPos.mLine;
 					cindex = 0;
+				}
+				else
+				{
+					mState.mCursorPosition = np;
+					line = np.mLine;
+					cindex = GetCharacterIndex(np);
+				}
 			}
 		}
 		else
 		{
-			--cindex;
-			if (cindex > 0)
+			if (cindex == 0)
 			{
-				if ((int)mLines.size() > line)
+				if (line > 0)
 				{
-					while (cindex > 0 && IsUTFSequence(mLines[line][cindex].mChar))
-						--cindex;
+					--line;
+					if ((int)mLines.size() > line)
+						cindex = (int)mLines[line].size();
+					else
+						cindex = 0;
 				}
 			}
-		}
+			else
+			{
+				--cindex;
+				if (cindex > 0)
+				{
+					if ((int)mLines.size() > line)
+					{
+						while (cindex > 0 && IsUTFSequence(mLines[line][cindex].mChar))
+							--cindex;
+					}
+				}
+			}
 
-		mState.mCursorPosition = Coordinates(line, GetCharacterColumn(line, cindex));
-		if (aWordMode)
-		{
-			mState.mCursorPosition = FindWordStart(mState.mCursorPosition);
-			cindex = GetCharacterIndex(mState.mCursorPosition);
+			mState.mCursorPosition = Coordinates(line, GetCharacterColumn(line, cindex));
 		}
 	}
 
@@ -2094,10 +2223,23 @@ void TextEditor::MoveRight(int aAmount, bool aSelect, bool aWordMode)
 	{
 		for (int i = 0; i < aAmount; ++i)
 		{
-			auto np = FindNextWord(mState.mCursorPosition);
-			if (np == mState.mCursorPosition)
+			auto curPos = mState.mCursorPosition;
+			auto cindex = GetCharacterIndex(curPos);
+			auto& line = mLines[curPos.mLine];
+			auto lineMaxCol = GetLineMaxColumn(curPos.mLine);
+
+			if (curPos.mColumn < lineMaxCol)
+			{
+				mState.mCursorPosition = Coordinates(curPos.mLine, lineMaxCol);
+			}
+			else if (curPos.mLine < (int)mLines.size() - 1)
+			{
+				mState.mCursorPosition = Coordinates(curPos.mLine + 1, 0);
+			}
+			else
+			{
 				break;
-			mState.mCursorPosition = np;
+			}
 		}
 	}
 	else
