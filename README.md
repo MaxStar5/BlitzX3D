@@ -120,7 +120,12 @@ BlitzX3D Community License.
   - C++ MFC for latest v143 build tools (x86 & x64)
   - C++ ATL for latest v143 build tools (x86 & x64)
   - ASP.NET and web development
-    
+- This repo vendors [SDL3](https://github.com/libsdl-org/SDL) as a **git submodule**. After cloning, initialize it before building:
+  ```sh
+  git submodule update --init
+  ```
+  (Or clone with `git clone --recurse-submodules`.) SDL3 is linked statically, so no `SDL3.dll` needs to be shipped alongside the builds.
+
 ### Before building `linker` or `bbruntime_dll`:
 
 1. Copy `linker/cryptseed.h.example` to `linker/cryptseed.h`.

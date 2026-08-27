@@ -13,7 +13,6 @@ _release/*.ttf
 *.dll
 !packages/**/*.dll
 !bass/bin/**/*.dll
-!vendor/SDL3/lib/**/*.dll
 *.pdb
 *.ilk
 *.aps

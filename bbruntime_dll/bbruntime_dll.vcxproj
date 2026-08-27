@@ -15,6 +15,7 @@
     <SccLocalPath />
     <ProjectGuid>{41785D5A-2FD3-43A2-9469-F5D9CF927E1D}</ProjectGuid>
     <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
+    <VcpkgApplocalDeps>false</VcpkgApplocalDeps>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'" Label="Configuration">
@@ -96,7 +97,7 @@
       <OutputFile>..\_release\bin\runtime.dll</OutputFile>
       <ImportLibrary>..\_release\userlibs\runtime.lib</ImportLibrary>
       <AdditionalOptions> /FIXED:NO</AdditionalOptions>
-      <AdditionalDependencies>bcrypt.lib;avformat.lib;FreeImage.lib;avcodec.lib;avutil.lib;swscale.lib;wsock32.lib;amstrmid.lib;winmm.lib;dxguid.lib;ddraw.lib;d3d9.lib;d3dx9.lib;dsound.lib;dinput8.lib;$(ProjectDir)..\vendor\SDL3\lib\x86\SDL3.lib;odbc32.lib;odbccp32.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>bcrypt.lib;avformat.lib;FreeImage.lib;avcodec.lib;avutil.lib;swscale.lib;wsock32.lib;amstrmid.lib;winmm.lib;dxguid.lib;ddraw.lib;d3d9.lib;d3dx9.lib;dsound.lib;dinput8.lib;setupapi.lib;imm32.lib;version.lib;odbc32.lib;odbccp32.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <AdditionalLibraryDirectories>$(DXSDK_DIR)Lib\x86;..\ffmpeg\lib;$(SolutionDir)packages\FreeImageNative.3.17.0\build\native\lib\Win32</AdditionalLibraryDirectories>
     </Link>
   </ItemDefinitionGroup>
@@ -159,14 +160,13 @@
       <SubSystem>Windows</SubSystem>
       <OutputFile>..\_release\bin\runtime.dll</OutputFile>
       <ImportLibrary>..\_release\userlibs\runtime.lib</ImportLibrary>
-      <AdditionalDependencies>bcrypt.lib;avformat.lib;FreeImage.lib;avcodec.lib;avutil.lib;swscale.lib;wsock32.lib;amstrmid.lib;winmm.lib;dxguid.lib;ddraw.lib;d3d9.lib;d3dx9.lib;dsound.lib;dinput8.lib;$(ProjectDir)..\vendor\SDL3\lib\x86\SDL3.lib;odbc32.lib;odbccp32.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>bcrypt.lib;avformat.lib;FreeImage.lib;avcodec.lib;avutil.lib;swscale.lib;wsock32.lib;amstrmid.lib;winmm.lib;dxguid.lib;ddraw.lib;d3d9.lib;d3dx9.lib;dsound.lib;dinput8.lib;setupapi.lib;imm32.lib;version.lib;odbc32.lib;odbccp32.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <GenerateDebugInformation>false</GenerateDebugInformation>
       <AdditionalOptions>/SAFESEH:NO %(AdditionalOptions)</AdditionalOptions>
       <AdditionalLibraryDirectories>$(DXSDK_DIR)Lib\x86;..\ffmpeg\lib;$(SolutionDir)packages\FreeImageNative.3.17.0\build\native\lib\Win32</AdditionalLibraryDirectories>
     </Link>
     <PostBuildEvent>
-      <Command>copy /Y "$(ProjectDir)..\bass\bin\bass.dll" "$(OutDir)bass.dll"
-copy /Y "$(ProjectDir)..\vendor\SDL3\lib\x86\SDL3.dll" "$(OutDir)SDL3.dll"</Command>
+      <Command>copy /Y "$(ProjectDir)..\bass\bin\bass.dll" "$(OutDir)bass.dll"</Command>
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemGroup>
@@ -204,6 +204,10 @@ copy /Y "$(ProjectDir)..\vendor\SDL3\lib\x86\SDL3.dll" "$(OutDir)SDL3.dll"</Comm
     </ProjectReference>
     <ProjectReference Include="..\stdutil\stdutil.vcxproj">
       <Project>{ec04d125-90b0-495f-a0db-367dc6215e42}</Project>
+      <ReferenceOutputAssembly>false</ReferenceOutputAssembly>
+    </ProjectReference>
+    <ProjectReference Include="..\sdl3_static.vcxproj">
+      <Project>{f064d5d3-af96-4c8b-8980-221d65d899d3}</Project>
       <ReferenceOutputAssembly>false</ReferenceOutputAssembly>
     </ProjectReference>
   </ItemGroup>
