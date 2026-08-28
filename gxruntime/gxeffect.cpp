@@ -45,6 +45,12 @@ bool gxEffect::setMatrix(const std::string& name, const D3DXMATRIX& mat) {
     return SUCCEEDED(effect->SetMatrix(h, &mat));
 }
 
+void gxEffect::setMatrixBySemantic(const char* semantic, const D3DXMATRIX& mat) {
+    if (!effect) return;
+    D3DXHANDLE h = effect->GetParameterBySemantic(nullptr, semantic);
+    if (h) effect->SetMatrix(h, &mat);
+}
+
 void gxEffect::setAutoMatrices(const D3DXMATRIX& world,
     const D3DXMATRIX& view,
     const D3DXMATRIX& proj) {
@@ -56,6 +62,14 @@ void gxEffect::setAutoMatrices(const D3DXMATRIX& world,
     setMatrix("Projection", proj);
     setMatrix("WorldView", wv);
     setMatrix("WorldViewProj", wvp);
+
+    // BLITZPRO
+    setMatrixBySemantic("MATRIX_WORLD", world);
+    setMatrixBySemantic("MATRIX_VIEW", view);
+    setMatrixBySemantic("MATRIX_PROJECTION", proj);
+    setMatrixBySemantic("MATRIX_WORLDVIEW", wv);
+    setMatrixBySemantic("MATRIX_VIEWPROJ", wvp);
+    setMatrixBySemantic("MATRIX_WORLDVIEWPROJ", wvp);
 }
 
 bool gxEffect::setTexture(const std::string& name, IDirect3DBaseTexture9* tex) {

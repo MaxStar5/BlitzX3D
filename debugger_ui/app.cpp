@@ -410,20 +410,12 @@ void App::drawSourceTab() {
 	}
 }
 
-static int DebugLogResizeCallback(ImGuiInputTextCallbackData* data) {
-	if (data->EventFlag == ImGuiInputTextFlags_CallbackResize) {
-		std::string* str = (std::string*)data->UserData;
-		str->resize(data->BufTextLen);
-		data->Buf = (char*)str->c_str();
-	}
-	return 0;
-}
-
 void App::drawDebugLog() {
 	bool scroll = logPendingScroll;
 	logPendingScroll = false;
 
-	logView.clear();
+	ImGui::PushStyleColor(ImGuiCol_Text, IM_COL32(prefs.rgb_default[0], prefs.rgb_default[1], prefs.rgb_default[2], 255));
+	ImGui::BeginChild("##logscroll", ImVec2(0, 0), false, ImGuiWindowFlags_HorizontalScrollbar);
 	const size_t logCount = log.size();
 	const size_t startIndex = logCount > 2000 ? logCount - 2000 : 0;
 	for (size_t k = startIndex; k < logCount; ++k) {
@@ -431,19 +423,11 @@ void App::drawDebugLog() {
 		if (m_currentFilter == 1 && e.severity != LOG_INFO) continue;
 		if (m_currentFilter == 2 && e.severity != LOG_WARNING) continue;
 		if (m_currentFilter == 3 && e.severity != LOG_ERROR) continue;
-		logView += e.text;
-		logView += '\n';
+		ImGui::TextUnformatted(e.text.c_str());
 	}
-	if (logView.empty())
-		logView.push_back('\n');
-
-	ImGui::PushStyleColor(ImGuiCol_Text, IM_COL32(prefs.rgb_default[0], prefs.rgb_default[1], prefs.rgb_default[2], 255));
-	ImGui::InputTextMultiline("##logscroll", (char*)logView.c_str(), (int)logView.capacity() + 1,
-		ImVec2(0, 0),
-		ImGuiInputTextFlags_ReadOnly | ImGuiInputTextFlags_NoUndoRedo | ImGuiInputTextFlags_CallbackResize,
-		DebugLogResizeCallback, (void*)&logView);
-	ImGui::PopStyleColor();
 	if (scroll) ImGui::SetScrollHereY(1.0f);
+	ImGui::EndChild();
+	ImGui::PopStyleColor();
 }
 
 void App::drawProfilerTab() {

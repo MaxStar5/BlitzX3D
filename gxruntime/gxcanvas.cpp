@@ -598,6 +598,7 @@ static void drawQuadWithEffect(IDirect3DDevice9* dev, gxEffect* effect, IDirect3
     effect->setAutoMatrices(world, view, proj);
     if (tex) {
         effect->setTexture("tex0", tex);
+        effect->setTexture("SceneTex", tex);
     }
     if (useAlpha) {
         float color[4] = {
