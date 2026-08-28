@@ -405,8 +405,8 @@ void App::frame() {
 	if (ctrl && ImGui::IsKeyPressed(ImGuiKey_S)) { if (currentIndex >= 0) fileSave(currentIndex); }
 	if (ctrl && ImGui::IsKeyPressed(ImGuiKey_N)) fileNew();
 	if (ctrl && ImGui::IsKeyPressed(ImGuiKey_O)) fileOpen();
-	if (ctrl && ImGui::IsKeyPressed(ImGuiKey_F5)) programCompile();
-	if (!ctrl && ImGui::IsKeyPressed(ImGuiKey_F5)) programExecute();
+	if (ctrl && ImGui::IsKeyPressed(ImGuiKey_F5, false)) programCompile();
+	if (!ctrl && ImGui::IsKeyPressed(ImGuiKey_F5, false)) programExecute();
 	(void)shift;
 
 	if (keywordsLoaded) {
@@ -1896,11 +1896,13 @@ Prefs::CompileOptions App::effectiveCompileOptions() {
 
 void App::build(bool exec, bool publish) {
 	if (compiling) return;
+	compiling = true;
 	Doc* e = currentDoc();
-	if (!e) return;
+	if (!e) { compiling = false; return; }
 
 	if (!fileSaveAll()) {
 		appendOutput("Save failed; compile aborted.\n");
+		compiling = false;
 		return;
 	}
 
@@ -1942,6 +1944,7 @@ void App::build(bool exec, bool publish) {
 		std::ofstream out(src, std::ios::binary | std::ios::trunc);
 		if (!out.good()) {
 			appendOutput("Error writing temporary file.\n");
+			compiling = false;
 			return;
 		}
 		out << e->editor.GetText();
@@ -1963,9 +1966,7 @@ void App::build(bool exec, bool publish) {
 }
 
 void App::compile(const std::vector<std::string>& args) {
-	if (compiling) return;
 	if (compileThread.joinable()) compileThread.join();
-	compiling = true;
 	compileOK = true;
 	std::string cmd;
 	for (size_t k = 0; k < args.size(); ++k) {
@@ -1977,17 +1978,26 @@ void App::compile(const std::vector<std::string>& args) {
 	compileThread = std::thread([this, args]() {
 		std::string output;
 		int code = runProcess(args, output);
+
+		std::vector<std::string> newLines;
+		{
+			std::stringstream ss(output);
+			std::string line;
+			while (std::getline(ss, line, '\n')) {
+				if (!line.empty() && line.back() == '\r') line.pop_back();
+				newLines.push_back(line);
+			}
+		}
+
 		{
 			std::lock_guard<std::mutex> lock(outputMutex);
 			this->output += output;
-			std::string line;
-			std::stringstream ss(output);
-			while (std::getline(ss, line, '\n')) {
-				if (!line.empty() && line.back() == '\r') line.pop_back();
-				parseOutputLine(line);
+			for (const auto& line : newLines)
 				this->outputLines.push_back(line);
-			}
 		}
+		for (const auto& line : newLines)
+			parseOutputLine(line);
+
 		if (code != 0) compileOK = false;
 		else if (!publishIconPath.empty() && !publishExePath.empty()) {
 			if (applyIconToExe(publishExePath, publishIconPath)) {
