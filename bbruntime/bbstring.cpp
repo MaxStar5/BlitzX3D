@@ -133,8 +133,12 @@ BBStr* bbBin(int n) {
 }
 
 int bbAsc(BBStr* s) {
-	int n = s->size() ? (*s)[0] & 255 : -1;
-	delete s; return n;
+	if (!s->size()) { delete s; return 0; }
+
+	int n = UTF8::decodeCharacter(s->c_str(), 0);
+
+	delete s;
+	return n;
 }
 
 int bbLen(BBStr* s) {
