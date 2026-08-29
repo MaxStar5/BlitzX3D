@@ -764,6 +764,7 @@ static void setupBlitRenderState(IDirect3DDevice9* dev, bool solid) {
     dev->SetTextureStageState(0, D3DTSS_ALPHAOP, D3DTOP_SELECTARG1);
     dev->SetSamplerState(0, D3DSAMP_MAGFILTER, D3DTEXF_POINT);
     dev->SetSamplerState(0, D3DSAMP_MINFILTER, D3DTEXF_POINT);
+    dev->SetSamplerState(0, D3DSAMP_MIPMAPLODBIAS, 0);
     if (!solid) {
         dev->SetRenderState(D3DRS_ALPHATESTENABLE, TRUE);
         dev->SetRenderState(D3DRS_ALPHAFUNC, D3DCMP_GREATER);
@@ -783,7 +784,7 @@ struct SavedBlitState {
     DWORD oldZ, oldAlphaTest, oldAlphaFunc, oldAlphaRef, oldAlphaBlend;
     DWORD oldSrcBlend, oldDestBlend;
     DWORD oldLighting, oldTextureFactor;
-    DWORD oldCOp, oldCArg1, oldCArg2, oldAOp, oldAArg1, oldMag, oldMin;
+    DWORD oldCOp, oldCArg1, oldCArg2, oldAOp, oldAArg1, oldMag, oldMin, oldLodBias;
 };
 
 static void saveBlitState(IDirect3DDevice9* dev, SavedBlitState& s) {
@@ -807,6 +808,7 @@ static void saveBlitState(IDirect3DDevice9* dev, SavedBlitState& s) {
     dev->GetTextureStageState(0, D3DTSS_ALPHAARG1, &s.oldAArg1);
     dev->GetSamplerState(0, D3DSAMP_MAGFILTER, &s.oldMag);
     dev->GetSamplerState(0, D3DSAMP_MINFILTER, &s.oldMin);
+    dev->GetSamplerState(0, D3DSAMP_MIPMAPLODBIAS, &s.oldLodBias);
 }
 
 static void restoreBlitState(IDirect3DDevice9* dev, SavedBlitState& s) {
@@ -831,6 +833,7 @@ static void restoreBlitState(IDirect3DDevice9* dev, SavedBlitState& s) {
     dev->SetTextureStageState(0, D3DTSS_ALPHAARG1, s.oldAArg1);
     dev->SetSamplerState(0, D3DSAMP_MAGFILTER, s.oldMag);
     dev->SetSamplerState(0, D3DSAMP_MINFILTER, s.oldMin);
+    dev->SetSamplerState(0, D3DSAMP_MIPMAPLODBIAS, s.oldLodBias);
     dev->SetTexture(0, s.oldTex);
     if (s.oldTex) s.oldTex->Release();
 }
@@ -867,6 +870,8 @@ void gxCanvas::beginBlitBatch() const {
     dev->SetDepthStencilSurface(nullptr);
     D3DVIEWPORT9 vp = { 0, 0, (DWORD)clip_rect.right, (DWORD)clip_rect.bottom, 0.0f, 1.0f };
     dev->SetViewport(&vp);
+
+    dev->SetSamplerState(0, D3DSAMP_MIPMAPLODBIAS, 0);
 
     dev->BeginScene();
     blit_batch_active = true;
@@ -1143,6 +1148,7 @@ void gxCanvas::blitstretch(int x, int y, int w, int h,
 
     dev->SetSamplerState(0, D3DSAMP_MAGFILTER, D3DTEXF_LINEAR);
     dev->SetSamplerState(0, D3DSAMP_MINFILTER, D3DTEXF_LINEAR);
+    dev->SetSamplerState(0, D3DSAMP_MIPMAPLODBIAS, 0);
 
     dev->BeginScene();
     drawBlitQuad(dev, (IDirect3DTexture9*)tex, dest_r, src_r, src->clip_rect.right, src->clip_rect.bottom);
