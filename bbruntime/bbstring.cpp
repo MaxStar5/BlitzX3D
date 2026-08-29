@@ -113,8 +113,11 @@ BBStr* bbRSet(BBStr* s, int n) {
 BBStr* bbChr(int chr) {
 	char buffer[8];
 	int len = UTF8::encodeCharacter(chr, buffer);
-	buffer[len] = '\0';
-	return new BBStr(buffer);
+	
+	BBStr* result = new BBStr();
+	
+	for (int i = 0; i < len; ++i) *result += buffer[i];
+	return result;
 }
 
 BBStr* bbHex(int n) {
