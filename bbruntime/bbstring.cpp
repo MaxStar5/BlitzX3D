@@ -120,7 +120,7 @@ BBStr* bbChr(int chr) {
 	return result;
 }
 
-BBStr* bbChrAscii(int n) {
+BBStr* bbChrRaw(int n) {
 	BBStr* t = new BBStr();
 	*t += (char)n;
 	return t;
@@ -202,7 +202,7 @@ void string_link(void(*rtSym)(const char*, void*)) {
 	rtSym("$LSet$string%size", bbLSet);
 	rtSym("$RSet$string%size", bbRSet);
 	rtSym("$Chr%unicode", bbChr);
-	rtSym("$ChrAscii%ascii", bbChrAscii);
+	rtSym("$ChrRaw%byte", bbChrRaw);
 	rtSym("%Asc$string", bbAsc);
 	rtSym("%Len$string", bbLen);
 	rtSym("$Hex%value", bbHex);
