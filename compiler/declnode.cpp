@@ -325,6 +325,8 @@ void VectorDeclNode::translate(Codegen* g) {
 }
 
 void EnumDeclNode::proto(DeclSeq* d, Environ* e) {
+    if (!e->typeDecls->insertDecl(name, Type::int_type, DECL_ENUM))
+        ex(MultiLang::duplicate_identifier);
     int val = 0;
     for (auto& mem : members) {
         if (mem.second) {

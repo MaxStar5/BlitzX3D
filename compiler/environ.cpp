@@ -58,7 +58,7 @@ Type* Environ::findType(const std::string& s) {
     if (s == "@") return Type::pointer_type;
 
     for (Environ* e = this; e; e = e->globals) {
-        if (Decl* d = e->typeDecls->findDecl(s)) return d->type->structType();
+        if (Decl* d = e->typeDecls->findDecl(s)) return d->type;
     }
     return 0;
 }

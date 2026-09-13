@@ -4,7 +4,7 @@
 #include <unordered_map>
 
 enum {
-	DECL_FUNC = 1, DECL_ARRAY = 2, DECL_STRUCT = 4,						//NOT vars
+	DECL_FUNC = 1, DECL_ARRAY = 2, DECL_STRUCT = 4, DECL_ENUM = 128,			//NOT vars
 	DECL_GLOBAL = 8, DECL_LOCAL = 16, DECL_PARAM = 32, DECL_FIELD = 64		//ARE vars
 };
 
