@@ -400,9 +400,8 @@ void App::mainloop() {
 
 		if (drawIde || focused)
 			frame();
-
-		if (focused)
-			SDL_WaitEventTimeout(nullptr, 16);
+		
+		SDL_WaitEventTimeout(nullptr, 16);
 
 		drawIde = false;
 	}
@@ -523,6 +522,7 @@ void App::menuBar() {
 			ImGui::EndMenu();
 		}
 		if (ImGui::MenuItem("Project...")) openProjectWindow();
+		if (ImGui::MenuItem("Open User libs folder")) SDL_OpenURL((prefs.homeDir + "/userlibs").c_str());
 		ImGui::Separator();
 		if (ImGui::MenuItem("Exit", "Alt+F4")) requestQuit();
 		ImGui::EndMenu();
@@ -915,8 +915,10 @@ void App::drawFindReplace() {
 		bool doFind = false, doFindPrev = false, doReplace = false, doReplaceAll = false;
 		bool focusFind = false, focusReplace = false;
 		if (findFocusPending) {
-			strcpy(findBuf, findStr.c_str());
-			strcpy(replaceBuf, replaceStr.c_str());
+			strncpy(findBuf, findStr.c_str(), sizeof(findBuf) - 1);
+			findBuf[sizeof(findBuf) - 1] = '\0';
+			strncpy(replaceBuf, replaceStr.c_str(), sizeof(replaceBuf) - 1);
+			replaceBuf[sizeof(replaceBuf) - 1] = '\0';
 			findFocusPending = false;
 			focusFind = !findFocusReplace;
 			focusReplace = findFocusReplace;
@@ -968,7 +970,9 @@ void App::drawFindReplace() {
 				else {
 					if (doReplace && d->editor.HasSelection()) {
 						std::string sel = d->editor.GetSelectedText();
-						if (sel == findStr) {
+						bool same = matchCase ? (sel == findStr) : (toLower(sel) == toLower(findStr));
+						if (same) {
+							d->editor.Delete();
 							d->editor.InsertText(replaceStr);
 							d->modified = true;
 						}
@@ -1250,13 +1254,25 @@ void App::autoSetupProjectFromIncludes(const std::string& path) {
 	refreshProjectSymbols();
 }
 
-static int editorColumn(const std::string& line, size_t bytePos) {
+static int editorColumn(const std::string& line, size_t bytePos, int tabSize) {
 	int column = 0;
 	for (size_t k = 0; k < bytePos && k < line.size(); ++k) {
-		if (line[k] == '\t') column = (column / 4 + 1) * 4;
+		if (line[k] == '\t') column = (column / tabSize + 1) * tabSize;
 		else if ((line[k] & 0xc0) != 0x80) ++column;
 	}
 	return column;
+}
+
+static size_t columnToByte(const std::string& line, int column, int tabSize) {
+	if (column <= 0) return 0;
+	int c = 0;
+	size_t i = 0;
+	while (i < line.size() && c < column) {
+		if (line[i] == '\t') c = (c / tabSize + 1) * tabSize;
+		else if ((line[i] & 0xc0) != 0x80) ++c;
+		++i;
+	}
+	return i;
 }
 
 void App::fileNew() { addDoc(""); }
@@ -1520,18 +1536,21 @@ void App::editFindNext(bool aBackwards) {
 	std::string needle = ic ? toLower(findStr) : findStr;
 
 	auto searchDocFwd = [&](Doc& d, int startLine, int startCol) -> bool {
-		std::vector<std::string> lines;
-		std::stringstream ss(d.editor.GetText());
-		std::string line;
-		while (std::getline(ss, line, '\n')) lines.push_back(line);
+		std::vector<std::string> lines = d.editor.GetTextLines();
+		int tab = d.editor.GetTabSize() > 0 ? d.editor.GetTabSize() : 4;
+		if (startLine < 0) { startLine = 0; startCol = 0; }
 		for (int row = startLine; row < (int)lines.size(); ++row) {
 			std::string hay = ic ? toLower(lines[row]) : lines[row];
-			size_t from = row == startLine ? (size_t)(startCol > 0 ? startCol : 0) : 0;
+			size_t from = 0;
+			if (row == startLine) {
+				from = columnToByte(lines[row], startCol, tab);
+				if (from > hay.size()) from = hay.size();
+			}
 			size_t pos = hay.find(needle, from);
 			if (pos == std::string::npos) continue;
 			size_t endPos = pos + findStr.size();
-			int startColumn = editorColumn(lines[row], pos);
-			int endColumn = editorColumn(lines[row], endPos);
+			int startColumn = editorColumn(lines[row], pos, tab);
+			int endColumn = editorColumn(lines[row], endPos, tab);
 			d.editor.SetCursorPosition(TextEditor::Coordinates(row, endColumn));
 			d.editor.SetSelection(TextEditor::Coordinates(row, startColumn),
 				TextEditor::Coordinates(row, endColumn));
@@ -1542,15 +1561,17 @@ void App::editFindNext(bool aBackwards) {
 	};
 
 	auto searchDocBack = [&](Doc& d, int startLine, int startCol) -> bool {
-		std::vector<std::string> lines;
-		std::stringstream ss(d.editor.GetText());
-		std::string line;
-		while (std::getline(ss, line, '\n')) lines.push_back(line);
+		std::vector<std::string> lines = d.editor.GetTextLines();
+		int tab = d.editor.GetTabSize() > 0 ? d.editor.GetTabSize() : 4;
 		int last = (int)lines.size() - 1;
 		if (startLine > last) { startLine = last; startCol = INT_MAX; }
 		for (int row = startLine; row >= 0; --row) {
 			std::string hay = ic ? toLower(lines[row]) : lines[row];
-			size_t limit = row == startLine ? (startCol > 0 ? (size_t)startCol : 0) : std::string::npos;
+			size_t limit = std::string::npos;
+			if (row == startLine && startCol != INT_MAX) {
+				limit = columnToByte(lines[row], startCol, tab);
+				if (limit > hay.size()) limit = hay.size();
+			}
 			size_t best = std::string::npos;
 			size_t pos = 0;
 			while ((pos = hay.find(needle, pos)) != std::string::npos) {
@@ -1560,8 +1581,8 @@ void App::editFindNext(bool aBackwards) {
 			}
 			if (best == std::string::npos) continue;
 			size_t endPos = best + findStr.size();
-			int startColumn = editorColumn(lines[row], best);
-			int endColumn = editorColumn(lines[row], endPos);
+			int startColumn = editorColumn(lines[row], best, tab);
+			int endColumn = editorColumn(lines[row], endPos, tab);
 			d.editor.SetCursorPosition(TextEditor::Coordinates(row, endColumn));
 			d.editor.SetSelection(TextEditor::Coordinates(row, startColumn),
 				TextEditor::Coordinates(row, endColumn));
@@ -1572,6 +1593,7 @@ void App::editFindNext(bool aBackwards) {
 	};
 
 	int first = currentIndex >= 0 ? currentIndex : 0;
+	if (first < 0 || first >= (int)docs.size()) return;
 	Doc& current = docs[first];
 
 	if (!aBackwards) {
