@@ -313,11 +313,13 @@ int bbHostIP(int index) {
 	return host_ips[index - 1];
 }
 
-UDPStream* bbCreateUDPStream(int port) {
+UDPStream* bbCreateUDPStream(const char* ip, int port) {
 	if (!socks_ok) return 0;
 	SOCKET s = ::socket(AF_INET, SOCK_DGRAM, 0);
 	if (s != INVALID_SOCKET) {
-		sockaddr_in addr = { AF_INET,htons(port) };
+		sockaddr_in addr = {AF_INET, htons(port)};
+		addr.sin_addr.s_addr = ::inet_addr(ip);
+
 		if (!::bind(s, (sockaddr*)&addr, sizeof(addr))) {
 			UDPStream* p = new UDPStream(s);
 			udp_set.insert(p);
@@ -520,7 +522,7 @@ void sockets_link(void(*rtSym)(const char*, void*)) {
 	rtSym("%CountHostIPs$host_name", bbCountHostIPs);
 	rtSym("%HostIP%host_index", bbHostIP);
 
-	rtSym("%CreateUDPStream%port=0", bbCreateUDPStream);
+	rtSym("%CreateUDPStream$ip%port=0", bbCreateUDPStream);
 	rtSym("CloseUDPStream%udp_stream", bbCloseUDPStream);
 	rtSym("SendUDPMsg%udp_stream%dest_ip%dest_port=0", bbSendUDPMsg);
 	rtSym("%RecvUDPMsg%udp_stream", bbRecvUDPMsg);
