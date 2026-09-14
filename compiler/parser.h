@@ -7,6 +7,7 @@
 
 #include "toker.h"
 #include "nodes.h"
+#include <vector>
 
 class Parser {
 public:
@@ -14,6 +15,7 @@ public:
 	Parser(Toker& t);
 
 	ProgNode* parse(const std::string& main, bool debug);
+	ProgNode* parseAll(const std::string& main, bool debug, std::vector<Ex>& out);
 
 private:
 	std::string incfile;
@@ -30,6 +32,8 @@ private:
 	DeclSeqNode* funcs;
 	DeclSeqNode* datas;
 	DeclSeqNode* enums;
+
+	void syncToStmtEnd();
 
 	StmtSeqNode* parseStmtSeq(int scope, bool debug);
 	void parseStmtSeq(StmtSeqNode* stmts, int scope, bool debug);

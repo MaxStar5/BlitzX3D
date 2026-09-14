@@ -5,6 +5,10 @@
 
 std::set<std::string> Node::usedfuncs;
 std::unordered_map<std::string, std::vector<OverrideFunction>> OverrideFunctionMap;
+
+thread_local bool Ex_collecting = false;
+thread_local std::vector<Ex>* Ex_errors = nullptr;
+
 ///////////////////////////////
 // generic exception thrower //
 ///////////////////////////////

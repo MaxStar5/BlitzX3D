@@ -33,6 +33,7 @@ struct ProgNode : public Node {
 	}
 
 	Environ* semant(Environ* e);
+	Environ* semantAll(Environ* e, std::vector<Ex>& out);
 	void translate(Codegen* g, const std::vector<UserFunc>& userfuncs);
 };
 

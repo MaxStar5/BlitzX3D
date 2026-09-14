@@ -4,6 +4,8 @@
 #include "preprocessor.h"
 #include "../MultiLang/MultiLang.h"
 #include <cctype>
+#include <ctime>
+#include <cstdio>
 #include <regex>
 #include <chrono>
 #include <functional>
@@ -148,7 +150,8 @@ std::unordered_map<std::string, int>& Toker::getKeywords()
 
 int Toker::pos()
 {
-    return ((curr_row) << 16) | (tokes[curr_toke].from);
+	int from = (curr_toke >= 0 && curr_toke < (int)tokes.size()) ? tokes[curr_toke].from : 0;
+	return ((curr_row) << 16) | from;
 }
 
 int Toker::curr()
@@ -164,7 +167,9 @@ std::string Toker::text()
 
 int Toker::lookAhead(int n)
 {
-    return tokes[curr_toke + n].n;
+	int i = curr_toke + n;
+	if (i < 0 || i >= (int)tokes.size()) return '\n';
+	return tokes[i].n;
 }
 
 void Toker::nextline()
@@ -202,6 +207,12 @@ void Toker::nextline()
         if (rawLine.empty() || rawLine.back() != '_') {
             break;
         }
+        if (rawLine.size() > 1) {
+            char prev = rawLine[rawLine.size() - 2];
+            if (isalnum((unsigned char)prev) || prev == '_' || prev == '\'') {
+                break;
+            }
+        }
 
         rawLine.pop_back();
 
@@ -220,13 +231,14 @@ void Toker::nextline()
     if (!noMacro) {
         auto now = std::chrono::system_clock::now();
         auto in_time_t = std::chrono::system_clock::to_time_t(now);
-        std::stringstream compilerDate;
-        compilerDate << '"' << std::put_time(std::localtime(&in_time_t), "%d %b %Y") << '"';
-
-        std::stringstream compilerTime;
-        compilerTime << '"' << std::put_time(std::localtime(&in_time_t), "%H:%M:%S") << '"';
-        MacroDefines["__DATE__"] = compilerDate.str();
-        MacroDefines["__TIME__"] = compilerTime.str();
+        std::tm lt{};
+        localtime_s(&lt, &in_time_t);
+        static const char* months[12] = { "Jan","Feb","Mar","Apr","May","Jun", "Jul","Aug","Sep","Oct","Nov","Dec" };
+        char dateBuf[32], timeBuf[32];
+        std::snprintf(dateBuf, sizeof(dateBuf), "\"%02d %s %d\"", lt.tm_mday, months[lt.tm_mon >= 0 && lt.tm_mon < 12 ? lt.tm_mon : 0], 1900 + lt.tm_year);
+        std::snprintf(timeBuf, sizeof(timeBuf), "\"%02d:%02d:%02d\"", lt.tm_hour, lt.tm_min, lt.tm_sec);
+        MacroDefines["__DATE__"] = dateBuf;
+        MacroDefines["__TIME__"] = timeBuf;
         MacroDefines["__LINE__"] = std::to_string(curr_row + 1);
 
         // Test and strip leading whitespace's for preprocessor directives only

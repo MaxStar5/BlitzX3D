@@ -82,6 +82,14 @@ public:
 	virtual void debugMsg(const char* e, bool serious) {
 		if (serious) {
 			std::string full = bbReleaseCrashReport(e);
+			if (const char* f = bbReleaseFile()) {
+				if (f[0]) {
+					int pos = bbReleasePos();
+					int row = ((pos >> 16) & 0xffff) + 1, col = (pos & 0xffff) + 1;
+					fprintf(stderr, "\"%s\":%d:%d:%d:%d:%s\n", f, row, col, row, col, e ? e : "");
+					fflush(stderr);
+				}
+			}
 			writeCrashLog("=== BLITZ RUNTIME ERROR ===");
 			writeCrashLog("%s", full.c_str());
 			writeCrashLog("---");

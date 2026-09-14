@@ -61,6 +61,15 @@ static void err(const std::string& t) {
 	exit(-1);
 }
 
+static void printErrors(const std::vector<Ex>& errors) {
+	for (const Ex& x : errors) {
+		std::string file = '\"' + x.file + '\"';
+		int p = x.pos < 0 ? 0 : x.pos;
+		int row = ((p >> 16) & 65535) + 1, col = (p & 65535) + 1;
+		std::cout << file << ":" << row << ":" << col << ":" << row << ":" << col << ":" << x.ex << std::endl;
+	}
+}
+
 static void deploySidecarDlls(const std::string& out_file, bool quiet, bool veryquiet) {
 	static const char* dlls[] = { "bass.dll", "FreeImage.dll" };
 
@@ -127,7 +136,6 @@ static void dumpKeys(bool lang, bool mod, bool help) {
 	if (lang) {
 		auto& keywords = Toker::getKeywords();
 		for (const auto& pair : keywords) {
-			if (pair.first.find(' ') != std::string::npos) continue;
 			std::cout << pair.first << std::endl;
 		}
 	}
@@ -278,15 +286,29 @@ int _cdecl main(int argc, char* argv[]) {
 	Module* module = 0;
 
 	try {
-		//parse
+		//parse & semant
+		//so editors can reuse the output for "true" error reporting
 		if (!veryquiet) std::cout << "Parsing..." << std::endl;
 		Toker toker(in_file, in, debug);
 		Parser parser(toker);
-		prog = parser.parse(in_file, debug);
+		static std::vector<Ex> errors;
+		errors.clear();
+		prog = parser.parseAll(in_file, debug, errors);
+		if (!errors.empty()) {
+			printErrors(errors);
+			delete prog;
+			exit(-1);
+		}
 
 		//semant
 		if (!veryquiet) std::cout << "Generating..." << std::endl;
-		environ = prog->semant(runtimeEnviron);
+		errors.clear();
+		environ = prog->semantAll(runtimeEnviron, errors);
+		if (!errors.empty()) {
+			printErrors(errors);
+			delete prog;
+			exit(-1);
+		}
 
 		//translate
 		if (!veryquiet) std::cout << "Translating..." << std::endl;

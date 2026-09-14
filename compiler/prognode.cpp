@@ -28,6 +28,21 @@ Environ* ProgNode::semant(Environ* e) {
 	return sem_env;
 }
 
+Environ* ProgNode::semantAll(Environ* e, std::vector<Ex>& out) {
+	Ex_collect_scope collecting(out);
+	Environ* env = 0;
+	try { env = semant(e); }
+	catch (Ex& x) {
+		if (out.empty()) {
+			if (x.pos < 0) x.pos = 0;
+			if (x.file.empty()) x.file = stmts->file;
+			out.push_back(x);
+		}
+		env = 0;
+	}
+	return env;
+}
+
 void ProgNode::translate(Codegen* g, const std::vector<UserFunc>& usrfuncs) {
 
 	int k;

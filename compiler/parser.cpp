@@ -39,6 +39,35 @@ ProgNode* Parser::parse(const std::string& main, bool debug) {
 	return new ProgNode(consts, structs, funcs, datas, enums, stmts);
 }
 
+void Parser::syncToStmtEnd() {
+	while (toker->curr() != ':' && toker->curr() != '\n' && toker->curr() != EOF) toker->next();
+}
+
+struct IncludeGuard {
+	Toker*& toker;
+	std::string& incfile;
+	Toker* saved_toker;
+	std::string saved_inc;
+	IncludeGuard(Toker*& t, std::string& f) :toker(t), incfile(f), saved_toker(t), saved_inc(f) {}
+	~IncludeGuard() { toker = saved_toker; incfile = saved_inc; }
+	void engage(Toker* t, const std::string& f) { toker = t; incfile = f; }
+};
+
+ProgNode* Parser::parseAll(const std::string& main, bool debug, std::vector<Ex>& out) {
+	Ex_collect_scope collecting(out);
+	ProgNode* p = 0;
+	try { p = parse(main, debug); }
+	catch (Ex& x) {
+		if (out.empty()) {
+			Ex_fill(x, main_toker->pos(), main);
+			out.push_back(x);
+		}
+		p = 0;
+	}
+	if (!out.empty()) { delete p; return 0; }
+	return p;
+}
+
 void Parser::ex(const std::string& s) {
 	throw Ex(s, toker->pos(), incfile);
 }
@@ -175,6 +204,7 @@ void Parser::parseStmtSeq(StmtSeqNode* stmts, int scope, bool debug) {
 
 		int pos = toker->pos();
 
+		try {
 		switch (toker->curr()) {
 		case INCLUDE:
 		{
@@ -194,8 +224,8 @@ void Parser::parseStmtSeq(StmtSeqNode* stmts, int scope, bool debug) {
 
 			Toker i_toker(inc, i_stream, debug);
 
-			std::string t_inc = incfile; incfile = inc;
-			Toker* t_toker = toker; toker = &i_toker;
+			IncludeGuard include_guard(toker, incfile);
+			include_guard.engage(&i_toker, inc);
 
 			included.insert(incfile);
 
@@ -203,9 +233,6 @@ void Parser::parseStmtSeq(StmtSeqNode* stmts, int scope, bool debug) {
 			if (toker->curr() != EOF) exp(MultiLang::end_of_file);
 
 			result = new IncludeNode(incfile, ss.release());
-
-			toker = t_toker;
-			incfile = t_inc;
 		}
 		break;
 		case IDENT:
@@ -575,6 +602,15 @@ void Parser::parseStmtSeq(StmtSeqNode* stmts, int scope, bool debug) {
 		break;
 		default:
 			return;
+		}
+		}
+		catch (Ex& x) {
+			if (!Ex_collecting || !Ex_errors) throw;
+			Ex_fill(x, toker->pos(), incfile);
+			Ex_errors->push_back(x);
+			if ((int)Ex_errors->size() >= Ex_MAX_ERRORS) throw;
+			syncToStmtEnd();
+			continue;
 		}
 
 		if (result) {

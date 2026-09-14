@@ -9,9 +9,13 @@ void DeclSeqNode::proto(DeclSeq* d, Environ* e) {
     for (int k = 0; k < decls.size(); ++k) {
         try { decls[k]->proto(d, e); }
         catch (Ex& x) {
-            if (x.pos < 0) x.pos = decls[k]->pos;
-            if (!x.file.size()) x.file = decls[k]->file;
-            throw;
+            Ex_fill(x, decls[k]->pos, decls[k]->file);
+            if (!Ex_collecting || !Ex_errors) throw;
+            Ex_errors->push_back(x);
+            if ((int)Ex_errors->size() >= Ex_MAX_ERRORS) throw;
+            delete decls[k];
+            decls.erase(decls.begin() + k);
+            --k;
         }
     }
 }
@@ -20,9 +24,10 @@ void DeclSeqNode::semant(Environ* e) {
     for (int k = 0; k < decls.size(); ++k) {
         try { decls[k]->semant(e); }
         catch (Ex& x) {
-            if (x.pos < 0) x.pos = decls[k]->pos;
-            if (!x.file.size()) x.file = decls[k]->file;
-            throw;
+            Ex_fill(x, decls[k]->pos, decls[k]->file);
+            if (!Ex_collecting || !Ex_errors) throw;
+            Ex_errors->push_back(x);
+            if ((int)Ex_errors->size() >= Ex_MAX_ERRORS) throw;
         }
     }
 }
