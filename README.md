@@ -110,7 +110,7 @@ well as third-party components. Those portions remain licensed under their
 respective original licenses and are not relicensed by BlitzX3D.
 
 Original contributions to BlitzX3D by Chris A. (krimbopple) are licensed under
-the GNU General Public License, version 3 (GPLv3).
+the MIT License (see LICENSE).
 
 
 ---
