@@ -313,12 +313,12 @@ int bbHostIP(int index) {
 	return host_ips[index - 1];
 }
 
-UDPStream* bbCreateUDPStream(const char* ip, int port) {
+UDPStream* bbCreateUDPStream(BBStr* ip, int port) {
 	if (!socks_ok) return 0;
 	SOCKET s = ::socket(AF_INET, SOCK_DGRAM, 0);
 	if (s != INVALID_SOCKET) {
 		sockaddr_in addr = {AF_INET, htons(port)};
-		addr.sin_addr.s_addr = ::inet_addr(ip);
+		addr.sin_addr.s_addr = ::inet_addr(ip->c_str()); delete ip;
 
 		if (!::bind(s, (sockaddr*)&addr, sizeof(addr))) {
 			UDPStream* p = new UDPStream(s);
