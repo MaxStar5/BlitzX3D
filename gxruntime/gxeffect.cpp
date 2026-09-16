@@ -4,7 +4,7 @@
 
 gxEffect::gxEffect(gxGraphics* gfx, ID3DXEffect* e)
     : graphics(gfx), effect(e) {
-    effect->AddRef();
+    // effect->AddRef(); bruh
 }
 
 gxEffect::~gxEffect() {
