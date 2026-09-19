@@ -499,18 +499,16 @@ int gxGraphics::getDepth()const {
 }
 
 gxFont* gxGraphics::loadFont(std::string f, int height, bool bold, bool italic, bool underlined) {
-	std::string t;
-	int n = f.find('.');
-	if (n == std::string::npos) {
-		t = fullfilename(f);
-		if (!font_res.count(t) && AddFontResource(t.c_str())) font_res.insert(t);
-		t = filenamefile(f.substr(0, n));
-	}
-	else {
-		t = f;
+	std::string t = f;
+	if (f.find('.') == std::string::npos) {
+		std::string sysFont = UTF8::getSystemFontFile(f);
+		if (!sysFont.empty()) {
+			t = sysFont;
+			if (!font_res.count(t) && AddFontResource(t.c_str())) font_res.insert(t);
+		}
 	}
 
-	gxFont* newFont = new gxFont(ftLibrary, this, f, height, bold, italic, underlined); // this line crashes in the backported version of UER, investigate !
+	gxFont* newFont = new gxFont(ftLibrary, this, t, height, bold, italic, underlined);
 	font_set.emplace(newFont);
 	return newFont;
 }
