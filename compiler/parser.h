@@ -22,10 +22,8 @@ private:
 	std::set<std::string> included;
 	Toker* toker, * main_toker;
 	std::map<std::string, DimNode*> arrayDecls;
-#ifdef XBETA
 	std::vector<DeclVarNode*> withStack;
 	std::map<std::string, bool> funcPtrIdents;
-#endif
 
 	DeclSeqNode* consts;
 	DeclSeqNode* structs;
@@ -38,11 +36,9 @@ private:
 	StmtSeqNode* parseStmtSeq(int scope, bool debug);
 	void parseStmtSeq(StmtSeqNode* stmts, int scope, bool debug);
 	StmtNode* parseAssignment(VarNode* var);
-#ifdef XBETA
 	bool isSoftKeyword(int c);
 	StmtNode* parseIdentStatement(const std::string& ident, bool debug);
 	ExprNode* parsePrimaryIdent(const std::string& ident);
-#endif
 
 	void ex(const std::string& s);
 	void exp(const std::string& s);
@@ -61,9 +57,7 @@ private:
 	DeclNode* parseStructDecl();
 	DeclNode* parseEnumDecl();
 
-#ifdef XBETA
 	std::vector<std::string>* parseFuncPtrParamTags();
-#endif
 
 	ExprSeqNode* parseExprSeq();
 

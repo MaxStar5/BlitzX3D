@@ -8,9 +8,7 @@ struct ArrayType;
 struct StructType;
 struct ConstType;
 struct VectorType;
-#ifdef XBETA
 struct FuncPtrType;
-#endif
 
 struct Type {
 	virtual ~Type() {}
@@ -27,9 +25,7 @@ struct Type {
 	virtual StructType* structType() { return 0; }
 	virtual ConstType* constType() { return 0; }
 	virtual VectorType* vectorType() { return 0; }
-#ifdef XBETA
 	virtual FuncPtrType* funcPtrType() { return 0; }
-#endif
 
 	//operators
 	virtual bool canCastTo(Type* t) { return this == t; }
@@ -89,7 +85,6 @@ struct VectorType : public Type {
 	std::string name() { return elementType->name() + " vector"; }
 };
 
-#ifdef XBETA
 struct FuncPtrType : public Type {
 	Type* returnType;
 	std::vector<Type*> paramTypes;
@@ -134,6 +129,5 @@ struct FuncPtrType : public Type {
 		return s;
 	}
 };
-#endif
 
 #endif

@@ -8,11 +8,13 @@ struct Prefs {
 	struct CompileOptions {
 		bool noautodecl = false;
 		bool encrypt = false;
+		bool experimental = false;
 	};
 
 	bool prg_debug = true;
 	bool prg_nolaa = false;
 	bool prg_noautodecl = false;
+	bool prg_experimental = false;
 	bool prg_dumpasm = false;
 	bool prg_quiet = true;
 	bool prg_veryquiet = false;

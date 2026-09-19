@@ -1,6 +1,7 @@
 #include "std.h"
 #include <cstdlib>
 #include "parser.h"
+#include "environ.h"
 #include "../MultiLang/MultiLang.h"
 #include <format>
 #include "preprocessor.h"
@@ -89,20 +90,17 @@ void Parser::exp(const std::string& s) {
 }
 
 std::string Parser::parseIdent() {
-#ifdef XBETA
 	if (isSoftKeyword(toker->curr())) {
 		std::string t = tolower(toker->text());
 		toker->next();
 		return t;
 	}
-#endif
 	if (toker->curr() != IDENT) exp(MultiLang::identifier);
 	std::string t = toker->text();
 	toker->next();
 	return t;
 }
 
-#ifdef XBETA
 bool Parser::isSoftKeyword(int c) {
 	return c == DO || c == LOOP || c == WITH || c == IS || c == ISNOT;
 }
@@ -183,7 +181,6 @@ ExprNode* Parser::parsePrimaryIdent(const std::string& ident) {
 	}
 	return result;
 }
-#endif
 
 void Parser::parseChar(int c) {
 	if (toker->curr() != c) exp(std::string("'") + char(c) + std::string("'"));
@@ -205,7 +202,9 @@ void Parser::parseStmtSeq(StmtSeqNode* stmts, int scope, bool debug) {
 		int pos = toker->pos();
 
 		try {
-		switch (toker->curr()) {
+		int curToken = toker->curr();
+		if (!experimentalSyntaxEnabled && isSoftKeyword(curToken)) curToken = IDENT;
+		switch (curToken) {
 		case INCLUDE:
 		{
 			if (toker->next() != STRINGCONST) exp(MultiLang::include_filename);
@@ -239,9 +238,10 @@ void Parser::parseStmtSeq(StmtSeqNode* stmts, int scope, bool debug) {
 		{
 			std::string ident = toker->text();
 			toker->next();
-#ifdef XBETA
-			result = parseIdentStatement(ident, debug);
-#else
+			if (experimentalSyntaxEnabled) {
+				result = parseIdentStatement(ident, debug);
+			}
+			else {
 			std::string tag = parseTypeTag();
 			if (arrayDecls.find(ident) == arrayDecls.end()
 				&& toker->curr() != '=' && toker->curr() != '\\' && toker->curr() != '['
@@ -279,10 +279,9 @@ void Parser::parseStmtSeq(StmtSeqNode* stmts, int scope, bool debug) {
 				toker->next(); ExprNode* expr = parseExpr(false);
 				result = new AssNode(var.release(), expr);
 			}
-#endif
+			}
 		}
 		break;
-#ifdef XBETA
 		case IS:
 		case ISNOT:
 		{
@@ -302,7 +301,6 @@ void Parser::parseStmtSeq(StmtSeqNode* stmts, int scope, bool debug) {
 			result = parseIdentStatement(ident, debug);
 			break;
 		}
-#endif
 		case IF:
 		{
 			toker->next(); result = parseIf(debug);
@@ -451,18 +449,11 @@ void Parser::parseStmtSeq(StmtSeqNode* stmts, int scope, bool debug) {
 			} while (toker->curr() == ',');
 			break;
 		case RESTORE:
-#ifdef XBETA
-			if (toker->next() == IDENT || isSoftKeyword(toker->curr())) {
+			if (toker->next() == IDENT || (experimentalSyntaxEnabled && isSoftKeyword(toker->curr()))) {
 				std::string label = toker->curr() == IDENT ? toker->text() : tolower(toker->text());
 				result = new RestoreNode(label); toker->next();
 			}
 			else result = new RestoreNode("");
-#else
-			if (toker->next() == IDENT) {
-				result = new RestoreNode(toker->text()); toker->next();
-			}
-			else result = new RestoreNode("");
-#endif
 			break;
 		case DATA:
 			if (scope != STMTS_PROG) ex(MultiLang::data_can_only_appear_in_main);
@@ -518,7 +509,6 @@ void Parser::parseStmtSeq(StmtSeqNode* stmts, int scope, bool debug) {
 				stmts->push_back(stmt);
 			} while (toker->curr() == ',');
 			break;
-#ifdef XBETA
 		case DO:
 		{
 			int nxt = toker->lookAhead(1);
@@ -576,12 +566,10 @@ void Parser::parseStmtSeq(StmtSeqNode* stmts, int scope, bool debug) {
 			result = new WithNode(objExpr, tempVar, body);
 			break;
 		}
-#endif
 		case '.':
 		{
 			toker->next();
-#ifdef XBETA
-			if (!withStack.empty()) {
+			if (experimentalSyntaxEnabled && !withStack.empty()) {
 				std::string fieldIdent = parseIdent();
 				std::string fieldTag = parseTypeTag();
 				if (toker->curr() == '=' || toker->curr() == PLUSEQ || toker->curr() == MINUSEQ || toker->curr() == STAREQ || toker->curr() == SLASHEQ || toker->curr() == AMPEQ) {
@@ -594,7 +582,6 @@ void Parser::parseStmtSeq(StmtSeqNode* stmts, int scope, bool debug) {
 				result = new LabelNode(fieldIdent, datas->size());
 				break;
 			}
-#endif
 			std::string t = parseIdent();
 			result = new LabelNode(t, datas->size());
 			break;
@@ -627,8 +614,7 @@ StmtNode* Parser::parseAssignment(VarNode* var) {
 		ExprNode* rhs = parseExpr(false);
 		return new AssNode(var, rhs);
 	}
-#ifdef XBETA
-	else if (opToken == PLUSEQ || opToken == MINUSEQ || opToken == STAREQ || opToken == SLASHEQ || opToken == AMPEQ) {
+	else if (experimentalSyntaxEnabled && (opToken == PLUSEQ || opToken == MINUSEQ || opToken == STAREQ || opToken == SLASHEQ || opToken == AMPEQ)) {
 		int arithOp = 0;
 		switch (opToken) {
 		case PLUSEQ: arithOp = '+'; break;
@@ -641,7 +627,6 @@ StmtNode* Parser::parseAssignment(VarNode* var) {
 		ExprNode* rhs = parseExpr(false);
 		return new CompoundAssNode(var, rhs, arithOp);
 	}
-#endif
 	else {
 		exp("assignment operator");
 		return nullptr;
@@ -659,7 +644,6 @@ std::string Parser::parseTypeTag() {
 	return "";
 }
 
-#ifdef XBETA
 std::vector<std::string>* Parser::parseFuncPtrParamTags() {
 	if (toker->curr() != '(') return 0;
 	toker->next();
@@ -685,7 +669,6 @@ std::vector<std::string>* Parser::parseFuncPtrParamTags() {
 	toker->next();
 	return tags.release();
 }
-#endif
 
 VarNode* Parser::parseVar() {
 	std::string ident = parseIdent();
@@ -732,8 +715,7 @@ DeclNode* Parser::parseVarDecl(int kind, bool constant) {
 	std::string ident = parseIdent();
 	std::string tag = parseTypeTag();
 	DeclNode* d;
-#ifdef XBETA
-	if ((tag == "%" || tag == "#" || tag == "$" || tag == "@") && toker->curr() == '(') {
+	if (experimentalSyntaxEnabled && (tag == "%" || tag == "#" || tag == "$" || tag == "@") && toker->curr() == '(') {
 		std::vector<std::string>* paramTags = parseFuncPtrParamTags();
 		ExprNode* expr = 0;
 		if (toker->curr() == '=') {
@@ -747,7 +729,6 @@ DeclNode* Parser::parseVarDecl(int kind, bool constant) {
 		d->pos = pos; d->file = incfile;
 		return d;
 	}
-#endif
 	if (toker->curr() == '[') {
 		if (constant) ex(MultiLang::blitz_arrays_may_not_be_constant);
 		toker->next();
@@ -947,24 +928,20 @@ ExprNode* Parser::parseExpr2(bool opt) {
 	for (;;) {
 		int c = toker->curr();
 		if (c != '<' && c != '>' && c != '=' && c != LE && c != GE && c != NE
-#ifdef XBETA
-			&& c != IS && c != ISNOT
-#endif
+			&& !(experimentalSyntaxEnabled && (c == IS || c == ISNOT))
 		) return lhs.release();
 
 		toker->next();
 		ExprNode* rhs = parseExpr3(false);
 		
-#ifdef XBETA
-		if (c == IS) {
+		if (experimentalSyntaxEnabled && c == IS) {
 			lhs = std::unique_ptr<ExprNode>(new RelExprNode('=', lhs.release(), rhs));
 			continue;
 		}
-		if (c == ISNOT) {
+		if (experimentalSyntaxEnabled && c == ISNOT) {
 			lhs = std::unique_ptr<ExprNode>(new RelExprNode(NE, lhs.release(), rhs));
 			continue;
 		}
-#endif
 		
 		lhs = std::unique_ptr<ExprNode>(new RelExprNode(c, lhs.release(), rhs));
 	}
@@ -1103,8 +1080,7 @@ ExprNode* Parser::parsePrimary(bool opt) {
 	ExprNode* result = 0;
 	int n, k;
 
-#ifdef XBETA
-	if (toker->curr() == '.' && !withStack.empty()) {
+	if (experimentalSyntaxEnabled && toker->curr() == '.' && !withStack.empty()) {
 		toker->next();  // mmmm yummy .
 		std::string fieldIdent = parseIdent();
 		std::string fieldTag = parseTypeTag();
@@ -1113,9 +1089,10 @@ ExprNode* Parser::parsePrimary(bool opt) {
 		FieldVarNode* fvn = new FieldVarNode(base, fieldIdent, fieldTag);
 		return new VarExprNode(fvn);
 	}
-#endif
 
-	switch (toker->curr()) {
+	int primaryToken = toker->curr();
+	if (!experimentalSyntaxEnabled && isSoftKeyword(primaryToken)) primaryToken = IDENT;
+	switch (primaryToken) {
 	case '(':
 		toker->next();
 		expr = std::unique_ptr<ExprNode>(parseExpr(false));
@@ -1179,26 +1156,26 @@ ExprNode* Parser::parsePrimary(bool opt) {
 	case IDENT:
 		ident = toker->text();
 		toker->next();
-#ifdef XBETA
-		result = parsePrimaryIdent(ident);
-#else
-		tag = parseTypeTag();
-		if (toker->curr() == '(' && arrayDecls.find(ident) == arrayDecls.end()) {
-			//must be a func
-			toker->next();
-			std::unique_ptr<ExprSeqNode> exprs(parseExprSeq());
-			if (toker->curr() != ')') exp("')'");
-			toker->next();
-			result = new CallNode(ident, tag, exprs.release());
+		if (experimentalSyntaxEnabled) {
+			result = parsePrimaryIdent(ident);
 		}
 		else {
-			//must be a var
-			VarNode* var = parseVar(ident, tag);
-			result = new VarExprNode(var);
+			tag = parseTypeTag();
+			if (toker->curr() == '(' && arrayDecls.find(ident) == arrayDecls.end()) {
+				//must be a func
+				toker->next();
+				std::unique_ptr<ExprSeqNode> exprs(parseExprSeq());
+				if (toker->curr() != ')') exp("')'");
+				toker->next();
+				result = new CallNode(ident, tag, exprs.release());
+			}
+			else {
+				//must be a var
+				VarNode* var = parseVar(ident, tag);
+				result = new VarExprNode(var);
+			}
 		}
-#endif
 		break;
-#ifdef XBETA
 	case DO:
 	case LOOP:
 	case WITH:
@@ -1208,19 +1185,12 @@ ExprNode* Parser::parsePrimary(bool opt) {
 		toker->next();
 		result = parsePrimaryIdent(ident);
 		break;
-#endif
 	case '%':
 		if (toker->next() == IDENT
-#ifdef XBETA
-			|| isSoftKeyword(toker->curr())
-#endif
+			|| (experimentalSyntaxEnabled && isSoftKeyword(toker->curr()))
 			) {
-#ifdef XBETA
 			std::string fn = toker->curr() == IDENT ? toker->text() : tolower(toker->text());
 			result = new CallPtrNode(fn);
-#else
-			result = new CallPtrNode(toker->text());
-#endif
 			toker->next();
 			break;
 		}

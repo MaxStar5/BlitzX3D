@@ -564,9 +564,11 @@ void App::menuBar() {
 		if (ImGui::MenuItem("Command Line...")) showCommandLine = true;
 		ImGui::Separator();
 		bool* optNoAutoDecl = &prefs.prg_noautodecl;
+		bool* optExperimental = &prefs.prg_experimental;
 		bool* optEncrypt = &prefs.prg_encrypt;
 		if (prefs.projectOptionsActive) {
 			optNoAutoDecl = &prefs.projectOptions.noautodecl;
+			optExperimental = &prefs.projectOptions.experimental;
 			optEncrypt = &prefs.projectOptions.encrypt;
 		}
 		auto persistOpts = [&]() { if (prefs.projectOptionsActive) prefs.saveProjectOptions(projectPath); };
@@ -574,6 +576,7 @@ void App::menuBar() {
 		if (ImGui::MenuItem("Debug", nullptr, &prefs.prg_debug)) {}
 		if (ImGui::MenuItem("No LAA", nullptr, &prefs.prg_nolaa)) {}
 		if (ImGui::MenuItem("No Auto Declaration ", nullptr, optNoAutoDecl)) optsChanged = true;
+		if (ImGui::MenuItem("Experimental Syntax", nullptr, optExperimental)) optsChanged = true;
 		ImGui::Separator();
 		if (ImGui::BeginMenu("Compile Options")) {
 			ImGui::MenuItem("Dump assembly", nullptr, &prefs.prg_dumpasm);
@@ -1931,6 +1934,7 @@ Prefs::CompileOptions App::effectiveCompileOptions() {
 	Prefs::CompileOptions co;
 	co.noautodecl = prefs.prg_noautodecl;
 	co.encrypt = prefs.prg_encrypt;
+	co.experimental = prefs.prg_experimental;
 	if (projectOpen && !projectPath.empty()) {
 		if (!prefs.projectOptionsActive) {
 			prefs.projectOptions = co;
@@ -1977,6 +1981,7 @@ void App::build(bool exec, bool publish) {
 	if (prefs.prg_dumpkeys) args.push_back("-k");
 	if (prefs.prg_nolaa) args.push_back("-nlaa");
 	if (co.noautodecl) args.push_back("-noautodecl");
+	if (co.experimental) args.push_back("-experimental");
 	if (co.encrypt) args.push_back("-encrypt");
 
 	if (publish) {

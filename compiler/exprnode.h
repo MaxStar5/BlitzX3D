@@ -61,7 +61,6 @@ struct CallPtrNode : public ExprNode {
 	TNode* translate(Codegen* g);
 };
 
-#ifdef XBETA
 struct CallIndirectNode : public ExprNode {
 	ExprNode* funcExpr;
 	ExprSeqNode* exprs;
@@ -71,7 +70,6 @@ struct CallIndirectNode : public ExprNode {
 	ExprNode* semant(Environ* e);
 	TNode* translate(Codegen* g);
 };
-#endif
 
 struct VarExprNode : public ExprNode {
 	VarNode* var;

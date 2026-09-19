@@ -153,6 +153,7 @@ void Prefs::open() {
 	inipp::get_value(ini.sections["COMPILER"], "Debug", prg_debug);
 	inipp::get_value(ini.sections["COMPILER"], "NoLAA", prg_nolaa);
 	inipp::get_value(ini.sections["COMPILER"], "NoAutoDecl", prg_noautodecl);
+	inipp::get_value(ini.sections["COMPILER"], "Experimental", prg_experimental);
 	inipp::get_value(ini.sections["COMPILER"], "DumpAsm", prg_dumpasm);
 	inipp::get_value(ini.sections["COMPILER"], "Quiet", prg_quiet);
 	inipp::get_value(ini.sections["COMPILER"], "VeryQuiet", prg_veryquiet);
@@ -238,6 +239,7 @@ void Prefs::close() {
 	compilerSection.insert(std::make_pair("Debug", boolToString(prg_debug)));
 	compilerSection.insert(std::make_pair("NoLAA", boolToString(prg_nolaa)));
 	compilerSection.insert(std::make_pair("NoAutoDecl", boolToString(prg_noautodecl)));
+	compilerSection.insert(std::make_pair("Experimental", boolToString(prg_experimental)));
 	compilerSection.insert(std::make_pair("DumpAsm", boolToString(prg_dumpasm)));
 	compilerSection.insert(std::make_pair("Quiet", boolToString(prg_quiet)));
 	compilerSection.insert(std::make_pair("VeryQuiet", boolToString(prg_veryquiet)));
@@ -313,6 +315,7 @@ bool Prefs::loadProjectOptions(const std::string& path) {
 	if (elem.empty()) return false;
 	projectOptions.noautodecl = parseBoolValue(xmlAttr(elem, "NoAutoDecl"), projectOptions.noautodecl);
 	projectOptions.encrypt = parseBoolValue(xmlAttr(elem, "Encrypt"), projectOptions.encrypt);
+	projectOptions.experimental = parseBoolValue(xmlAttr(elem, "Experimental"), projectOptions.experimental);
 	projectOptionsActive = true;
 	return true;
 }
@@ -353,5 +356,6 @@ void Prefs::clearProjectOptions() {
 
 std::string Prefs::compileOptionsXml() const {
 	return std::string("NoAutoDecl=\"") + boolToString(projectOptions.noautodecl) +
-		"\" Encrypt=\"" + boolToString(projectOptions.encrypt) + "\"";
+		"\" Encrypt=\"" + boolToString(projectOptions.encrypt) +
+		"\" Experimental=\"" + boolToString(projectOptions.experimental) + "\"";
 }

@@ -13,9 +13,7 @@ static struct i_type : public Type {
 	}
 	bool canCastTo(Type* t) {
 		if(t == Type::int_type || t == Type::float_type || t == Type::string_type) return true;
-#ifdef XBETA
 		if(t->funcPtrType()) return true;
-#endif
 		return false;
 	}
 	std::string name() { return "Int"; }
@@ -45,9 +43,7 @@ static struct ptr_type : public Type {
 
 	bool canCastTo(Type* t) {
 		if(t == Type::int_type || t == Type::float_type || t == Type::string_type || t == Type::pointer_type) return true;
-#ifdef XBETA
 		if(t->funcPtrType()) return true;
-#endif
 		return false;
 	}
 	std::string name() { return "Pointer"; }

@@ -626,8 +626,6 @@ void ReadNode::translate(Codegen* g) {
 	g->code(var->store(g, t));
 }
 
-#ifdef XBETA
-
 void DoLoopNode::semant(Environ* e) {
 	if (cond) {
 		cond = cond->semant(e);
@@ -744,5 +742,3 @@ void CompoundAssNode::translate(Codegen* g) {
 		g->code(lhs->store(g, new TNode(opIR, load, rNode)));
 	}
 }
-
-#endif

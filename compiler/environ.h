@@ -10,6 +10,7 @@
 #include "label.h"
 
 extern bool autoDeclEnabled;
+extern bool experimentalSyntaxEnabled;
 
 class Environ {
 public:

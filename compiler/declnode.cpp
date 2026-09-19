@@ -61,7 +61,6 @@ void VarDeclNode::proto(DeclSeq* d, Environ* e) {
 
     Type* ty;
 
-#ifdef XBETA
     if (funcPtrParamTags) {
         Type* retTy = tagType(tag, e);
         if (!retTy) retTy = Type::int_type;
@@ -88,7 +87,6 @@ void VarDeclNode::proto(DeclSeq* d, Environ* e) {
         if (expr) sem_var = new DeclVarNode(decl);
         return;
     }
-#endif
 
     ty = tagType(tag, e);
     if (!ty) ty = Type::int_type;

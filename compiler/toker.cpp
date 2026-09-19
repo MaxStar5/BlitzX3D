@@ -13,6 +13,8 @@
 
 int Toker::chars_toked;
 
+extern bool experimentalSyntaxEnabled;
+
 std::map<std::string, std::string> MacroDefines;
 
 static std::unordered_map<std::string, int> alphaTokes, lowerTokes;
@@ -116,7 +118,6 @@ static void makeKeywords()
     alphaTokes["End While"] = WEND;
 #endif
 
-#ifdef XBETA
     alphaTokes["Do"] = DO;
     alphaTokes["Loop"] = LOOP;
     alphaTokes["With"] = WITH;
@@ -125,7 +126,6 @@ static void makeKeywords()
     alphaTokes["IsNot"] = ISNOT;
     alphaTokes["IsNaht"] = ISNOT;
     alphaTokes["Case Else"] = DEFAULT;
-#endif
 
     std::unordered_map<std::string, int>::const_iterator it;
     for (it = alphaTokes.begin(); it != alphaTokes.end(); ++it) {
@@ -150,8 +150,8 @@ std::unordered_map<std::string, int>& Toker::getKeywords()
 
 int Toker::pos()
 {
-	int from = (curr_toke >= 0 && curr_toke < (int)tokes.size()) ? tokes[curr_toke].from : 0;
-	return ((curr_row) << 16) | from;
+    int from = (curr_toke >= 0 && curr_toke < (int)tokes.size()) ? tokes[curr_toke].from : 0;
+    return ((curr_row) << 16) | from;
 }
 
 int Toker::curr()
@@ -167,9 +167,9 @@ std::string Toker::text()
 
 int Toker::lookAhead(int n)
 {
-	int i = curr_toke + n;
-	if (i < 0 || i >= (int)tokes.size()) return '\n';
-	return tokes[i].n;
+    int i = curr_toke + n;
+    if (i < 0 || i >= (int)tokes.size()) return '\n';
+    return tokes[i].n;
 }
 
 void Toker::nextline()
@@ -194,36 +194,36 @@ void Toker::nextline()
         return;
     }
 
-#ifdef XBETA
-    while (true) {
-        size_t end = rawLine.find_last_not_of(" \t");
-        if (end != std::string::npos) {
-            rawLine.erase(end + 1);
-        }
-        else {
-            rawLine.clear();
-        }
+    if (experimentalSyntaxEnabled) {
+        while (true) {
+            size_t end = rawLine.find_last_not_of(" \t");
+            if (end != std::string::npos) {
+                rawLine.erase(end + 1);
+            }
+            else {
+                rawLine.clear();
+            }
 
-        if (rawLine.empty() || rawLine.back() != '_') {
-            break;
-        }
-        if (rawLine.size() > 1) {
-            char prev = rawLine[rawLine.size() - 2];
-            if (isalnum((unsigned char)prev) || prev == '_' || prev == '\'') {
+            if (rawLine.empty() || rawLine.back() != '_') {
                 break;
             }
-        }
+            if (rawLine.size() > 1) {
+                char prev = rawLine[rawLine.size() - 2];
+                if (isalnum((unsigned char)prev) || prev == '_' || prev == '\'') {
+                    break;
+                }
+            }
 
-        rawLine.pop_back();
+            rawLine.pop_back();
 
-        std::string nextLine;
-        if (!getline(in, nextLine)) {
-            break;
+            std::string nextLine;
+            if (!getline(in, nextLine)) {
+                break;
+            }
+            ++curr_row;
+            rawLine += nextLine;
         }
-        ++curr_row;
-        rawLine += nextLine;
     }
-#endif
 
     line = rawLine + '\n';
     chars_toked += line.size();
@@ -547,9 +547,7 @@ void Toker::nextline()
         if (isalpha((unsigned char)c))
         {
             for (++k; isalnum((unsigned char)line[k]) || line[k] == '_'
-#ifdef XBETA
-                || line[k] == '\''
-#endif
+                || (experimentalSyntaxEnabled && line[k] == '\'')
                 ; ++k) {
             }
 
@@ -601,8 +599,7 @@ void Toker::nextline()
             tokes.push_back(Toke(GE, from, k += 2));
             continue;
         }
-#ifdef XBETA
-        if ((c == '+' || c == '-' || c == '*' || c == '/' || c == '&') && line[k + 1] == '=') {
+        if (experimentalSyntaxEnabled && (c == '+' || c == '-' || c == '*' || c == '/' || c == '&') && line[k + 1] == '=') {
             int token = 0;
             switch (c) {
             case '+': token = PLUSEQ; break;
@@ -614,7 +611,6 @@ void Toker::nextline()
             tokes.push_back(Toke(token, from, k += 2));
             continue;
         }
-#endif
         //Modern logical operators: &, |, !, !=
         if (c == '&') {
             if (n != ' ') line = line.insert(k, 1, ' ');

@@ -38,7 +38,7 @@ static void showInfo() {
 }
 
 static void showUsage() {
-	std::cout << "Usage: blitzcc [-h|-q|+q|-c|-d|-k|+k|-nlaa|-noautodecl|-v|-o exefile] [sourcefile.bb]" << std::endl;
+	std::cout << "Usage: blitzcc [-h|-q|+q|-c|-d|-k|+k|-nlaa|-noautodecl|-experimental|-v|-o exefile] [sourcefile.bb]" << std::endl;
 }
 
 static void showHelp() {
@@ -53,6 +53,7 @@ static void showHelp() {
 	std::cout << "-v		 : version info" << std::endl;
 	std::cout << "-nlaa      : disables large address awareness for the output executable" << std::endl;
 	std::cout << "-noautodecl: disables auto declaration of undeclared variables" << std::endl;
+	std::cout << "-experimental: enables experimental language syntax" << std::endl;
 	std::cout << "-o exefile : generate executable" << std::endl;
 }
 
@@ -215,6 +216,9 @@ int _cdecl main(int argc, char* argv[]) {
 		}
 		else if (t == "-noautodecl") {
 			autoDeclEnabled = false;
+		}
+		else if (t == "-experimental") {
+			experimentalSyntaxEnabled = true;
 		}
 		else if (t == "-encrypt") {
 			encrypt = true;

@@ -234,8 +234,6 @@ struct RestoreNode : public StmtNode {
 	void translate(Codegen* g);
 };
 
-#ifdef XBETA
-
 struct DoLoopNode : public StmtNode {
 	ExprNode* cond;
 	StmtSeqNode* stmts;
@@ -271,7 +269,5 @@ struct CompoundAssNode : public StmtNode {
 	void semant(Environ* e) override;
 	void translate(Codegen* g) override;
 };
-
-#endif
 
 #endif
