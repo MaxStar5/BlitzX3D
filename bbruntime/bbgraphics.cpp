@@ -503,7 +503,7 @@ static bool saveCanvas(gxCanvas* c, const std::string& f)
 
     BITMAPFILEHEADER bf;
     memset(&bf, 0, sizeof(bf));
-    bf.bfType = 'BM';
+    bf.bfType = 'B' | ('M' << 8);
     bf.bfSize = sizeof(BITMAPFILEHEADER) + sizeof(BITMAPINFOHEADER) + tempsize * c->getHeight();
     bf.bfOffBits = sizeof(BITMAPFILEHEADER) + sizeof(BITMAPINFOHEADER);
     BITMAPINFOHEADER bi; memset(&bi, 0, sizeof(bi));
@@ -1510,6 +1510,7 @@ void bbGrabImage(bbImage* i, int x, int y, int n)
     x += src_ox - dst_hx; y += src_oy - dst_hy;
     c->setViewport(0, 0, c->getWidth(), c->getHeight());
     c->blit(0, 0, gx_canvas, x, y, c->getWidth(), c->getHeight(), true);
+    i->saveOrigPixels();
     if (auto_dirty) c->backup();
 }
 
