@@ -28,6 +28,8 @@ static void procNotFound() {
 void _bbLoadLibs(char* p) {
 
 	std::string home;
+	std::vector<std::string> missingLibs;
+	std::map<std::string, std::vector<std::string>> missingProc;
 
 	if (const char* t = getenv("blitzpath")) home = t;
 	while (*p) {
@@ -45,21 +47,51 @@ void _bbLoadLibs(char* p) {
 				p += strlen(p) + 1;
 				void* ptr = *(void**)p;
 				p += 4;
-				if (!proc) // throw an early exception
-					procNotFound();
-				*(void**)ptr = proc;
+				if (proc) { *(void**)ptr = proc; }
+				else { missingProc[libFile].push_back(funcName); }
 			}
 		}
 		else {
 			while (*p) {
 				p += strlen(p) + 1;
-				void* ptr = *(void**)p;
 				p += 4;
-				libNotFound();
-				//*(void**)ptr = libNotFound;
 			}
+			missingLibs.push_back(libFile);
 		}
 		++p;
+	}
+
+	std::string errorMsg;
+
+	if (!missingLibs.empty() || !missingProc.empty()) {
+		errorMsg = "Failed to load required runtime dependencies.\n\n";
+
+		if (!missingLibs.empty()) {
+			errorMsg += "Missing libraries:\n";
+
+			for (const std::string& lib : missingLibs) {
+				errorMsg += "  - " + lib + "\n";
+			}
+		}
+
+		if (!missingProc.empty()) {
+			if (!missingLibs.empty()) errorMsg += "\n";
+
+			errorMsg += "Missing functions:\n";
+
+			for (const auto& proc : missingProc) {
+				errorMsg += "  " + proc.first + ":\n";
+
+				for (const std::string& func : proc.second) {
+					errorMsg += "    - " + func + "\n";
+				}
+			}
+		}
+
+		errorMsg += "\n";
+		errorMsg += "The application cannot continue because one or more required dependencies could not be loaded.";
+
+		RTEX(errorMsg.c_str());
 	}
 }
 
