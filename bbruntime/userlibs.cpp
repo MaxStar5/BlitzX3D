@@ -29,13 +29,13 @@ void _bbLoadLibs(char* p) {
 
 	std::string home;
 
-	libFile = p;
 	if (const char* t = getenv("blitzpath")) home = t;
 	while (*p) {
 		HMODULE mod = LoadLibrary(p);
 		if (!mod && home.size()) {
 			mod = LoadLibrary((home + "/userlibs/" + p).c_str());
 		}
+		libFile = p;
 		p += strlen(p) + 1;
 		if (mod) {
 			_mods.push_back(mod);
@@ -45,7 +45,9 @@ void _bbLoadLibs(char* p) {
 				p += strlen(p) + 1;
 				void* ptr = *(void**)p;
 				p += 4;
-				*(void**)ptr = proc ? proc : procNotFound;
+				if (!proc) // throw an early exception
+					procNotFound();
+				*(void**)ptr = proc;
 			}
 		}
 		else {
@@ -53,7 +55,8 @@ void _bbLoadLibs(char* p) {
 				p += strlen(p) + 1;
 				void* ptr = *(void**)p;
 				p += 4;
-				*(void**)ptr = libNotFound;
+				libNotFound();
+				//*(void**)ptr = libNotFound;
 			}
 		}
 		++p;
