@@ -171,13 +171,6 @@ gxRuntime::gxRuntime(HINSTANCE hi, const std::string& cl, HWND hw) :
 	memset(&d3ddmEx, 0, sizeof(d3ddmEx));
 	d3ddmEx.Size = sizeof(D3DDISPLAYMODEEX);
 
-	if (FAILED(Direct3DCreate9Ex(D3D_SDK_VERSION, &d3d))) {
-		d3d = nullptr;
-		debugLog("Direct3D9 not available");
-	}
-
-	enumGfx();
-
 	TIMECAPS tc;
 	timeGetDevCaps(&tc, sizeof(tc));
 	timeBeginPeriod(tc.wPeriodMin);
@@ -1135,8 +1128,10 @@ gxGraphics* gxRuntime::openGraphics(int w, int h, int d, int driver, int flags) 
 		return 0;
 	}
 
+	if (drivers.empty()) enumGfx();
+
 	if (!this->d3d) {
-		DebugMsg("ERROR: Direct3D9 object is null! Direct3DCreate9 failed in constructor.");
+		DebugMsg("ERROR: Direct3D9 object is null! Direct3DCreate9 failed.");
 		busy = false;
 		return 0;
 	}
@@ -1293,8 +1288,17 @@ void gxRuntime::closeFileSystem(gxFileSystem* f) {
 ////////////////////
 // GFX ENUM STUFF //
 ////////////////////
+void gxRuntime::ensureD3D() {
+	if (d3d) return;
+	if (FAILED(Direct3DCreate9Ex(D3D_SDK_VERSION, &d3d))) {
+		d3d = nullptr;
+		debugLog("Direct3D9 not available");
+	}
+}
+
 void gxRuntime::enumGfx() {
 	denumGfx();
+	ensureD3D();
 	if (!d3d) return;
 	static const D3DFORMAT kFormats[] = { D3DFMT_X8R8G8B8, D3DFMT_R5G6B5, D3DFMT_A8R8G8B8 };
 	UINT adapterCount = d3d->GetAdapterCount();

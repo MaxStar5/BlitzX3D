@@ -78,6 +78,7 @@ private:
     GfxDriver* curr_driver;
     int use_di;
 
+    void ensureD3D();
     void enumGfx();
     void denumGfx();
 
