@@ -2719,7 +2719,7 @@ void TextEditor::ToggleComment()
 	}
 
 	Coordinates cstart(firstLine, 0);
-	Coordinates cend(lastLine, GetLineMaxColumn(lastLine));
+	Coordinates cend(lastLine, GetLineMaxColumn(lastLine) + 1);
 	u.mRemoved = GetText(cstart, cend);
 	u.mRemovedStart = cstart;
 	u.mRemovedEnd = cend;
@@ -2737,9 +2737,12 @@ void TextEditor::ToggleComment()
 		else
 		{
 			line.insert(line.begin() + i, Glyph(';', PaletteIndex::Default));
+			cend.mColumn++;
 		}
 	}
 
+	SetSelection(cstart, cend);
+	SetCursorPosition(cend);
 	u.mAdded = GetText(cstart, cend);
 	u.mAddedStart = cstart;
 	u.mAddedEnd = cend;
