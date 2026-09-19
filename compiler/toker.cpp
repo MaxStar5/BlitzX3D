@@ -573,7 +573,15 @@ void Toker::nextline()
                 continue;
             }
 
-            tokes.push_back(Toke(it->second, from, k));
+            int tok = it->second;
+            if (!experimentalSyntaxEnabled && (tok == DO || tok == LOOP || tok == WITH || tok == IS || tok == ISNOT))
+            {
+                for (int n = from; n < k; ++n) line[n] = tolower((unsigned char)line[n]);
+                tokes.push_back(Toke(IDENT, from, k));
+                continue;
+            }
+
+            tokes.push_back(Toke(tok, from, k));
             continue;
         }
         if (c == '\"')
