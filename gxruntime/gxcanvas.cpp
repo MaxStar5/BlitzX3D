@@ -9,6 +9,14 @@ static int canvas_cnt;
 
 extern gxRuntime* gx_runtime;
 
+static inline unsigned toRGB565(unsigned rgb) {
+    return ((rgb >> 19) & 0x1f) << 11 | ((rgb >> 10) & 0x3f) << 5 | ((rgb >> 3) & 0x1f);
+}
+static inline bool maskMatch(unsigned rgb, unsigned maskRGB, bool legacy565) {
+    if (!legacy565) return (rgb & 0xffffff) == (maskRGB & 0xffffff);
+    return toRGB565(rgb) == toRGB565(maskRGB);
+}
+
 static unsigned FWMS[] = {
     0xffffffff,0x7fffffff,0x3fffffff,0x1fffffff,
     0x0fffffff,0x07ffffff,0x03ffffff,0x01ffffff,
@@ -408,7 +416,7 @@ void gxCanvas::updateBitMask(const RECT& r) const {
             unsigned mask = 0;
             for (int x = 0; x < 32; ++x) {
                 unsigned pix = format.getPixel(src) & 0xffffff;
-                mask = (mask << 1) | (pix != mask_argb);
+                mask = (mask << 1) | !maskMatch(pix, mask_argb, graphics->mask565);
                 src += format.getPitch();
             }
             *dest++ = mask;
@@ -793,13 +801,13 @@ static IDirect3DTexture9* getOrBuildBlitTex(IDirect3DDevice9* dev, gxCanvas* src
             }
             if (doMask) {
                 for (int x = 0; x < logW; ++x)
-                    if ((dstRow[x] & 0x00ffffffu) == maskRGB) dstRow[x] = 0x00000000u;
+                    if (maskMatch(dstRow[x], maskRGB, src->graphics->mask565)) dstRow[x] = 0x00000000u;
             }
         }
         else {
             for (int x = 0; x < logW; ++x) {
                 unsigned argb = fmt.toARGB(fmt.getPixel((void*)(srcRow + x * pitch)));
-                if (doMask && (argb & 0x00ffffffu) == maskRGB)
+                if (doMask && maskMatch(argb, maskRGB, src->graphics->mask565))
                     argb = 0x00000000u;
                 else if (!srcHasAlpha) {
                     argb |= 0xff000000u;
@@ -1095,7 +1103,7 @@ static void cpuBlit(gxCanvas* dest, const RECT& dest_r, gxCanvas* src, const REC
             for (int x = 0; x < dw; ++x) {
                 int sx = stretch ? (x * sw / dw) : x;
                 unsigned argb = sf.toARGB(sf.getPixel((void*)(srow + sx * sp)));
-                if (doMask && (argb & 0x00ffffffu) == maskRGB) continue;
+                    if (doMask && maskMatch(argb, maskRGB, src->graphics->mask565)) continue;
                 if (!doAlpha) argb |= 0xff000000u;
                 df.setPixel(drow + x * dp, df.fromARGB(argb));
             }
@@ -1666,7 +1674,7 @@ void gxCanvas::blitTForm(int x, int y, gxCanvas* src, int src_x, int src_y, int 
                     if (ix < 0) ix = 0; else if (ix >= srcW) ix = srcW - 1;
                     if (iy < 0) iy = 0; else if (iy >= srcH) iy = srcH - 1;
                     argb = src->format.toARGB(src->getPixelFast(ix, iy));
-                    if (doMask && (argb & 0x00ffffffu) == maskRGB) continue;
+                    if (doMask && maskMatch(argb, maskRGB, graphics->mask565)) continue;
                     if (!doAlpha) argb |= 0xff000000u;
                 } else {
                     int ix = (int)floorf(sxf); int iy = (int)floorf(syf);
@@ -1683,7 +1691,7 @@ void gxCanvas::blitTForm(int x, int y, gxCanvas* src, int src_x, int src_y, int 
                     unsigned c00 = getC(ix, iy); unsigned c10 = getC(ix+1, iy);
                     unsigned c01 = getC(ix, iy+1); unsigned c11 = getC(ix+1, iy+1);
                     if (doMask) {
-                        auto masked = [&](unsigned c)->unsigned { return (c & 0x00ffffffu) == maskRGB ? 0 : c; };
+                        auto masked = [&](unsigned c)->unsigned { return maskMatch(c, maskRGB, graphics->mask565) ? 0 : c; };
                         c00 = masked(c00); c10 = masked(c10); c01 = masked(c01); c11 = masked(c11);
                     }
                     int w1 = (int)((1-fxfrac)*(1-fyfrac)*256); int w2 = (int)(fxfrac*(1-fyfrac)*256);

@@ -1200,6 +1200,8 @@ gxGraphics* gxRuntime::openGraphics(int w, int h, int d, int driver, int flags) 
 	gfx_lost = false;
 	busy = false;
 
+	if (graphics) graphics->mask565 = (d == 16);
+
 	if (!graphics) {
 		DebugMsg("openGraphics FINAL: Returning NULL (graphics creation failed)");
 	}
