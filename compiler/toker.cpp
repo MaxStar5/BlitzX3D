@@ -21,8 +21,13 @@ static std::unordered_map<std::string, int> alphaTokes, lowerTokes;
 
 static void makeKeywords()
 {
-    static bool made;
-    if (made) return;
+    static bool made, madeExperimental;
+    if (made && madeExperimental == experimentalSyntaxEnabled) return;
+    made = true;
+    madeExperimental = experimentalSyntaxEnabled;
+
+    alphaTokes.clear();
+    lowerTokes.clear();
 
     alphaTokes["Dim"] = DIM;
     alphaTokes["Goto"] = GOTO;
@@ -101,37 +106,36 @@ static void makeKeywords()
     alphaTokes["Infinity"] = INFINITYCONST;
     alphaTokes["PowTwo"] = POWTWO;
 
-#if BETA
-    alphaTokes["Switch"] = SELECT;
-    alphaTokes["End Switch"] = ENDSELECT;
-    alphaTokes["Array"] = DIM;
-    alphaTokes["Interger"] = BBINT;
-    alphaTokes["Method"] = FUNCTION;
-    alphaTokes["Fun"] = FUNCTION;
-    alphaTokes["End Method"] = ENDFUNCTION;
-    alphaTokes["EndFun"] = ENDFUNCTION;
-    alphaTokes["End Fun"] = ENDFUNCTION;
-    alphaTokes["EndType"] = ENDTYPE;
-    alphaTokes["EndSwitch"] = ENDSELECT;
-    alphaTokes["EndSel"] = ENDSELECT;
-    alphaTokes["Final"] = BBCONST;
-    alphaTokes["End While"] = WEND;
-#endif
+    if (experimentalSyntaxEnabled) {
+        alphaTokes["Switch"] = SELECT;
+        alphaTokes["End Switch"] = ENDSELECT;
+        alphaTokes["Array"] = DIM;
+        alphaTokes["Interger"] = BBINT;
+        alphaTokes["Method"] = FUNCTION;
+        alphaTokes["Fun"] = FUNCTION;
+        alphaTokes["End Method"] = ENDFUNCTION;
+        alphaTokes["EndFun"] = ENDFUNCTION;
+        alphaTokes["End Fun"] = ENDFUNCTION;
+        alphaTokes["EndType"] = ENDTYPE;
+        alphaTokes["EndSwitch"] = ENDSELECT;
+        alphaTokes["EndSel"] = ENDSELECT;
+        alphaTokes["Final"] = BBCONST;
+        alphaTokes["End While"] = WEND;
 
-    alphaTokes["Do"] = DO;
-    alphaTokes["Loop"] = LOOP;
-    alphaTokes["With"] = WITH;
-    alphaTokes["End With"] = ENDWITH;
-    alphaTokes["Is"] = IS;
-    alphaTokes["IsNot"] = ISNOT;
-    alphaTokes["IsNaht"] = ISNOT;
-    alphaTokes["Case Else"] = DEFAULT;
+        alphaTokes["Do"] = DO;
+        alphaTokes["Loop"] = LOOP;
+        alphaTokes["With"] = WITH;
+        alphaTokes["End With"] = ENDWITH;
+        alphaTokes["Is"] = IS;
+        alphaTokes["IsNot"] = ISNOT;
+        alphaTokes["IsNaht"] = ISNOT;
+        alphaTokes["Case Else"] = DEFAULT;
+    }
 
     std::unordered_map<std::string, int>::const_iterator it;
     for (it = alphaTokes.begin(); it != alphaTokes.end(); ++it) {
         lowerTokes[tolower(it->first)] = it->second;
     }
-    made = true;
 }
 
 Toker::Toker(const std::string& file, std::istream& in, bool debug) :inc_file(file), in(in), curr_row(-1), skipLine(false), noMacro(false)
@@ -573,15 +577,7 @@ void Toker::nextline()
                 continue;
             }
 
-            int tok = it->second;
-            if (!experimentalSyntaxEnabled && (tok == DO || tok == LOOP || tok == WITH || tok == IS || tok == ISNOT))
-            {
-                for (int n = from; n < k; ++n) line[n] = tolower((unsigned char)line[n]);
-                tokes.push_back(Toke(IDENT, from, k));
-                continue;
-            }
-
-            tokes.push_back(Toke(tok, from, k));
+            tokes.push_back(Toke(it->second, from, k));
             continue;
         }
         if (c == '\"')
