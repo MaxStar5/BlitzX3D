@@ -133,6 +133,8 @@ gxAudio::gxAudio(gxRuntime* r) :
 	next_chan = 0;
 	soundChannels.resize(4096);
 	for (int k = 0; k < 4096; ++k) soundChannels[k] = 0;
+	reverb_stream = BASS_StreamCreate(0, 0, BASS_STREAM_DECODE, STREAMPROC_DEVICE, 0);
+	reverb_fx = 0;
 }
 
 gxAudio::~gxAudio() {
@@ -142,6 +144,11 @@ gxAudio::~gxAudio() {
 	while (sound_set.size()) freeSound(*sound_set.begin());
 	soundChannels.clear();
 	songs.clear();
+	if (reverb_stream) {
+		reverb_fx = 0;
+		BASS_StreamFree(reverb_stream);
+		reverb_stream = 0;
+	}
 }
 
 gxChannel* gxAudio::play(HSAMPLE sample, float def_vol) {
@@ -209,6 +216,26 @@ void gxAudio::setPaused(bool paused) {
 }
 
 void gxAudio::setVolume(float volume) {
+	if (volume < 0.0f) volume = 0.0f;
+	else if (volume > 1.0f) volume = 1.0f;
+	DWORD v = (DWORD)(volume * 10000.0f);
+	BASS_SetConfig(BASS_CONFIG_GVOL_SAMPLE, v);
+	BASS_SetConfig(BASS_CONFIG_GVOL_STREAM, v);
+	BASS_SetConfig(BASS_CONFIG_GVOL_MUSIC, v);
+}
+
+void gxAudio::setReverb(float in_gain, float reverb_mix, float reverb_time, float high_freq_ratio) {
+	if (!reverb_stream) return;
+	if (!reverb_fx) {
+		reverb_fx = BASS_ChannelSetFX(reverb_stream, BASS_FX_DX8_REVERB, 0);
+		if (!reverb_fx) return;
+	}
+	BASS_DX8_REVERB p;
+	p.fInGain = in_gain;
+	p.fReverbMix = reverb_mix;
+	p.fReverbTime = reverb_time;
+	p.fHighFreqRTRatio = high_freq_ratio;
+	BASS_FXSetParameters(reverb_fx, &p);
 }
 
 void gxAudio::set3dOptions(float roll, float dopp, float dist) {

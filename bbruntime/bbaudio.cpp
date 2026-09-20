@@ -70,6 +70,16 @@ gxChannel* bbPlayCDTrack(int track, int mode) {
 	return gx_audio ? gx_audio->playCDTrack(track, mode) : 0;
 }
 
+void bbSetMasterVolume(float volume) {
+	if (!gx_audio) return;
+	gx_audio->setVolume(volume);
+}
+
+void bbSetReverb(float in_gain, float reverb_mix, float reverb_time, float high_freq_ratio) {
+	if (!gx_audio) return;
+	gx_audio->setReverb(in_gain, reverb_mix, reverb_time, high_freq_ratio);
+}
+
 void bbStopChannel(gxChannel* channel) {
 	if (!channel) return;
 	channel->stop();
@@ -138,4 +148,6 @@ void audio_link(void(*rtSym)(const char*, void*)) {
 	rtSym("ChannelPan%channel#pan", bbChannelPan);
 	rtSym("%ChannelPlaying%channel", bbChannelPlaying);
 	rtSym("%Load3DSound$filename", bbLoad3DSound);
+	rtSym("SetMasterVolume#volume", bbSetMasterVolume);
+	rtSym("SetReverb#in_gain#reverb_mix#reverb_time#high_freq_ratio", bbSetReverb);
 }

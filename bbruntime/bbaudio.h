@@ -15,6 +15,8 @@ void		 bbSoundVolume(gxSound* sound, float volume);
 void		 bbSoundPan(gxSound* sound, float pan);
 gxChannel* bbPlayMusic(BBStr* s, int mode);
 gxChannel* bbPlayCDTrack(int track, int mode);
+void		 bbSetMasterVolume(float volume);
+void		 bbSetReverb(float in_gain, float reverb_mix, float reverb_time, float high_freq_ratio);
 void		 bbStopChannel(gxChannel* channel);
 void		 bbPauseChannel(gxChannel* channel);
 void		 bbResumeChannel(gxChannel* channel);

@@ -22,6 +22,8 @@ public:
 	void resume();
 
 private:
+	HSTREAM reverb_stream;
+	HFX reverb_fx;
 
 	/***** GX INTERFACE *****/
 public:
@@ -35,6 +37,7 @@ public:
 
 	void setPaused(bool paused);	//master pause
 	void setVolume(float volume);	//master volume
+	void setReverb(float in_gain, float reverb_mix, float reverb_time, float high_freq_ratio);
 
 	void set3dOptions(float roll, float dopp, float dist);
 
