@@ -986,8 +986,6 @@ void gxRuntime::applyAntialiasToParams(D3DPRESENT_PARAMETERS& pp) {
 }
 
 gxGraphics* gxRuntime::openWindowedGraphics(int w, int h, int d, bool d3d) {
-	if (!d3d) return 0;
-
 	ZeroMemory(&d3dpp, sizeof(d3dpp));
 	d3dpp.Windowed = TRUE;
 	d3dpp.SwapEffect = D3DSWAPEFFECT_DISCARD;
@@ -1036,8 +1034,6 @@ gxGraphics* gxRuntime::openWindowedGraphics(int w, int h, int d, bool d3d) {
 }
 
 gxGraphics* gxRuntime::openExclusiveGraphics(int w, int h, int d, bool d3d) {
-	if (!d3d) return 0;
-
 	D3DFORMAT format;
 	if (d == 0) {
 		D3DDISPLAYMODE mode;
@@ -1121,12 +1117,6 @@ gxGraphics* gxRuntime::openGraphics(int w, int h, int d, int driver, int flags) 
 	ss.str("");
 	ss << "d3d flag=" << d3d << " windowed=" << windowed;
 	DebugMsg(ss.str());
-
-	if (!d3d) {
-		DebugMsg("ERROR: GRAPHICS_3D flag not set!");
-		busy = false;
-		return 0;
-	}
 
 	if (drivers.empty()) enumGfx();
 

@@ -64,6 +64,8 @@ void	 bbWritePixelFast(int x, int y, int argb, gxCanvas* buff);
 //2d rendering functions
 void	 bbOrigin(int x, int y);
 void	 bbViewport(int x, int y, int w, int h);
+void	 bbBeginScrollRect(int x, int y, int w, int h, int scroll_x = 0, int scroll_y = 0);
+void	 bbEndScrollRect();
 void	 bbColor(int r, int g, int b, int a = 255);
 void	 bbClsColor(int r, int g, int b, int a = 255);
 void	 bbCls();

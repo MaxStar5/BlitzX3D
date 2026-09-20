@@ -5,12 +5,21 @@
 #include "../MultiLang/MultiLang.h"
 #include <algorithm>
 #include <cmath>
+#include <vector>
 #include "../blitz3d/texture.h"
 #include "../blitz3d/cachedtexture.h"
 
 gxGraphics* gx_graphics;
 gxCanvas* gx_canvas;
 gxCanvas* gx_depth_canvas;
+
+struct ScrollRectState
+{
+    RECT viewport;
+    int origin_x, origin_y;
+};
+
+static std::vector<ScrollRectState> scroll_rect_stack;
 
 struct GfxMode
 {
@@ -672,6 +681,7 @@ static void applyCanvasBuffer(gxCanvas* buff)
         RTEX(MultiLang::buffer_not_exist);
     }
     gx_canvas = buff;
+    scroll_rect_stack.clear();
     curs_x = curs_y = 0;
     gx_canvas->setOrigin(0, 0);
     gx_canvas->setViewport(0, 0, gx_canvas->getWidth(), gx_canvas->getHeight());
@@ -1043,6 +1053,49 @@ void bbOrigin(int x, int y)
 void bbViewport(int x, int y, int w, int h)
 {
     gx_canvas->setViewport(x, y, w, h);
+}
+
+static RECT intersectRect(const RECT& a, const RECT& b)
+{
+    RECT r;
+    r.left = a.left > b.left ? a.left : b.left;
+    r.top = a.top > b.top ? a.top : b.top;
+    r.right = a.right < b.right ? a.right : b.right;
+    r.bottom = a.bottom < b.bottom ? a.bottom : b.bottom;
+    if (r.right < r.left) r.right = r.left;
+    if (r.bottom < r.top) r.bottom = r.top;
+    return r;
+}
+
+void bbBeginScrollRect(int x, int y, int w, int h, int scroll_x, int scroll_y)
+{
+    int ox, oy, vx, vy, vw, vh;
+    gx_canvas->getOrigin(&ox, &oy);
+    gx_canvas->getViewport(&vx, &vy, &vw, &vh);
+
+    ScrollRectState st;
+    st.viewport.left = vx; st.viewport.top = vy;
+    st.viewport.right = vx + vw; st.viewport.bottom = vy + vh;
+    st.origin_x = ox; st.origin_y = oy;
+    scroll_rect_stack.push_back(st);
+
+    RECT want;
+    want.left = ox + x; want.top = oy + y;
+    want.right = want.left + w; want.bottom = want.top + h;
+    RECT clip = intersectRect(st.viewport, want);
+
+    gx_canvas->setViewport(clip.left, clip.top, clip.right - clip.left, clip.bottom - clip.top);
+    gx_canvas->setOrigin(ox + x - scroll_x, oy + y - scroll_y);
+}
+
+void bbEndScrollRect()
+{
+    if (scroll_rect_stack.empty()) return;
+    ScrollRectState st = scroll_rect_stack.back();
+    scroll_rect_stack.pop_back();
+    gx_canvas->setViewport(st.viewport.left, st.viewport.top,
+        st.viewport.right - st.viewport.left, st.viewport.bottom - st.viewport.top);
+    gx_canvas->setOrigin(st.origin_x, st.origin_y);
 }
 
 void bbColor(int r, int g, int b, int a)
@@ -2369,6 +2422,8 @@ void graphics_link(void (*rtSym)(const char* sym, void* pc))
     //rendering
     rtSym("Origin%x%y", bbOrigin);
     rtSym("Viewport%x%y%width%height", bbViewport);
+    rtSym("BeginScrollRect%x%y%width%height%scrollX=0%scrollY=0", bbBeginScrollRect);
+    rtSym("EndScrollRect", bbEndScrollRect);
     rtSym("Color%red%green%blue%alpha=255", bbColor);
     rtSym("GetColor%x%y", bbGetColor);
     rtSym("%ColorRed", bbColorRed);

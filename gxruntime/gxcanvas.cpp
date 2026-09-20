@@ -891,6 +891,8 @@ struct SavedBlitState {
     IDirect3DSurface9* oldDS;
     IDirect3DBaseTexture9* oldTex;
     D3DVIEWPORT9 oldVP;
+    DWORD oldScissorEnable;
+    RECT oldScissorRect;
     DWORD oldZ, oldAlphaTest, oldAlphaFunc, oldAlphaRef, oldAlphaBlend;
     DWORD oldSrcBlend, oldDestBlend;
     DWORD oldLighting, oldTextureFactor;
@@ -917,6 +919,8 @@ static void saveBlitState(IDirect3DDevice9* dev, SavedBlitState& s) {
         dev->GetTextureStageState(1 + i, D3DTSS_ALPHAOP, &s.extraAOp[i]);
     }
     dev->GetViewport(&s.oldVP);
+    dev->GetRenderState(D3DRS_SCISSORTESTENABLE, &s.oldScissorEnable);
+    dev->GetScissorRect(&s.oldScissorRect);
     dev->GetRenderState(D3DRS_ZENABLE, &s.oldZ);
     dev->GetRenderState(D3DRS_ALPHABLENDENABLE, &s.oldAlphaBlend);
     dev->GetRenderState(D3DRS_SRCBLEND, &s.oldSrcBlend);
@@ -943,6 +947,8 @@ static void restoreBlitState(IDirect3DDevice9* dev, SavedBlitState& s) {
     if (s.oldRT) s.oldRT->Release();
     if (s.oldDS) s.oldDS->Release();
     dev->SetViewport(&s.oldVP);
+    dev->SetScissorRect(&s.oldScissorRect);
+    dev->SetRenderState(D3DRS_SCISSORTESTENABLE, s.oldScissorEnable);
     dev->SetRenderState(D3DRS_ZENABLE, s.oldZ);
     dev->SetRenderState(D3DRS_ALPHABLENDENABLE, s.oldAlphaBlend);
     dev->SetRenderState(D3DRS_SRCBLEND, s.oldSrcBlend);
@@ -1714,6 +1720,7 @@ void gxCanvas::blitTForm(int x, int y, gxCanvas* src, int src_x, int src_y, int 
     }
     IDirect3DDevice9* dev = graphics->dir3dDev;
     if (!dev) return;
+    if (viewport.right <= viewport.left || viewport.bottom <= viewport.top) return;
     bool useAlpha = (src->getFlags() & CANVAS_TEX_ALPHA) != 0 || src->format.hasAlphaMask();
     bool useMask = src->hasMask();
     unsigned maskRGB = useMask ? (src->format.toARGB(src->mask_surf) & 0x00ffffffu) : ~0u;
@@ -1744,6 +1751,9 @@ void gxCanvas::blitTForm(int x, int y, gxCanvas* src, int src_x, int src_y, int 
     dev->SetDepthStencilSurface(nullptr);
     D3DVIEWPORT9 vp = { 0,0,(DWORD)clip_rect.right,(DWORD)clip_rect.bottom,0.0f,1.0f };
     dev->SetViewport(&vp);
+    RECT scissor = { viewport.left, viewport.top, viewport.right, viewport.bottom };
+    dev->SetScissorRect(&scissor);
+    dev->SetRenderState(D3DRS_SCISSORTESTENABLE, TRUE);
     dev->SetRenderState(D3DRS_ZENABLE, FALSE);
     dev->SetRenderState(D3DRS_LIGHTING, FALSE);
     if (useAlpha) {
