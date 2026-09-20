@@ -11,7 +11,7 @@
 extern gxRuntime* gx_runtime;
 static Debugger* debugger;
 
-gxGraphics::gxGraphics(gxRuntime* rt, IDirect3DDevice9Ex* dev, IDirect3DSurface9* front, IDirect3DSurface9* back, bool d3d) : runtime(rt), dir3dDev(dev), frontBuffer(front), backBuffer(back), gfx_lost(false), dummy_mesh(0), skin_vshader(nullptr), skin_decl(nullptr), skin_shader_load_failed(false), skin_caps_checked(-1) {
+gxGraphics::gxGraphics(gxRuntime* rt, IDirect3DDevice9Ex* dev, IDirect3DSurface9* front, IDirect3DSurface9* back, bool d3d) : runtime(rt), dir3dDev(dev), frontBuffer(front), backBuffer(back), gfx_lost(false), dummy_mesh(0), skin_vshader(nullptr), skin_decl(nullptr), skin_shader_load_failed(false), skin_caps_checked(-1), copy_scratch(nullptr), copy_scratch_w(0), copy_scratch_h(0), copy_scratch_fmt(D3DFMT_UNKNOWN) {
 
 	if (dir3dDev) dir3dDev->AddRef();
 	if (frontBuffer) frontBuffer->AddRef();
@@ -65,6 +65,8 @@ gxGraphics::gxGraphics(gxRuntime* rt, IDirect3DDevice9Ex* dev, IDirect3DSurface9
 }
 
 gxGraphics::~gxGraphics() {
+	ddUtil::releaseCopyScratch();
+	releaseCopyScratchCanvas();
 	while (scene_set.size()) freeScene(*scene_set.begin());
 	while (movie_set.size()) closeMovie(*movie_set.begin());
 	while (font_set.size()) freeFont(*font_set.begin());
@@ -168,6 +170,8 @@ bool gxGraphics::restore() {
 
 		runtime->applyAntialiasToParams(present_params);
 
+		ddUtil::releaseCopyScratch();
+		releaseCopyScratchCanvas();
 		hr = dir3dDev->ResetEx(&present_params, present_params.Windowed ? nullptr : &runtime->d3ddmEx);
 		if (FAILED(hr) && present_params.MultiSampleType != D3DMULTISAMPLE_NONE) {
 			present_params.MultiSampleType = D3DMULTISAMPLE_NONE;
@@ -286,6 +290,8 @@ bool gxGraphics::changeDisplayMode(int width, int height, bool fullscreen, bool 
 
 	runtime->applyAntialiasToParams(present_params);
 
+	ddUtil::releaseCopyScratch();
+	releaseCopyScratchCanvas();
 	HRESULT hr = dir3dDev->ResetEx(&present_params, fullscreen ? &runtime->d3ddmEx : nullptr);
 	if (FAILED(hr) && present_params.MultiSampleType != D3DMULTISAMPLE_NONE) {
 		present_params.MultiSampleType = D3DMULTISAMPLE_NONE;
@@ -389,9 +395,37 @@ void gxGraphics::flip(bool vwait) {
 }
 
 void gxGraphics::copy(gxCanvas* dest, int dx, int dy, int dw, int dh, gxCanvas* src, int sx, int sy, int sw, int sh) {
+	if (dest == src && (dest->getFlags() & gxCanvas::CANVAS_TEXTURE) && sw > 0 && sh > 0 && dw > 0 && dh > 0) {
+		D3DSURFACE_DESC desc;
+		if (dir3dDev && SUCCEEDED(dest->getSurface()->GetDesc(&desc)) && ensureCopyScratch(sw, sh, desc.Format)) {
+			RECT srcRect = { sx, sy, sx + sw, sy + sh };
+			RECT tmpRect = { 0, 0, sw, sh };
+			if (SUCCEEDED(dir3dDev->StretchRect(src->getSurface(), &srcRect, copy_scratch->getSurface(), &tmpRect, D3DTEXF_NONE))) {
+				dest->blitstretch(dx, dy, dw, dh, copy_scratch, 0, 0, sw, sh, true);
+				return;
+			}
+		}
+	}
 	ddUtil::copy(dir3dDev, dest->getSurface(), dx, dy, dw, dh, src->getSurface(), sx, sy, sw, sh);
 	RECT r = { dx, dy, dx + dw, dy + dh };
 	dest->damage(r);
+}
+
+bool gxGraphics::ensureCopyScratch(int w, int h, D3DFORMAT fmt) {
+	if (copy_scratch && (copy_scratch_fmt != fmt || copy_scratch_w < w || copy_scratch_h < h)) releaseCopyScratchCanvas();
+	if (!copy_scratch) {
+		IDirect3DTexture9* tex = nullptr;
+		if (FAILED(dir3dDev->CreateTexture(w, h, 1, D3DUSAGE_RENDERTARGET, fmt, D3DPOOL_DEFAULT, &tex, nullptr))) return false;
+		copy_scratch = new gxCanvas(this, tex, 0);
+		copy_scratch_w = w; copy_scratch_h = h; copy_scratch_fmt = fmt;
+	}
+	return true;
+}
+
+void gxGraphics::releaseCopyScratchCanvas() {
+	if (copy_scratch) { delete copy_scratch; copy_scratch = nullptr; }
+	copy_scratch_w = copy_scratch_h = 0;
+	copy_scratch_fmt = D3DFMT_UNKNOWN;
 }
 
 int gxGraphics::getScanLine() const { return 0; }

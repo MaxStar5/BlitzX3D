@@ -1420,12 +1420,12 @@ void gxCanvas::text(int x, int y, const std::string& t) {
     int b = 0, w;
     while (b < (int)t.size() && tx + (w = font->charAdvance(UTF8::decodeCharacter(t.c_str(), b))) <= viewport.left) {
         tx += w; x += w;
-        b += UTF8::measureCodepoint(t[b]);
+        b += UTF8::measureCharacter(t.c_str(), b);
     }
     int e = b;
     while (e < (int)t.size() && tx < viewport.right) {
         tx += font->charAdvance(UTF8::decodeCharacter(t.c_str(), e));
-        e += UTF8::measureCodepoint(t[e]);
+        e += UTF8::measureCharacter(t.c_str(), e);
     }
     if (e > b) {
         beginBlitBatch();

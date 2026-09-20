@@ -585,6 +585,7 @@ void bbSetCubeMode(Texture* t, int mode) {
 gxCanvas* bbTextureBuffer(Texture* t, int frame) {
 	//v1.04
 	debugTexture(t, "TextureBuffer");
+	if (!t || !texture_set.count(t)) return 0;
 	if (gxCanvas* c = t->getCanvas(frame)) {
 		if (c->getDepth()) return c;
 	}

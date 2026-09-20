@@ -142,11 +142,18 @@ public:
 	bool ensureSkinningShader();
 	IDirect3DVertexShader9* getSkinningShader()const { return skin_vshader; }
 
+	bool ensureCopyScratch(int w, int h, D3DFORMAT fmt);
+	void releaseCopyScratchCanvas();
+
 private:
 	IDirect3DVertexShader9* skin_vshader;
 	IDirect3DVertexDeclaration9* skin_decl;
 	bool skin_shader_load_failed;
 	int skin_caps_checked;   //-1 unknown, 0 unsupported, 1 supported
+
+	gxCanvas* copy_scratch;
+	int copy_scratch_w, copy_scratch_h;
+	D3DFORMAT copy_scratch_fmt;
 };
 
 #endif

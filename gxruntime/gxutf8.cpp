@@ -19,20 +19,32 @@ int UTF8::measureCodepoint(char chr) {
 }
 
 int UTF8::decodeCharacter(const char* buf, int index) {
-	int codepointLen = measureCodepoint(buf[index]);
-
-	if (codepointLen == 1) {
-		return buf[index];
+	int len = measureCharacter(buf, index);
+	if (len == 1) {
+		return (unsigned char)buf[index];
 	}
 	else {
 		//decode first byte by skipping all bits that indicate the length of the codepoint
-		int newChar = buf[index] & (0x7f >> codepointLen);
-		for (int j = 1; j < codepointLen; j++) {
+		unsigned char c = (unsigned char)buf[index];
+		int newChar = c & (0x7f >> len);
+		for (int j = 1; j < len; j++) {
 			//decode all of the following bytes, fixed 6 bits per byte
-			newChar = (newChar << 6) | (buf[index + j] & 0x3f);
+			newChar = (newChar << 6) | (((unsigned char)buf[index + j]) & 0x3f);
 		}
 		return newChar;
 	}
+}
+
+int UTF8::measureCharacter(const char* buf, int index) {
+	unsigned char c = (unsigned char)buf[index];
+	if (c == 0 || (c & 0x80) == 0) return 1;
+	int len = measureCodepoint((char)c);
+	if (len < 2 || len > 4) return 1;
+	for (int j = 1; j < len; j++) {
+		unsigned char d = (unsigned char)buf[index + j];
+		if (d == 0 || (d & 0xC0) != 0x80) return 1;
+	}
+	return len;
 }
 
 int UTF8::encodeCharacter(int chr, char* result) {
@@ -136,7 +148,7 @@ int UTF8::length(const std::string& str) {
 	int utf8Len = 0;
 	for (int i = 0; i < str.size();) {
 		utf8Len++;
-		i += measureCodepoint(str[i]);
+		i += measureCharacter(str.c_str(), i);
 	}
 	return utf8Len;
 }
@@ -150,7 +162,7 @@ int UTF8::find(const std::string& str, const std::string& sstr, int from) {
 			break;
 		}
 		utf8Index++;
-		i += measureCodepoint(str[i]);
+		i += measureCharacter(str.c_str(), i);
 	}
 	if (bytesFrom < 0) { return -1; }
 	int bytesResult = str.find(sstr, bytesFrom);
@@ -161,7 +173,7 @@ int UTF8::find(const std::string& str, const std::string& sstr, int from) {
 			break;
 		}
 		utf8Index++;
-		i += measureCodepoint(str[i]);
+		i += measureCharacter(str.c_str(), i);
 	}
 	return result;
 }
@@ -189,7 +201,7 @@ std::string UTF8::substr(const std::string& str, int start, int length) {
 			break;
 		}
 		utf8Index++;
-		i += measureCodepoint(str[i]);
+		i += measureCharacter(str.c_str(), i);
 	}
 	return str.substr(bytesStart, bytesLength);
 }
@@ -199,7 +211,7 @@ std::wstring UTF8::convertToUtf16(const std::string& str) {
 
 	for (int i = 0; i < str.size();) {
 		result.push_back(decodeCharacter(str.c_str(), i));
-		i += measureCodepoint(str[i]);
+		i += measureCharacter(str.c_str(), i);
 	}
 
 	return result;

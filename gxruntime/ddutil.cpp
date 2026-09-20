@@ -14,6 +14,16 @@ static AsmCoder asm_coder;
 
 static thread_local std::string g_lastImageError;
 
+static IDirect3DTexture9* g_copyScratch = nullptr;
+static int g_copyScratchW = 0, g_copyScratchH = 0;
+static D3DFORMAT g_copyScratchFmt = D3DFMT_UNKNOWN;
+
+void ddUtil::releaseCopyScratch() {
+    if (g_copyScratch) { g_copyScratch->Release(); g_copyScratch = nullptr; }
+    g_copyScratchW = g_copyScratchH = 0;
+    g_copyScratchFmt = D3DFMT_UNKNOWN;
+}
+
 const std::string& ddUtil::getLastImageError() {
     return g_lastImageError;
 }
@@ -212,6 +222,30 @@ void ddUtil::copy(IDirect3DDevice9* dev, IDirect3DSurface9* dest_surf, int dx, i
     HRESULT hr = dev->StretchRect(src_surf, &srcRect, dest_surf, &destRect, D3DTEXF_LINEAR);
     if (SUCCEEDED(hr)) return;
 
+    if (src_surf == dest_surf && sw > 0 && sh > 0 && dw > 0 && dh > 0) {
+        D3DSURFACE_DESC self_desc;
+        if (SUCCEEDED(src_surf->GetDesc(&self_desc))) {
+            if (!g_copyScratch || g_copyScratchFmt != self_desc.Format || g_copyScratchW < sw || g_copyScratchH < sh) {
+                releaseCopyScratch();
+                if (SUCCEEDED(dev->CreateTexture(sw, sh, 1, D3DUSAGE_RENDERTARGET, self_desc.Format, D3DPOOL_DEFAULT, &g_copyScratch, nullptr))) {
+                    g_copyScratchW = sw; g_copyScratchH = sh; g_copyScratchFmt = self_desc.Format;
+                }
+            }
+            if (g_copyScratch) {
+                IDirect3DSurface9* tmp_surf = nullptr;
+                if (SUCCEEDED(g_copyScratch->GetSurfaceLevel(0, &tmp_surf))) {
+                    RECT tmp_rect = { 0, 0, sw, sh };
+                    if (SUCCEEDED(dev->StretchRect(src_surf, &srcRect, tmp_surf, &tmp_rect, D3DTEXF_NONE)) &&
+                        SUCCEEDED(dev->StretchRect(tmp_surf, &tmp_rect, dest_surf, &destRect, D3DTEXF_LINEAR))) {
+                        tmp_surf->Release();
+                        return;
+                    }
+                    tmp_surf->Release();
+                }
+            }
+        }
+    }
+
     D3DSURFACE_DESC src_desc, dst_desc;
     src_surf->GetDesc(&src_desc);
     dest_surf->GetDesc(&dst_desc);
@@ -337,6 +371,15 @@ IDirect3DTexture9* ddUtil::createTextureSurface(int w, int h, int flags, gxGraph
 
     IDirect3DTexture9* tex = nullptr;
     HRESULT hr = dev->CreateTexture(w, h, mipLevels, usage, fmt, pool, &tex, nullptr);
+    if (FAILED(hr) && fmt != D3DFMT_A8R8G8B8) {
+        fmt = D3DFMT_A8R8G8B8;
+        hr = dev->CreateTexture(w, h, mipLevels, usage, fmt, pool, &tex, nullptr);
+    }
+    if (FAILED(hr) && renderTarget) {
+        usage = D3DUSAGE_DYNAMIC;
+        mipLevels = 1;
+        hr = dev->CreateTexture(w, h, mipLevels, usage, fmt, pool, &tex, nullptr);
+    }
     if (FAILED(hr)) return nullptr;
     return tex;
 }
@@ -505,7 +548,7 @@ static IDirect3DTexture9* textureFromDecodedUnlocked(void* vfib32, int w, int h,
 	bool hasActualAlpha = hasRealAlpha(fib32);
 
 	D3DFORMAT fmt = D3DFMT_A8R8G8B8;
-	if (flags & gxCanvas::CANVAS_TEX_HICOLOR) fmt = D3DFMT_A4R4G4B4;
+	if ((flags & gxCanvas::CANVAS_TEX_HICOLOR) && !renderTarget) fmt = D3DFMT_A4R4G4B4;
 
 	IDirect3DDevice9* dev = gfx->dir3dDev;
 	if (!dev) return nullptr;
@@ -532,6 +575,15 @@ static IDirect3DTexture9* textureFromDecodedUnlocked(void* vfib32, int w, int h,
 
 	IDirect3DTexture9* tex = nullptr;
 	HRESULT hr = dev->CreateTexture(adjW, adjH, mipLevels, usage, fmt, pool, &tex, nullptr);
+	if (FAILED(hr) && fmt != D3DFMT_A8R8G8B8) {
+		fmt = D3DFMT_A8R8G8B8;
+		hr = dev->CreateTexture(adjW, adjH, mipLevels, usage, fmt, pool, &tex, nullptr);
+	}
+	if (FAILED(hr) && renderTarget) {
+		usage = D3DUSAGE_DYNAMIC;
+		mipLevels = 1;
+		hr = dev->CreateTexture(adjW, adjH, mipLevels, usage, fmt, pool, &tex, nullptr);
+	}
 	if (FAILED(hr)) return nullptr;
 
 	if (renderTarget) {

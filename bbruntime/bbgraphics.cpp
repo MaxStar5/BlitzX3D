@@ -179,8 +179,8 @@ extern std::unordered_set<Texture*> texture_set;
 
 static inline void debugImage(bbImage* i, const char* function, int frame = 0)
 {
-    if (!image_set.count(i)) ErrorLog(function, MultiLang::image_not_exist);
-    if (frame >= i->getFrames().size()) ErrorLog(function, MultiLang::image_frame_out_of_range);
+    if (!image_set.count(i)) RTEX(MultiLang::image_not_exist);
+    if (frame < 0 || frame >= (int)i->getFrames().size()) RTEX(MultiLang::image_frame_out_of_range);
 }
 
 static inline void debugFont(gxFont* f, const char* function)
@@ -668,6 +668,9 @@ int  bbAvailVidMem()
 
 static void applyCanvasBuffer(gxCanvas* buff)
 {
+    if (!buff || !gx_graphics->verifyCanvas(buff)) {
+        RTEX(MultiLang::buffer_not_exist);
+    }
     gx_canvas = buff;
     curs_x = curs_y = 0;
     gx_canvas->setOrigin(0, 0);

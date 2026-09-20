@@ -205,7 +205,7 @@ void gxFont::render(gxCanvas* dest, unsigned color_argb, int x, int y, const std
 	int t_x = 0;
 
 	for (int i = 0; i < (int)text.size(); ) {
-		int codepointLen = UTF8::measureCodepoint(text[i]);
+		int codepointLen = UTF8::measureCharacter(text.c_str(), i);
 		int chr = UTF8::decodeCharacter(text.c_str(), i);
 
 		auto it = glyphData.find(chr);
@@ -263,7 +263,7 @@ int gxFont::stringWidth(const std::string& text) {
 	int width = 0;
 
 	for(int i = 0; i < text.size();) {
-		int codepointLen = UTF8::measureCodepoint(text[i]);
+		int codepointLen = UTF8::measureCharacter(text.c_str(), i);
 		int chr = UTF8::decodeCharacter(text.c_str(), i);
 		std::unordered_map<int, GlyphData>::iterator it = glyphData.find(chr);
 		if(it == glyphData.end()) {

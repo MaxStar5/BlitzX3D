@@ -10,6 +10,7 @@ private:
     UTF8(const UTF8& o) {}
 public:
     static int measureCodepoint(char chr);
+    static int measureCharacter(const char* buf, int index);
     static int decodeCharacter(const char* buf, int index);
     static int encodeCharacter(int chr, char* result);
     static std::string convertToUtf8(const std::string& str);
