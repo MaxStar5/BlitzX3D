@@ -1772,6 +1772,37 @@ int  bbAnimating(Object* o) {
 	return 0;
 }
 
+int  bbBlendAnim(Object* o, int seq, float weight, int mode, float speed, float fade) {
+	debugObject(o, "BlendAnim");
+	if (Animator* anim = o->getAnimator()) {
+		return anim->blend(seq, weight, mode, speed, fade);
+	}
+	ErrorLog("BlendAnim", MultiLang::entity_no_animations);
+	return -1;
+}
+
+void  bbStopAnimBlend(Object* o, int seq) {
+	debugObject(o, "StopAnimBlend");
+	if (Animator* anim = o->getAnimator()) {
+		anim->stopBlend(seq);
+	}
+	else {
+		ErrorLog("StopAnimBlend", MultiLang::entity_no_animations);
+	}
+}
+
+float  bbAnimBlendWeight(Object* o, int seq) {
+	debugObject(o, "AnimBlendWeight");
+	if (Animator* anim = o->getAnimator()) return anim->blendWeight(seq);
+	return 0;
+}
+
+int  bbCountAnimBlends(Object* o) {
+	debugObject(o, "CountAnimBlends");
+	if (Animator* anim = o->getAnimator()) return anim->numBlends();
+	return 0;
+}
+
 ////////////////////////////////
 // ENTITY SPECIAL FX COMMANDS //
 ////////////////////////////////
@@ -2610,6 +2641,10 @@ void blitz3d_link(void (*rtSym)(const char* sym, void* pc)) {
 	rtSym("#AnimTime%entity", bbAnimTime);
 	rtSym("%AnimLength%entity", bbAnimLength);
 	rtSym("%Animating%entity", bbAnimating);
+	rtSym("%BlendAnim%entity%sequence#weight=1%mode=1#speed=1#fade=0", bbBlendAnim);
+	rtSym("StopAnimBlend%entity%sequence", bbStopAnimBlend);
+	rtSym("#AnimBlendWeight%entity%sequence", bbAnimBlendWeight);
+	rtSym("%CountAnimBlends%entity", bbCountAnimBlends);
 
 	rtSym("EntityParent%entity%parent%global=1", bbEntityParent);
 	rtSym("%CountChildren%entity", bbCountChildren);

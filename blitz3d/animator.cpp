@@ -30,6 +30,7 @@ Animator::Animator(const std::vector<Object*>& objs, int frames) :_objs(objs) {
 
 void Animator::reset() {
 	_seq = _mode = _seq_len = _time = _speed = _trans_time = _trans_speed = 0;
+	_blends.clear();
 }
 
 void Animator::addObjs(Object* obj) {
@@ -94,6 +95,139 @@ void Animator::updateAnim() {
 		if (keys.numRotationKeys()) {
 			obj->setLocalRotation(keys.getRotation(_time));
 		}
+	}
+}
+
+int Animator::blend(int seq, float weight, int mode, float speed, float fade) {
+	if (seq < 0 || seq >= _seqs.size()) return -1;
+
+	for (int k = 0; k < _blends.size(); ++k) {
+		if (_blends[k].seq != seq) continue;
+		Blend& b = _blends[k];
+		if (mode == ANIM_MODE_ONESHOT || (weight > 0 && b.weight <= 0)) {
+			b.len = _seqs[seq].frames;
+			b.time = speed >= 0 ? 0 : b.len;
+			b.cur = fade > 0 ? 0 : weight;
+		}
+		b.mode = mode;
+		b.speed = speed;
+		b.weight = weight;
+		b.fade = fade;
+		return k;
+	}
+
+	if (weight <= 0) return -1;
+
+	Blend b;
+	b.seq = seq;
+	b.mode = mode;
+	b.len = _seqs[seq].frames;
+	b.speed = speed;
+	b.time = speed >= 0 ? 0 : b.len;
+	b.weight = weight;
+	b.cur = fade > 0 ? 0 : weight;
+	b.fade = fade;
+	_blends.push_back(b);
+	return _blends.size() - 1;
+}
+
+void Animator::stopBlend(int seq) {
+	for (int k = 0; k < _blends.size(); ++k) {
+		if (_blends[k].seq == seq) {
+			_blends[k].weight = 0;
+		}
+	}
+}
+
+float Animator::blendWeight(int seq)const {
+	for (int k = 0; k < _blends.size(); ++k) {
+		if (_blends[k].seq == seq) return _blends[k].cur;
+	}
+	return 0;
+}
+
+void Animator::advanceBlends(float elapsed) {
+	for (int k = 0; k < _blends.size();) {
+		Blend& b = _blends[k];
+
+		//ramp current weight toward target
+		if (b.fade > 0) {
+			float d = b.weight - b.cur, step = b.fade * elapsed;
+			if (d > -step && d < step) b.cur = b.weight;
+			else b.cur += d > 0 ? step : -step;
+		}
+		else {
+			b.cur = b.weight;
+		}
+
+		if (b.speed != 0 && b.len > 0) {
+			b.time += b.speed * elapsed;
+			switch (b.mode) {
+			case ANIM_MODE_LOOP:
+				b.time = fmod(b.time, b.len);
+				if (b.time < 0) b.time += b.len;
+				break;
+			case ANIM_MODE_PINGPONG:
+				b.time = fmod(b.time, b.len * 2);
+				if (b.time < 0) b.time += b.len * 2;
+				if (b.time >= b.len) { b.time = b.len - (b.time - b.len); b.speed = -b.speed; }
+				break;
+			case ANIM_MODE_ONESHOT:
+				if (b.time < 0) { b.time = 0; b.speed = 0; }
+				else if (b.time >= b.len) { b.time = b.len; b.speed = 0; }
+				break;
+			}
+		}
+
+		if (b.weight <= 0 && b.cur <= 0) {
+			_blends.erase(_blends.begin() + k);
+			continue;
+		}
+		++k;
+	}
+}
+
+void Animator::updateBlend() {
+	if (_blends.empty()) return;
+
+	for (int k = 0; k < _objs.size(); ++k) {
+		Object* obj = _objs[k];
+
+		float p_tot = 0, s_tot = 0, r_tot = 0;
+		Vector p_sum, s_sum;
+		Quat r_sum;
+		bool has_p = false, has_s = false, has_r = false;
+
+		//base pose comes from the current transform fduring a base transition
+		if (_mode & 0x8000) {
+			p_sum = obj->getLocalPosition(); p_tot = 1; has_p = true;
+			s_sum = obj->getLocalScale(); s_tot = 1; has_s = true;
+			r_sum = obj->getLocalRotation(); r_tot = 1; has_r = true;
+		}
+
+		for (int j = 0; j < _blends.size(); ++j) {
+			const Blend& b = _blends[j];
+			if (b.cur <= 0 || b.seq < 0 || b.seq >= _anims[k].keys.size()) continue;
+			const Animation& a = _anims[k].keys[b.seq];
+			float w = b.cur;
+
+			if (a.numPositionKeys()) {
+				p_sum += a.getPosition(b.time) * w; p_tot += w; has_p = true;
+			}
+			if (a.numScaleKeys()) {
+				s_sum += a.getScale(b.time) * w; s_tot += w; has_s = true;
+			}
+			if (a.numRotationKeys()) {
+				Quat q = a.getRotation(b.time);
+				if (r_tot <= 0) { r_sum = q; r_tot = w; }
+				else { r_tot += w; r_sum = r_sum.slerpTo(q, w / r_tot); }
+				has_r = true;
+			}
+		}
+
+		if (has_p && p_tot > 0) obj->setLocalPosition(p_sum / p_tot);
+		if (has_s && s_tot > 0) obj->setLocalScale(s_sum / s_tot);
+		if (has_r && r_tot > 0) obj->setLocalRotation(r_sum.normalized());
 	}
 }
 
@@ -178,40 +312,49 @@ void Animator::animate(int mode, float speed, int seq, float trans) {
 
 void Animator::update(float elapsed) {
 
-	if (!_mode) return;
+	if (!_mode && _blends.empty()) return;
 
 	if (_mode & 0x8000) {
 		_trans_time += _trans_speed * elapsed;
 		if (_trans_time < 1) {
 			updateTrans();
+			advanceBlends(elapsed);
+			updateBlend();
 			return;
 		}
 		_mode &= 0x7fff;
 		if (!_mode || !_speed) {
 			updateAnim();
 			_mode = 0;
+			advanceBlends(elapsed);
+			updateBlend();
 			return;
 		}
 	}
 
-	//do anim...
-	_time += _speed * elapsed;
+	if (_mode) {
+		//do anim...
+		_time += _speed * elapsed;
 
-	switch (_mode) {
-	case ANIM_MODE_LOOP:
-		_time = fmod(_time, _seq_len);
-		if (_time < 0) _time += _seq_len;
-		break;
-	case ANIM_MODE_PINGPONG:
-		_time = fmod(_time, _seq_len * 2);
-		if (_time < 0) _time += _seq_len * 2;
-		if (_time >= _seq_len) { _time = _seq_len - (_time - _seq_len); _speed = -_speed; }
-		break;
-	case ANIM_MODE_ONESHOT:
-		if (_time < 0) { _time = 0; _mode = 0; }
-		else if (_time >= _seq_len) { _time = _seq_len; _mode = 0; }
-		break;
+		switch (_mode) {
+		case ANIM_MODE_LOOP:
+			_time = fmod(_time, _seq_len);
+			if (_time < 0) _time += _seq_len;
+			break;
+		case ANIM_MODE_PINGPONG:
+			_time = fmod(_time, _seq_len * 2);
+			if (_time < 0) _time += _seq_len * 2;
+			if (_time >= _seq_len) { _time = _seq_len - (_time - _seq_len); _speed = -_speed; }
+			break;
+		case ANIM_MODE_ONESHOT:
+			if (_time < 0) { _time = 0; _mode = 0; }
+			else if (_time >= _seq_len) { _time = _seq_len; _mode = 0; }
+			break;
+		}
+
+		updateAnim();
 	}
 
-	updateAnim();
+	advanceBlends(elapsed);
+	updateBlend();
 }
