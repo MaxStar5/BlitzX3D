@@ -28,6 +28,7 @@ Need help, have a question, or found a problem?
 - Better render-target control with SetBufferDepth and RenderEntity.
 - Improved texture handling, including automatic alpha detection, animated texture grids, mipmapped filtering, cubemap fixes, and better transparency handling.
 - Upgraded audio system now powered by BASS for improved compatibility, stability, and sound quality.
+- "Faster than old Blitz3D" 
 
 ### Used in
 * [**SCP – Containment Breach Multiplayer 1.3.0R**](https://store.steampowered.com/app/1782380/SCP_Containment_Breach_Multiplayer/)
