@@ -228,4 +228,46 @@ struct OffsetOfNode : public ExprNode {
 	TNode* translate(Codegen* g);
 };
 
+struct TernaryExprNode : public ExprNode {
+	ExprNode* cond, * thenExpr, * elseExpr;
+	VarNode* sem_temp;
+	TernaryExprNode(ExprNode* c, ExprNode* t, ExprNode* e) :cond(c), thenExpr(t), elseExpr(e), sem_temp(0) {}
+	~TernaryExprNode() { delete cond; delete thenExpr; delete elseExpr; delete sem_temp; }
+	ExprNode* semant(Environ* e);
+	TNode* translate(Codegen* g);
+};
+
+struct SelectExprNode : public ExprNode {
+	struct CaseExpr {
+		ExprSeqNode* exprs;
+		ExprNode* result;
+		CaseExpr(ExprSeqNode* e, ExprNode* r) :exprs(e), result(r) {}
+	};
+	ExprNode* expr;
+	std::vector<CaseExpr> cases;
+	ExprNode* defaultExpr;
+	VarNode* sem_temp, * sem_result;
+	Type* op_type;
+	SelectExprNode(ExprNode* e) :expr(e), defaultExpr(0), sem_temp(0), sem_result(0), op_type(0) {}
+	~SelectExprNode() {
+		delete expr; delete defaultExpr; delete sem_temp; delete sem_result;
+		for(size_t k = 0; k < cases.size(); ++k) { delete cases[k].exprs; delete cases[k].result; }
+	}
+	void push_back(ExprSeqNode* e, ExprNode* r) { cases.push_back(CaseExpr(e, r)); }
+	ExprNode* semant(Environ* e);
+	TNode* translate(Codegen* g);
+};
+
+struct IsExprNode : public ExprNode {
+	ExprNode* lhs;
+	ExprSeqNode* exprs;
+	bool negate;
+	VarNode* sem_temp;
+	Type* op_type;
+	IsExprNode(ExprNode* l, ExprSeqNode* e, bool n) :lhs(l), exprs(e), negate(n), sem_temp(0), op_type(0) {}
+	~IsExprNode() { delete lhs; delete exprs; delete sem_temp; }
+	ExprNode* semant(Environ* e);
+	TNode* translate(Codegen* g);
+};
+
 #endif

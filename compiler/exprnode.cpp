@@ -7,6 +7,19 @@
 #include "type.h"
 #include "environ.h"
 
+static Type* commonExprType(Type* t1, Type* t2) {
+	if(t1 == t2) return t1;
+	if(t1 == Type::null_type) return t2;
+	if(t2 == Type::null_type) return t1;
+	if(t1->structType() || t2->structType()) {
+		if(t1->structType() && t2->structType()) Node::ex(MultiLang::objects_types_are_different);
+		Node::ex(MultiLang::illegal_operator_for_type);
+	}
+	if(t1->stringType() || t2->stringType()) return Type::string_type;
+	if(t1->floatType() || t2->floatType()) return Type::float_type;
+	return Type::int_type;
+}
+
 //////////////////////////////////
 // Cast an expression to a type //
 //////////////////////////////////
@@ -836,4 +849,113 @@ ExprNode* OffsetOfNode::semant(Environ* e) {
 
 TNode* OffsetOfNode::translate(Codegen* g) {
 	return iconst(sem_offset);
+}
+
+/////////////////////////
+// Conditional (If...) //
+/////////////////////////
+ExprNode* TernaryExprNode::semant(Environ* e) {
+	cond = cond->semant(e);
+	cond = cond->castTo(Type::int_type, e);
+	thenExpr = thenExpr->semant(e);
+	elseExpr = elseExpr->semant(e);
+	sem_type = commonExprType(thenExpr->sem_type, elseExpr->sem_type);
+	thenExpr = thenExpr->castTo(sem_type, e);
+	elseExpr = elseExpr->castTo(sem_type, e);
+	sem_temp = genLocal(e, sem_type);
+	return this;
+}
+
+TNode* TernaryExprNode::translate(Codegen* g) {
+	std::string _else = genLabel(), _end = genLabel();
+	g->code(jumpf(cond->translate(g), _else));
+	g->code(sem_temp->store(g, thenExpr->translate(g)));
+	g->code(jump(_end));
+	g->label(_else);
+	g->code(sem_temp->store(g, elseExpr->translate(g)));
+	g->label(_end);
+	return sem_temp->load(g);
+}
+
+////////////////////////
+// Select expression  //
+////////////////////////
+ExprNode* SelectExprNode::semant(Environ* e) {
+	expr = expr->semant(e);
+	op_type = expr->sem_type;
+	if(op_type->structType()) ex(MultiLang::select_cannot_used_with_objects);
+	sem_temp = genLocal(e, op_type);
+
+	Type* resultType = 0;
+	for(size_t k = 0; k < cases.size(); ++k) {
+		cases[k].exprs->semant(e);
+		cases[k].exprs->castTo(op_type, e);
+		cases[k].result = cases[k].result->semant(e);
+		resultType = resultType ? commonExprType(resultType, cases[k].result->sem_type) : cases[k].result->sem_type;
+	}
+	if(defaultExpr) {
+		defaultExpr = defaultExpr->semant(e);
+		resultType = resultType ? commonExprType(resultType, defaultExpr->sem_type) : defaultExpr->sem_type;
+	}
+	if(!resultType) resultType = Type::int_type;
+	for(size_t k = 0; k < cases.size(); ++k) cases[k].result = cases[k].result->castTo(resultType, e);
+	if(defaultExpr) defaultExpr = defaultExpr->castTo(resultType, e);
+	sem_type = resultType;
+	sem_result = genLocal(e, resultType);
+	return this;
+}
+
+TNode* SelectExprNode::translate(Codegen* g) {
+	g->code(sem_temp->store(g, expr->translate(g)));
+
+	std::vector<std::string> labs;
+	std::string end = genLabel();
+
+	for(size_t k = 0; k < cases.size(); ++k) {
+		labs.push_back(genLabel());
+		for(int j = 0; j < cases[k].exprs->size(); ++j) {
+			ExprNode* m = cases[k].exprs->exprs[j];
+			g->code(jumpt(compare('=', sem_temp->load(g), m->translate(g), op_type), labs.back()));
+		}
+	}
+	if(defaultExpr) g->code(sem_result->store(g, defaultExpr->translate(g)));
+	g->code(jump(end));
+	for(size_t k = 0; k < cases.size(); ++k) {
+		g->label(labs[k]);
+		g->code(sem_result->store(g, cases[k].result->translate(g)));
+		g->code(jump(end));
+	}
+	g->label(end);
+	return sem_result->load(g);
+}
+
+////////////////////////////////////////////
+// Is / IsNot against a list of choices   //
+////////////////////////////////////////////
+ExprNode* IsExprNode::semant(Environ* e) {
+	lhs = lhs->semant(e);
+	Type* ty = lhs->sem_type;
+	for(int k = 0; k < exprs->size(); ++k) {
+		exprs->exprs[k] = exprs->exprs[k]->semant(e);
+		ty = commonExprType(ty, exprs->exprs[k]->sem_type);
+	}
+	op_type = ty;
+	lhs = lhs->castTo(ty, e);
+	for(int k = 0; k < exprs->size(); ++k) exprs->exprs[k] = exprs->exprs[k]->castTo(ty, e);
+	sem_temp = genLocal(e, ty);
+	sem_type = Type::int_type;
+	return this;
+}
+
+TNode* IsExprNode::translate(Codegen* g) {
+	g->code(sem_temp->store(g, lhs->translate(g)));
+	TNode* result = 0;
+	for(int k = 0; k < exprs->size(); ++k) {
+		TNode* cmp = compare(negate ? NE : '=', sem_temp->load(g), exprs->exprs[k]->translate(g), op_type);
+		if(!result) result = cmp;
+		else if(negate) result = new TNode(IR_AND, result, cmp, genLabel());
+		else result = new TNode(IR_LOR, result, cmp, genLabel());
+	}
+	if(!result) result = new TNode(IR_CONST, 0, 0, negate ? 1 : 0);
+	return result;
 }

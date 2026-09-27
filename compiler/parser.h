@@ -60,6 +60,11 @@ private:
 	std::vector<std::string>* parseFuncPtrParamTags();
 
 	ExprSeqNode* parseExprSeq();
+	bool isParenList();
+	ExprSeqNode* parseParenExprList();
+	ExprNode* parseTernaryExpr();
+	ExprNode* parseTernaryTail();
+	ExprNode* parseSelectExpr();
 
 	ExprNode* parseExpr(bool opt);
 	ExprNode* parseExpr1(bool opt);		//Or, Xor

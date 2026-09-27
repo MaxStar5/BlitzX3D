@@ -891,6 +891,73 @@ ExprSeqNode* Parser::parseExprSeq() {
 	return exprs.release();
 }
 
+bool Parser::isParenList() {
+	if (toker->curr() != '(') return false;
+	int nest = 0;
+	for (int k = 0;; ++k) {
+		int t = toker->lookAhead(k);
+		if (t == EOF || t == '\n' || t == ':') return false;
+		if (t == '(') ++nest;
+		else if (t == ')') { if (--nest == 0) return false; }
+		else if (t == ',' && nest == 1) return true;
+	}
+}
+
+ExprSeqNode* Parser::parseParenExprList() {
+	parseChar('(');
+	ExprSeqNode* exprs = parseExprSeq();
+	if (toker->curr() != ')') exp("')'");
+	toker->next();
+	return exprs;
+}
+
+ExprNode* Parser::parseTernaryExpr() {
+	parseChar(IF);
+	return parseTernaryTail();
+}
+
+ExprNode* Parser::parseTernaryTail() {
+	std::unique_ptr<ExprNode> cond(parseExpr(false));
+	if (toker->curr() != THEN) exp("'Then'");
+	toker->next();
+	std::unique_ptr<ExprNode> thenExpr(parseExpr(false));
+	std::unique_ptr<ExprNode> elseExpr;
+	if (toker->curr() == ELSEIF) {
+		toker->next();
+		elseExpr = std::unique_ptr<ExprNode>(parseTernaryTail());
+	}
+	else if (toker->curr() == ELSE) {
+		toker->next();
+		elseExpr = std::unique_ptr<ExprNode>(parseExpr(false));
+	}
+	else exp("'Else'");
+	return new TernaryExprNode(cond.release(), thenExpr.release(), elseExpr.release());
+}
+
+ExprNode* Parser::parseSelectExpr() {
+	parseChar(SELECT);
+	std::unique_ptr<SelectExprNode> node(new SelectExprNode(parseExpr(false)));
+	for (;;) {
+		while (toker->curr() == ':' || toker->curr() == '\n') toker->next();
+		if (toker->curr() == CASE) {
+			toker->next();
+			std::unique_ptr<ExprSeqNode> exprs(parseExprSeq());
+			if (!exprs->size()) exp(MultiLang::expression_sequence);
+			if (toker->curr() != THEN) exp("'Then'");
+			toker->next();
+			node->push_back(exprs.release(), parseExpr(false));
+			continue;
+		}
+		if (toker->curr() == DEFAULT) {
+			toker->next();
+			node->defaultExpr = parseExpr(false);
+			break;
+		}
+		exp("'Case' or 'Default'");
+	}
+	return node.release();
+}
+
 ExprNode* Parser::parseExpr(bool opt) {
 	if (toker->curr() == NOT) {
 		toker->next();
@@ -932,6 +999,13 @@ ExprNode* Parser::parseExpr2(bool opt) {
 		) return lhs.release();
 
 		toker->next();
+
+		if (experimentalSyntaxEnabled && (c == IS || c == ISNOT) && toker->curr() == '(' && isParenList()) {
+			std::unique_ptr<ExprSeqNode> list(parseParenExprList());
+			lhs = std::unique_ptr<ExprNode>(new IsExprNode(lhs.release(), list.release(), c == ISNOT));
+			continue;
+		}
+
 		ExprNode* rhs = parseExpr3(false);
 		
 		if (experimentalSyntaxEnabled && c == IS) {
@@ -1099,6 +1173,14 @@ ExprNode* Parser::parsePrimary(bool opt) {
 		if (toker->curr() != ')') exp("')'");
 		toker->next();
 		result = expr.release();
+		break;
+	case IF:
+		if (!experimentalSyntaxEnabled) { if (!opt) exp(MultiLang::expression); break; }
+		result = parseTernaryExpr();
+		break;
+	case SELECT:
+		if (!experimentalSyntaxEnabled) { if (!opt) exp(MultiLang::expression); break; }
+		result = parseSelectExpr();
 		break;
 	case BBNEW:
 		toker->next(); t = parseIdent();
