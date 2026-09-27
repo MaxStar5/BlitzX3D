@@ -234,9 +234,7 @@ bool MeshModel::render(const RenderContext& rc) {
 	const Box& b = rep->getCullBox();
 	if(b.empty()) return false;
 
-	static Frustum model_frustum;
-	new(&model_frustum) Frustum(rc.getWorldFrustum(), -getRenderTform());
-	if(!model_frustum.cull(b)) return false;
+	if(!rc.getWorldFrustum().cull(getRenderTform() * b)) return false;
 
 	if(brush_changes != rep->brush_changes) {
 		brushes.clear();
@@ -355,6 +353,12 @@ Surface* MeshModel::findSurface(const Brush& b)const {
 }
 
 bool MeshModel::collide(const Line& line, float radius, Collision* curr_coll, const Transform& t) {
+	const Box& b = rep->getBox();
+	if (!b.empty()) {
+		Box wb = t * b;
+		if (radius > 0) wb.expand(radius);
+		if (!wb.overlaps(Box(line))) return false;
+	}
 	return getCollider()->collide(line, radius, curr_coll, t);
 }
 

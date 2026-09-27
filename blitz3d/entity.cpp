@@ -3,6 +3,7 @@
 #include "scene.h"
 
 Entity* Entity::_orphans, * Entity::_last_orphan;
+unsigned Entity::_enum_rev = 0;
 
 enum {
 	INVALID_LOCALTFORM = 1,
@@ -26,6 +27,7 @@ void Entity::remove() {
 	}
 	if (_succ) _succ->_pred = _pred;
 	if (_pred) _pred->_succ = _succ;
+	bumpEnum();
 }
 
 void Entity::insert() {
@@ -54,6 +56,7 @@ void Entity::insert() {
 		sceneId = 0;
 		g_sceneManager.get(0)->add(this);
 	}
+	bumpEnum();
 }
 
 Entity::Entity() :
@@ -130,10 +133,12 @@ void Entity::setName(const std::string& t) {
 
 void Entity::setVisible(bool visible) {
 	_visible = visible;
+	bumpEnum();
 }
 
 void Entity::setEnabled(bool enabled) {
 	_enabled = enabled;
+	bumpEnum();
 }
 
 void Entity::setPinned(bool pinned) {

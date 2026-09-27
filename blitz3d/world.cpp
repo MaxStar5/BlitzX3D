@@ -1,5 +1,6 @@
 #include "std.h"
 #include <queue>
+#include <algorithm>
 #include "world.h"
 
 //0=tris compared for collision
@@ -9,9 +10,16 @@ float stats3d[10];
 extern gxScene* gx_scene;
 extern gxRuntime* gx_runtime;
 
-static std::vector<Object*> _enabled, _visible;
+static std::vector<Object*> _enabled, _visible, _target_visible;
+
+static unsigned _enabled_rev = ~0u, _visible_rev = ~0u;
+static int _enabled_scene = -1, _visible_scene = -1;
 
 static void enumEnabled() {
+	unsigned rev = Entity::enumRevision();
+	int scene = g_sceneManager.currentSceneId;
+	if(rev == _enabled_rev && scene == _enabled_scene) return;
+	_enabled_rev = rev; _enabled_scene = scene;
 	_enabled.clear();
 	for(Entity* e = Entity::orphans(); e; e = e->successor()) {
 		e->enumEnabled(_enabled);
@@ -19,6 +27,10 @@ static void enumEnabled() {
 }
 
 static void enumVisible() {
+	unsigned rev = Entity::enumRevision();
+	int scene = g_sceneManager.currentSceneId;
+	if(rev == _visible_rev && scene == _visible_scene) return;
+	_visible_rev = rev; _visible_scene = scene;
 	_visible.clear();
 	for(Entity* e = Entity::orphans(); e; e = e->successor()) {
 		e->enumVisible(_visible);
@@ -101,7 +113,9 @@ bool World::checkLOS(Object* src, Object* dest) {
 
 	Collision curr_coll;
 
-	Line line(src->getWorldPosition(), dest->getWorldPosition() - src->getWorldPosition());
+	const Vector& sp = src->getWorldPosition();
+	const Vector& dp = dest->getWorldPosition();
+	Line line(sp, dp - sp);
 
 	for (Object* obj : _enabled) {
 		if (obj == src || obj == dest || !obj->getPickGeometry() || !obj->getObscurer())
@@ -354,8 +368,6 @@ void World::render(float tween) {
 	ord_mods.clear();
 	unord_mods.clear();
 
-	_visible.clear();
-
 	Scene* curr = g_sceneManager.get(g_sceneManager.currentSceneId);
 	if (!curr) curr = g_sceneManager.get(0);
 	if (!curr) return; // should never happen
@@ -425,15 +437,9 @@ void World::render(Camera* cam, Mirror* mirror) {
 	}
 
 	gx_scene->setZMode(gxScene::ZMODE_NORMAL);
-	std::map<Brush, std::vector<Model*>> buckets;
 	for (Model* mod : unord_mods) {
-		buckets[mod->getBrush()].push_back(mod);
-	}
-	for (auto& bucket : buckets) {
-		for (Model* mod : bucket.second) {
-			if (!mod->doAutoFade(cam_tform.v)) continue;
-			render(mod, rc);
-		}
+		if (!mod->doAutoFade(cam_tform.v)) continue;
+		render(mod, rc);
 	}
 	gx_scene->setZMode(gxScene::ZMODE_CMPONLY);
 	flushTransparent();
@@ -470,7 +476,6 @@ void World::renderEntity(Camera* cam, float tween) {
 	ord_mods.clear();
 	unord_mods.clear();
 
-	_visible.clear();
 	_lights.clear();
 	_mirrors.clear();
 	_listeners.clear();
@@ -503,14 +508,14 @@ void World::renderEntity(Camera* cam, Entity* target, float tween) {
 	ord_mods.clear();
 	unord_mods.clear();
 
-	_visible.clear();
+	_target_visible.clear();
 	_lights.clear();
 	_mirrors.clear();
 	_listeners.clear();
 
-	if (target) target->enumVisible(_visible);
+	if (target) target->enumVisible(_target_visible);
 
-	for (Object* o : _visible) {
+	for (Object* o : _target_visible) {
 		if (!o->beginRender(tween)) continue;
 		if (Light* t = o->getLight())    _lights.push_back(t->getGxLight());
 		else if (Mirror* t = o->getMirror())   _mirrors.push_back(t);

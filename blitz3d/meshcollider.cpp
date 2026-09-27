@@ -61,10 +61,13 @@ static bool isRigid(const Matrix& m) {
 	float ix = m.i.x * m.i.x + m.i.y * m.i.y + m.i.z * m.i.z;
 	float jx = m.j.x * m.j.x + m.j.y * m.j.y + m.j.z * m.j.z;
 	float kx = m.k.x * m.k.x + m.k.y * m.k.y + m.k.z * m.k.z;
-	if (fabsf(ix - 1) > e || fabsf(jx - 1) > e || fabsf(kx - 1) > e) return false;
-	if (fabsf(m.i.x * m.j.x + m.i.y * m.j.y + m.i.z * m.j.z) > e) return false;
-	if (fabsf(m.i.x * m.k.x + m.i.y * m.k.y + m.i.z * m.k.z) > e) return false;
-	if (fabsf(m.j.x * m.k.x + m.j.y * m.k.y + m.j.z * m.k.z) > e) return false;
+	if (ix > 1 + e || ix < 1 - e || jx > 1 + e || jx < 1 - e || kx > 1 + e || kx < 1 - e) return false;
+	float d = m.i.x * m.j.x + m.i.y * m.j.y + m.i.z * m.j.z;
+	if (d > e || d < -e) return false;
+	d = m.i.x * m.k.x + m.i.y * m.k.y + m.i.z * m.k.z;
+	if (d > e || d < -e) return false;
+	d = m.j.x * m.k.x + m.j.y * m.k.y + m.j.z * m.k.z;
+	if (d > e || d < -e) return false;
 	return true;
 }
 
@@ -76,19 +79,28 @@ bool MeshCollider::collide(const Line& line, float radius, Collision* curr_coll,
 
 	if (!tree) return false;
 
-	//create local box
+	bool rigid = isRigid(t.m);
+
+	if (!rigid && radius > 0) {
+		Box box(line);
+		box.expand(radius);
+		Transform inv = -t;
+		return collide(inv * box, line, radius, t, curr_coll, tree);
+	}
+
+	Transform inv = rigid ? ~t : -t;
 	Box box(line);
 	box.expand(radius);
-	Transform inv = -t;
 	Box local_box = inv * box;
+	Line local_line = inv * line;
 
-	if (isRigid(t.m)) {
-		Line local_line = inv * line;
-		bool hit = collideLocal(local_box, local_line, radius, curr_coll, tree);
-		if (hit) curr_coll->normal = t.m * curr_coll->normal;
-		return hit;
+	bool hit = collideLocal(local_box, local_line, radius, curr_coll, tree);
+	if (hit) {
+		curr_coll->normal = rigid
+			? t.m * curr_coll->normal
+			: (t.m.cofactor() * curr_coll->normal).normalized();
 	}
-	return collide(local_box, line, radius, t, curr_coll, tree);
+	return hit;
 }
 
 bool MeshCollider::collideLocal(const Box& line_box, const Line& local_line, float radius, Collision* curr_coll, Node* node) {

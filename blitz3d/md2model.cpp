@@ -108,9 +108,7 @@ void MD2Model::animate(float e) {
 }
 
 bool MD2Model::render(const RenderContext& rc) {
-	static Frustum f;
-	new(&f) Frustum(rc.getWorldFrustum(), -getRenderTform());
-	if (!f.cull(rep->getBox())) return false;
+	if (!rc.getWorldFrustum().cull(getRenderTform() * rep->getBox())) return false;
 
 	if (anim_mode & 0x8000) {
 		rep->render(this, trans_verts, anim_time, trans_time);
