@@ -278,11 +278,33 @@ static float cubic_weight(float t, float a = -0.5f) {
     if (t < 1.0f) {
         return ((a + 2.0f) * t - (a + 3.0f)) * t * t + 1.0f;
     }
-    else if (t < 2.0f) {
-        return ((a * t - 5.0f * a) * t + 8.0f * a) * t - 4.0f * a;
-    }
-    return 0.0f;
+	else if (t < 2.0f) {
+		return ((a * t - 5.0f * a) * t + 8.0f * a) * t - 4.0f * a;
+	}
+	return 0.0f;
 }
+
+static const int CUBIC_LUT_SIZE = 1024;
+static const int CUBIC_LUT_MASK = CUBIC_LUT_SIZE - 1;
+struct CubicLUT {
+	float w[CUBIC_LUT_SIZE][4];
+	CubicLUT() {
+		for (int i = 0; i < CUBIC_LUT_SIZE; ++i) {
+			float f = (i + 0.5f) / CUBIC_LUT_SIZE;
+			float w0 = cubic_weight(f + 1.0f);
+			float w1 = cubic_weight(f);
+			float w2 = cubic_weight(f - 1.0f);
+			float w3 = cubic_weight(f - 2.0f);
+			float s = w0 + w1 + w2 + w3;
+			if (s != 0.0f) { w0 /= s; w1 /= s; w2 /= s; w3 /= s; }
+			w[i][0] = w0; w[i][1] = w1; w[i][2] = w2; w[i][3] = w3;
+		}
+	}
+	const float* taps(float frac) const {
+		return w[(int)(frac * CUBIC_LUT_SIZE) & CUBIC_LUT_MASK];
+	}
+};
+static const CubicLUT cubic_lut;
 
 static unsigned box4(unsigned c00, unsigned c10, unsigned c01, unsigned c11) {
     int a = ((c00 >> 24) & 0xFF) + ((c10 >> 24) & 0xFF) + ((c01 >> 24) & 0xFF) + ((c11 >> 24) & 0xFF);
@@ -449,20 +471,21 @@ static gxCanvas* tformCanvas(gxCanvas* c, float m[2][2], int x_handle, int y_han
                 color = ((unsigned)a << 24) | (r << 16) | (g << 8) | b;
             }
             else if (tform_method == 2) {
+                const float* wx = cubic_lut.taps(fxfrac);
+                const float* wy = cubic_lut.taps(fyfrac);
                 float a = 0.0f, r = 0.0f, g = 0.0f, b = 0.0f, total_w = 0.0f;
-                for (int dy = -1; dy <= 2; ++dy) {
-                    int yi = iy + dy;
+                for (int dy = 0; dy < 4; ++dy) {
+                    float wyv = wy[dy];
+                    if (wyv == 0.0f) continue;
+                    int yi = iy + dy - 1;
                     if (yi < 0) yi = 0;
                     if (yi >= srcH) yi = srcH - 1;
-                    float wy = cubic_weight(fyfrac - dy);
-                    if (wy == 0.0f) continue;
-                    for (int dx = -1; dx <= 2; ++dx) {
-                        int xi = ix + dx;
+                    for (int dx = 0; dx < 4; ++dx) {
+                        float w = wx[dx] * wyv;
+                        if (w == 0.0f) continue;
+                        int xi = ix + dx - 1;
                         if (xi < 0) xi = 0;
                         if (xi >= srcW) xi = srcW - 1;
-                        float wx = cubic_weight(fxfrac - dx);
-                        float w = wx * wy;
-                        if (w == 0.0f) continue;
                         unsigned pix = src->getPixelFast(xi, yi);
                         a += ((pix >> 24) & 0xFF) * w;
                         r += ((pix >> 16) & 0xFF) * w;
@@ -2000,15 +2023,16 @@ static unsigned sampleOrigPixel(const std::vector<uint32_t>& src, int srcW, int 
         return ((unsigned)a << 24) | (r << 16) | (g << 8) | b;
     }
     else {
+        const float* wx = cubic_lut.taps(fxfrac);
+        const float* wy = cubic_lut.taps(fyfrac);
         float a = 0.0f, r = 0.0f, g = 0.0f, b = 0.0f, total_w = 0.0f;
-        for (int dy = -1; dy <= 2; ++dy) {
-            float wy = cubic_weight(fyfrac - dy);
-            if (wy == 0.0f) continue;
-            for (int dx = -1; dx <= 2; ++dx) {
-                float wx = cubic_weight(fxfrac - dx);
-                float w = wx * wy;
+        for (int dy = 0; dy < 4; ++dy) {
+            float wyv = wy[dy];
+            if (wyv == 0.0f) continue;
+            for (int dx = 0; dx < 4; ++dx) {
+                float w = wx[dx] * wyv;
                 if (w == 0.0f) continue;
-                unsigned pix = clampedPixel(ix + dx, iy + dy);
+                unsigned pix = clampedPixel(ix + dx - 1, iy + dy - 1);
                 a += ((pix >> 24) & 0xFF) * w;
                 r += ((pix >> 16) & 0xFF) * w;
                 g += ((pix >> 8) & 0xFF) * w;

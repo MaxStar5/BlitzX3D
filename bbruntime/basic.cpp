@@ -199,6 +199,10 @@ BBObj* _bbObjNew(BBObjType* type) {
 	if (type->free.next == &type->free) {
 		int obj_size = sizeof(BBObj) + type->fieldCnt * 4;
 		BBObj* o = (BBObj*)bbMalloc(obj_size * OBJ_NEW_INC);
+		if (!o) {
+			ErrorLog("New", "Out of memory");
+			return 0;
+		}
 		for (int k = 0; k < OBJ_NEW_INC; ++k) {
 			insertObj(o, &type->free);
 			o = (BBObj*)((char*)o + obj_size);
