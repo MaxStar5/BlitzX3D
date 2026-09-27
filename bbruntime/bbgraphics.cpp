@@ -1395,6 +1395,35 @@ bbImage* bbLoadAnimImage(BBStr* s, int w, int h, int first, int cnt) {
     std::string path = *s;
     delete s;
 
+    std::vector<IDirect3DTexture9*> gifFrames;
+    int gifW = 0, gifH = 0;
+    if (ddUtil::loadTextureFrames(path, gxCanvas::CANVAS_TEXTURE | gxCanvas::CANVAS_TEX_ALPHA, gx_graphics, gifFrames, &gifW, &gifH)) {
+        int total = (int)gifFrames.size();
+        if (first < 0) first = 0;
+        if (cnt <= 0) cnt = total - first;
+        if (first + cnt > total) cnt = total - first;
+        if (cnt <= 0) {
+            for (IDirect3DTexture9* t : gifFrames) t->Release();
+            return 0;
+        }
+
+        std::vector<gxCanvas*> frames;
+        for (int k = 0; k < cnt; ++k) {
+            gxCanvas* c = new gxCanvas(gx_graphics, gifFrames[first + k], gxCanvas::CANVAS_TEXTURE | gxCanvas::CANVAS_TEX_ALPHA);
+            gx_graphics->adoptCanvas(c);
+            c->setLogicalSize(gifW, gifH);
+            c->backup();
+            if (auto_midhandle) c->setHandle(gifW / 2, gifH / 2);
+            frames.push_back(c);
+        }
+        for (int k = 0; k < first; ++k) gifFrames[k]->Release();
+        for (int k = first + cnt; k < total; ++k) gifFrames[k]->Release();
+
+        bbImage* image = new bbImage(frames);
+        image_set.insert(image);
+        return image;
+    }
+
     int srcFlags = ddUtil::hasActualAlpha(path) ? gxCanvas::CANVAS_TEX_ALPHA : 0;
 
     IDirect3DTexture9* picTex = ddUtil::loadTextureSurface(path, srcFlags, gx_graphics, false);

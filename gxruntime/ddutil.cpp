@@ -757,3 +757,46 @@ IDirect3DTexture9* ddUtil::loadTextureSurface(const std::string& file, int flags
 	FreeImage_Unload((FIBITMAP*)fib32);
 	return tex;
 }
+
+bool ddUtil::loadTextureFrames(const std::string& file, int flags, gxGraphics* gfx, std::vector<IDirect3DTexture9*>& outFrames, int* outW, int* outH) {
+	std::lock_guard<std::mutex> lock(g_freeimage_mutex);
+	g_lastImageError.clear();
+
+	FREE_IMAGE_FORMAT fif = FreeImage_GetFileType(file.c_str(), 0);
+	if (fif == FIF_UNKNOWN) fif = FreeImage_GetFIFFromFilename(file.c_str());
+	if (fif != FIF_GIF) return false;
+
+	FIMULTIBITMAP* mb = FreeImage_OpenMultiBitmap(fif, file.c_str(), FALSE, TRUE, TRUE, GIF_PLAYBACK);
+	if (!mb) { g_lastImageError = "OpenMultiBitmap failed: " + file; return false; }
+
+	int pages = FreeImage_GetPageCount(mb);
+	if (pages <= 0) { FreeImage_CloseMultiBitmap(mb, 0); return false; }
+
+	bool ok = true;
+	for (int p = 0; p < pages; ++p) {
+		FIBITMAP* page = FreeImage_LockPage(mb, p);
+		if (!page) { ok = false; break; }
+
+		FIBITMAP* fib32 = (FreeImage_GetBPP(page) == 32) ? page : FreeImage_ConvertTo32Bits(page);
+		if (!fib32) { FreeImage_UnlockPage(mb, page, FALSE); ok = false; break; }
+
+		int w = FreeImage_GetWidth(fib32);
+		int h = FreeImage_GetHeight(fib32);
+		IDirect3DTexture9* tex = textureFromDecodedUnlocked(fib32, w, h, flags, gfx, false, outW, outH);
+		if (outFrames.empty()) { if (outW) *outW = w; if (outH) *outH = h; }
+
+		if (fib32 != page) FreeImage_Unload(fib32);
+		FreeImage_UnlockPage(mb, page, FALSE);
+
+		if (!tex) { ok = false; break; }
+		outFrames.push_back(tex);
+	}
+	FreeImage_CloseMultiBitmap(mb, 0);
+
+	if (!ok) {
+		for (IDirect3DTexture9* t : outFrames) t->Release();
+		outFrames.clear();
+		return false;
+	}
+	return true;
+}
