@@ -8,6 +8,7 @@
 #include <atomic>
 #include <mutex>
 #include <functional>
+#include <filesystem>
 
 #include <SDL3/SDL_events.h>
 #include <SDL3/SDL_video.h>
@@ -20,6 +21,8 @@ struct Doc {
 	std::string name;
 	TextEditor editor;
 	bool modified = false;
+	std::filesystem::file_time_type lastWrite{};
+	bool externalChanged = false;
 
 	struct FuncItem { std::string label; int line; int kind; };
 	std::vector<FuncItem> funcs;
@@ -52,6 +55,8 @@ private:
 	void fileExit();
 	void requestQuit();
 	void drawExitPrompt();
+	void checkDiskChanges(bool force = false);
+	void drawDiskPrompt();
 	void fileRecent(const std::string& path);
 	void addRecent(const std::string& path);
 	void removeRecent(const std::string& path);
@@ -183,6 +188,8 @@ private:
 	bool aboutOpen = false;
 	bool quitting = false;
 	bool showExitPrompt = false;
+	std::string diskPromptPath;
+	unsigned long long lastDiskCheck = 0;
 	bool focused = false;
 	bool drawIde = false;
 

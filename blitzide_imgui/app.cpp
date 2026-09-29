@@ -388,6 +388,7 @@ void App::mainloop() {
 				break;
 			case SDL_EVENT_WINDOW_FOCUS_GAINED:
 				focused = true;
+				checkDiskChanges(true);
 				break;
 			default:
 				drawIde = true;
@@ -464,6 +465,9 @@ void App::frame() {
 
 	drawUpdate();
 	drawUpdateDialog();
+
+	checkDiskChanges();
+	drawDiskPrompt();
 
 	drawExitPrompt();
 
@@ -1011,6 +1015,8 @@ int App::addDoc(const std::string& path) {
 			ss << in.rdbuf();
 			d.editor.SetText(ss.str());
 		}
+		std::error_code ec;
+		d.lastWrite = fs::last_write_time(path, ec);
 	}
 	d.editor.SetLanguageDefinition(makeBlitzLangDef(keywords, funcs, {}));
 	rebuildFuncList(d);
@@ -1399,6 +1405,9 @@ bool App::fileSave(int idx) {
 	out << d->editor.GetText();
 	out.close();
 	d->modified = false;
+	std::error_code ec;
+	d->lastWrite = fs::last_write_time(d->path, ec);
+	d->externalChanged = false;
 	return true;
 }
 bool App::fileSaveAs(int idx) {
@@ -1499,6 +1508,83 @@ void App::drawExitPrompt() {
 		ImGui::SameLine();
 		if (ImGui::Button("Cancel", ImVec2(btn, 0))) {
 			showExitPrompt = false;
+		}
+		ImGui::EndPopup();
+	}
+}
+
+void App::checkDiskChanges(bool force) {
+	unsigned long long now = SDL_GetTicks();
+	if (!force && now - lastDiskCheck < 1000) return;
+	lastDiskCheck = now;
+
+	for (auto& d : docs) {
+		if (d.path.empty() || d.externalChanged) continue;
+		std::error_code ec;
+		auto t = fs::last_write_time(d.path, ec);
+		if (ec) continue;
+		if (d.lastWrite != fs::file_time_type{} && t != d.lastWrite)
+			d.externalChanged = true;
+	}
+
+	if (diskPromptPath.empty()) {
+		for (auto& d : docs) {
+			if (d.externalChanged) { diskPromptPath = d.path; break; }
+		}
+	}
+}
+
+void App::drawDiskPrompt() {
+	if (diskPromptPath.empty()) return;
+
+	Doc* d = nullptr;
+	for (auto& doc : docs) {
+		if (!doc.path.empty() && samePath(doc.path, diskPromptPath)) { d = &doc; break; }
+	}
+	if (!d) { diskPromptPath.clear(); return; }
+
+	ImGui::SetNextWindowSize(ImVec2(480, 0), ImGuiCond_Always);
+	ImGui::OpenPopup("File Changed on Disk");
+	if (ImGui::BeginPopupModal("File Changed on Disk", nullptr,
+		ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoResize)) {
+		ImGui::BringWindowToDisplayFront(ImGui::GetCurrentWindow());
+		ImGui::TextWrapped("A newer version of \"%s\" exists locally.", d->name.c_str());
+		ImGui::Spacing();
+		ImGui::TextWrapped("Do you want to load that version instead of the one currently open in the editor?");
+		if (d->modified) {
+			ImGui::Spacing();
+			ImGui::PushTextWrapPos(ImGui::GetCursorPosX() + 440.0f);
+			ImGui::TextColored(ImVec4(1.0f, 0.75f, 0.3f, 1.0f),
+				"Warning: reloading will discard your unsaved changes in this file.");
+			ImGui::PopTextWrapPos();
+		}
+		ImGui::Spacing();
+
+		float width = ImGui::GetContentRegionAvail().x;
+		float btn = (width - ImGui::GetStyle().ItemSpacing.x) / 2.0f;
+		if (ImGui::Button("Load from Disk", ImVec2(btn, 0))) {
+			std::ifstream in(d->path, std::ios::binary);
+			if (in.good()) {
+				std::stringstream ss;
+				ss << in.rdbuf();
+				d->editor.SetText(ss.str());
+				d->editor.ClearTextChanged();
+				d->modified = false;
+				rebuildFuncList(*d);
+			}
+			std::error_code ec;
+			d->lastWrite = fs::last_write_time(d->path, ec);
+			d->externalChanged = false;
+			diskPromptPath.clear();
+			ImGui::CloseCurrentPopup();
+		}
+		ImGui::SameLine();
+		if (ImGui::Button("Keep Editor Version", ImVec2(btn, 0))) {
+			std::error_code ec;
+			d->lastWrite = fs::last_write_time(d->path, ec);
+			d->externalChanged = false;
+			diskPromptPath.clear();
+			ImGui::CloseCurrentPopup();
 		}
 		ImGui::EndPopup();
 	}
