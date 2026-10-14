@@ -176,6 +176,10 @@ private:
 	char projectSavePathBuf[1024] = {};
 	char projectFilterBuf[256] = {};
 	char projectSymbolFilterBuf[256] = {};
+	char projectFindBuf[256] = {};
+	std::string projectFindQuery;
+	struct ProjectFindHit { std::string path; std::string name; int line; int col; std::string text; };
+	std::vector<ProjectFindHit> projectFindHits;
 
 	bool projectOpen = false;
 	std::string projectPath;

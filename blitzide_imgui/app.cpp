@@ -832,6 +832,57 @@ void App::drawProjectNavigator() {
 			ImGui::EndTabItem();
 		}
 
+		if (ImGui::BeginTabItem("Find")) {
+			ImGui::SetNextItemWidth(-1);
+			ImGui::InputTextWithHint("##project_find_input", "Find in project...", projectFindBuf, sizeof(projectFindBuf));
+			if (projectFindQuery != projectFindBuf) {
+				projectFindQuery = projectFindBuf;
+				projectFindHits.clear();
+				std::string needle = toLower(projectFindQuery);
+				if (!needle.empty()) {
+					for (int docIndex : sourceDocs) {
+						if (docIndex < 0 || docIndex >= (int)docs.size()) continue;
+						Doc& d = docs[docIndex];
+						std::string text = stripBOM(d.editor.GetText());
+						std::stringstream ss(text);
+						std::string line;
+						int ln = 0;
+						while (std::getline(ss, line, '\n')) {
+							if (!line.empty() && line.back() == '\r') line.pop_back();
+							size_t pos = toLower(line).find(needle);
+							if (pos != std::string::npos)
+								projectFindHits.push_back({ d.path, d.name, ln, (int)pos, line });
+							++ln;
+						}
+					}
+				}
+			}
+			if (!projectFindQuery.empty())
+				ImGui::TextDisabled("%d match%s", (int)projectFindHits.size(), projectFindHits.size() == 1 ? "" : "es");
+			ImGui::BeginChild("##project_find_list", ImVec2(0, 0), false);
+			int hitId = 0;
+			ImGui::PushTextWrapPos(0.0f);
+			for (const auto& hit : projectFindHits) {
+				ImGui::PushID(hitId++);
+				std::string label = hit.name + ":" + std::to_string(hit.line + 1);
+				if (ImGui::Selectable(label.c_str())) {
+					std::lock_guard<std::mutex> lock(outputMutex);
+					pendingGotoPath = hit.path;
+					pendingGotoRow = hit.line + 1;
+					pendingGotoCol = hit.col + 1;
+					pendingGoto = true;
+				}
+				std::string trimmed = hit.text;
+				size_t t = trimmed.find_first_not_of(" \t");
+				if (t != std::string::npos && t > 0) trimmed.erase(0, t);
+				if (!trimmed.empty()) ImGui::TextDisabled("%s", trimmed.c_str());
+				ImGui::PopID();
+			}
+			ImGui::PopTextWrapPos();
+			ImGui::EndChild();
+			ImGui::EndTabItem();
+		}
+
 		if (ImGui::BeginTabItem("Project")) {
 			ImGui::TextUnformatted("Project");
 			ImGui::TextWrapped("%s", projectPath.c_str());
