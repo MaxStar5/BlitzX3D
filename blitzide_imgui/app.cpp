@@ -912,6 +912,7 @@ void App::drawFindReplace() {
 	if (!showFind && !showReplace) return;
 	int flags = ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoDocking;
 	ImGui::SetNextWindowPos(ImVec2(windowW / 2.0f - 200, 40), ImGuiCond_Appearing);
+	if (findFocusPending) ImGui::SetNextWindowFocus();
 	if (ImGui::Begin("Find / Replace", &showFind, flags)) {
 		ImGui::BringWindowToDisplayFront(ImGui::GetCurrentWindow());
 		ImGuiIO& fio = ImGui::GetIO();
@@ -928,9 +929,11 @@ void App::drawFindReplace() {
 			findFocusReplace = false;
 			ImGui::SetWindowFocus();
 		}
+		ImGuiInputTextFlags findFlags = ImGuiInputTextFlags_EnterReturnsTrue;
+		if (focusFind) findFlags |= ImGuiInputTextFlags_AutoSelectAll;
 		ImGui::SetNextItemWidth(300);
 		if (focusFind) ImGui::SetKeyboardFocusHere();
-		bool findEnter = ImGui::InputText("Find text", findBuf, sizeof(findBuf), ImGuiInputTextFlags_EnterReturnsTrue);
+		bool findEnter = ImGui::InputText("Find text", findBuf, sizeof(findBuf), findFlags);
 		ImGui::SameLine();
 		if (ImGui::Button("Find Next")) doFind = true;
 		if (findEnter) {
@@ -939,9 +942,11 @@ void App::drawFindReplace() {
 		ImGui::Checkbox("Match case", &matchCase);
 		ImGui::Checkbox("Search all open files", &findAllFiles);
 		ImGui::SameLine();
+		ImGuiInputTextFlags replaceFlags = ImGuiInputTextFlags_EnterReturnsTrue;
+		if (focusReplace) replaceFlags |= ImGuiInputTextFlags_AutoSelectAll;
 		ImGui::SetNextItemWidth(300);
 		if (focusReplace) ImGui::SetKeyboardFocusHere();
-		bool replaceEnter = ImGui::InputText("Replace text", replaceBuf, sizeof(replaceBuf), ImGuiInputTextFlags_EnterReturnsTrue);
+		bool replaceEnter = ImGui::InputText("Replace text", replaceBuf, sizeof(replaceBuf), replaceFlags);
 		ImGui::SameLine();
 		if (ImGui::Button("Replace")) doReplace = true;
 		if (replaceEnter) doReplace = true;
