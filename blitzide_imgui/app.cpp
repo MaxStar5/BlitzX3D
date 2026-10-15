@@ -445,6 +445,8 @@ void App::frame() {
 
 	menuBar();
 
+	drawToolbar();
+
 	drawPaneBackground();
 
 	processPendingGoto();
@@ -556,6 +558,7 @@ void App::menuBar() {
 		if (ImGui::MenuItem("Functions Panel", nullptr, &showFuncList)) {}
 		if (ImGui::MenuItem("Project Navigator", nullptr, &showProjectNavigator)) {}
 		if (ImGui::MenuItem("Output Panel", nullptr, &showOutput)) {}
+		if (ImGui::MenuItem("Toolbar", nullptr, &showToolbar)) {}
 		ImGui::Separator();
 		if (ImGui::MenuItem("Stylization...")) showStylize = true;
 		ImGui::EndMenu();
@@ -601,6 +604,110 @@ void App::menuBar() {
 	}
 
 	ImGui::EndMainMenuBar();
+}
+
+void App::loadToolbarTexture() {
+	if (toolbarTexTried) return;
+	toolbarTexTried = true;
+	if (prefs.homeDir.empty()) return;
+
+	std::string path = prefs.homeDir + "/cfg/ide_toolbar.bmp";
+	SDL_Surface* loaded = SDL_LoadBMP(path.c_str());
+	if (!loaded) return;
+	SDL_Surface* surface = SDL_ConvertSurface(loaded, SDL_PIXELFORMAT_RGBA32);
+	SDL_DestroySurface(loaded);
+	if (!surface) return;
+
+	int w = surface->w, h = surface->h;
+	if (w <= 0 || h <= 0) { SDL_DestroySurface(surface); return; }
+
+	const unsigned char* src = (const unsigned char*)surface->pixels;
+	int pitch = surface->pitch;
+	int bgR = src[0], bgG = src[1], bgB = src[2];
+
+	std::vector<unsigned char> pixels((size_t)w * h * 4);
+	for (int y = 0; y < h; ++y) {
+		const unsigned char* row = src + (size_t)y * pitch;
+		for (int x = 0; x < w; ++x) {
+			int r = row[x * 4 + 0], g = row[x * 4 + 1], b = row[x * 4 + 2];
+			int d = (std::max)({ std::abs(r - bgR), std::abs(g - bgG), std::abs(b - bgB) });
+			int a = d <= 10 ? 0 : d >= 48 ? 255 : (d - 10) * 255 / 38;
+			size_t o = ((size_t)y * w + x) * 4;
+			pixels[o + 0] = 255;
+			pixels[o + 1] = 255;
+			pixels[o + 2] = 255;
+			pixels[o + 3] = (unsigned char)a;
+		}
+	}
+	SDL_DestroySurface(surface);
+
+	GLuint tex = 0;
+	glGenTextures(1, &tex);
+	glBindTexture(GL_TEXTURE_2D, tex);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+	glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, w, h, 0, GL_RGBA, GL_UNSIGNED_BYTE, pixels.data());
+
+	toolbarTex = (unsigned int)tex;
+	toolbarTexW = w;
+	toolbarTexH = h;
+}
+
+void App::drawToolbar() {
+	if (!showToolbar) return;
+	loadToolbarTexture();
+
+	const float iconSize = 16.0f;
+	float btnH = iconSize + ImGui::GetStyle().FramePadding.y * 2.0f;
+	ImGuiViewport* viewport = ImGui::GetMainViewport();
+	ImGuiWindowFlags flags = ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse | ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoNav | ImGuiWindowFlags_NoBringToFrontOnFocus;
+	if (ImGui::BeginViewportSideBar("##Toolbar", viewport, ImGuiDir_Up, btnH + 6.0f, flags)) {
+		ImGui::SetCursorPosY(3.0f);
+		ImTextureID tex = (ImTextureID)toolbarTex;
+		float iconW = (toolbarTex && toolbarIconCount > 0) ? (float)toolbarTexW / (float)toolbarIconCount : 0.0f;
+		ImVec4 tint = ImGui::GetStyleColorVec4(ImGuiCol_Text);
+
+		auto drawButton = [&](int index, const char* label, const char* tip) -> bool {
+			if (index != 0) ImGui::SameLine(0.0f, 3.0f);
+			ImGui::PushID(index);
+			bool clicked = false;
+			if (toolbarTex && iconW > 0.0f && index < toolbarIconCount) {
+				ImVec2 uv0(index * iconW / (float)toolbarTexW, 0.0f);
+				ImVec2 uv1((index + 1) * iconW / (float)toolbarTexW, 1.0f);
+				clicked = ImGui::ImageButton("##btn", tex, ImVec2(iconSize, iconSize), uv0, uv1, ImVec4(0.0f, 0.0f, 0.0f, 0.0f), tint);
+			}
+			else {
+				clicked = ImGui::Button(label);
+			}
+			ImGui::PopID();
+			if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", tip);
+			return clicked;
+		};
+		auto drawSeparator = [&]() {
+			ImGui::SameLine(0.0f, 6.0f);
+			ImGui::TextDisabled("|");
+			ImGui::SameLine(0.0f, 6.0f);
+		};
+
+		if (drawButton(0, "New", "New")) fileNew();
+		if (drawButton(1, "Open", "Open")) fileOpen();
+		if (drawButton(2, "Save", "Save")) { if (currentIndex >= 0) fileSave(currentIndex); }
+		if (drawButton(3, "Close", "Close")) { if (currentIndex >= 0) fileClose(currentIndex); }
+		drawSeparator();
+		if (drawButton(4, "Cut", "Cut")) editCut();
+		if (drawButton(5, "Copy", "Copy")) editCopy();
+		if (drawButton(6, "Paste", "Paste")) editPaste();
+		drawSeparator();
+		if (drawButton(7, "Find", "Find / Replace")) editFind();
+		drawSeparator();
+		if (drawButton(8, "Run", "Run program")) programExecute();
+		drawSeparator();
+		if (drawButton(9, "Home", "Help home")) helpHome();
+	}
+	ImGui::End();
 }
 
 void App::drawTabs() {

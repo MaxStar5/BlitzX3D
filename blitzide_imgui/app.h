@@ -115,6 +115,8 @@ private:
 	void drawStylize();
 	void drawProjectWindow();
 	void drawProjectNavigator();
+	void drawToolbar();
+	void loadToolbarTexture();
 	void setupDockLayout();
 	void drawPaneBackground();
 
@@ -171,6 +173,12 @@ private:
 	bool showStylize = false;
 	bool showProjectWindow = false;
 	bool showProjectNavigator = true;
+	bool showToolbar = true;
+	unsigned int toolbarTex = 0;
+	bool toolbarTexTried = false;
+	int toolbarTexW = 0;
+	int toolbarTexH = 0;
+	int toolbarIconCount = 12;
 	std::string projectDraftMainPath;
 	std::string projectStatus;
 	char projectSavePathBuf[1024] = {};
