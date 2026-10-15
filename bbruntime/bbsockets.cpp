@@ -7,6 +7,7 @@
 
 #pragma comment (lib, "Urlmon.lib")
 #pragma comment (lib, "Dnsapi.lib")
+#pragma comment (lib, "wininet.lib")
 static bool socks_ok;
 static WSADATA wsadata;
 static int recv_timeout;
@@ -513,11 +514,175 @@ bool sockets_destroy() {
 	return true;
 }
 
-int bbDownloadFile(BBStr* url, BBStr* file) {
-	HRESULT result = URLDownloadToFileA(NULL, url->c_str(), file->c_str(), NULL, NULL);
-	delete url; delete file;
-	return result;
+struct Download {
+	std::atomic<int> status{ 1 }, progress{ -1 };
+	std::atomic<DWORD> error{ 0 };
+	std::atomic<uint64_t> received{ 0 }, total{ 0 };
+	std::atomic<bool> cancel{ false };
+	std::thread worker;
+
+	~Download() {
+		if (worker.joinable()) worker.join();
+	}
+};
+
+static std::mutex downloadMutex;
+static std::unordered_map<uint32_t, std::shared_ptr<Download>> downloads;
+
+static std::shared_ptr<Download> GetDownload(int handle) {
+	std::lock_guard<std::mutex> lock(downloadMutex);
+	auto it = downloads.find((uint32_t)(handle));
+	return it == downloads.end() ? nullptr : it->second;
 }
+
+static void DownloadWorker(std::shared_ptr<Download> d, std::string url, std::string file) {
+	HINTERNET session = nullptr, request = nullptr;
+	FILE* stream = nullptr;
+	DWORD error;
+	bool success;
+	std::string temp = file + ".part." + std::to_string((uint32_t)(d.get()));
+
+	do {
+		if (d->cancel) break;
+
+		session = InternetOpenA("RookIE/1.0", INTERNET_OPEN_TYPE_PRECONFIG, nullptr, nullptr, 0);
+		if (!session) { error = GetLastError(); break; }
+
+		DWORD timeout = 10000;
+		for (DWORD option : { DWORD(INTERNET_OPTION_CONNECT_TIMEOUT), DWORD(INTERNET_OPTION_RECEIVE_TIMEOUT), DWORD(INTERNET_OPTION_SEND_TIMEOUT) }) {
+			if (!InternetSetOptionA(session, option, &timeout, sizeof(timeout))) { error = GetLastError(); break; }
+		}
+		if (error || d->cancel) break;
+
+		request = InternetOpenUrlA(session, url.c_str(), nullptr, 0, INTERNET_FLAG_RELOAD | INTERNET_FLAG_NO_CACHE_WRITE, 0);
+		if (!request) { error = GetLastError(); break; }
+
+		DWORD code = 0, size = sizeof(code);
+		if (!HttpQueryInfoA(request, HTTP_QUERY_STATUS_CODE | HTTP_QUERY_FLAG_NUMBER, &code, &size, nullptr)) { error = GetLastError(); break; }
+		if (code != 200) { error = 100000 + code; break; }
+
+		char length[64] = {};
+		size = sizeof(length) - 1;
+
+		if (HttpQueryInfoA(request, HTTP_QUERY_CONTENT_LENGTH, length, &size, nullptr)) {
+			length[size] = 0;
+			char* end;
+			uint64_t value = std::strtoull(length, &end, 10);
+			if (end != length && !*end && value) d->total = value;
+		}
+
+		if (d->cancel) break;
+
+		stream = fopen(temp.c_str(), "wb");
+		if (!stream) { error = ERROR_ACCESS_DENIED; break; }
+
+		BYTE buffer[8192];
+		DWORD bytes = 0;
+		uint64_t received = 0, total = d->total;
+		bool valid = true;
+
+		while (!d->cancel) {
+			if (!InternetReadFile(request, buffer, sizeof(buffer), &bytes)) { error = GetLastError(); valid = false; break; }
+			if (!bytes) break;
+			if (fwrite(buffer, 1, bytes, stream) != bytes) { error = ERROR_WRITE_FAULT; valid = false; break; }
+
+			d->received = received += bytes;
+			if (total) d->progress = (int)(received >= total ? 100 : (received / total) * 100 + ((received % total) * 100) / total);
+		}
+
+		if (fclose(stream)) { error = ERROR_WRITE_FAULT; valid = false; }
+		stream = nullptr;
+
+		if (!valid || d->cancel) break;
+		if (total && received != total) { error = ERROR_HANDLE_EOF; break; }
+		if (!MoveFileExA(temp.c_str(), file.c_str(), MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH)) { error = GetLastError(); break; }
+
+		success = true;
+	} while (false);
+
+	if (stream) fclose(stream);
+	if (request) InternetCloseHandle(request);
+	if (session) InternetCloseHandle(session);
+	if (!success) DeleteFileA(temp.c_str());
+	if (success) d->progress = 100;
+
+	d->error = error;
+	d->status = success ? 2 : d->cancel ? -2 : -1;
+}
+
+int bbDownloadFile(BBStr* url, BBStr* file) {
+	if (!url || !file) { delete url; delete file; return 0; }
+
+	uint32_t handle = 0;
+
+	try {
+		auto d = std::make_shared<Download>();
+		handle = (uint32_t)(d.get());
+
+		{
+			std::lock_guard<std::mutex> lock(downloadMutex);
+			if (!downloads.emplace(handle, d).second) { delete url; delete file; return 0; }
+		}
+
+		d->worker = std::thread(DownloadWorker, d, std::string(url->c_str()), std::string(file->c_str()));
+		delete url; delete file;
+		return (int)(handle);
+	}
+	catch (...) {
+		std::lock_guard<std::mutex> lock(downloadMutex);
+		if (handle) downloads.erase(handle);
+		delete url; delete file;
+		return 0;
+	}
+}
+
+int bbDownloadStatus(int handle) {
+	auto d = GetDownload(handle);
+	return d ? d->status.load() : -1;
+}
+
+int bbDownloadProgress(int handle) {
+	auto d = GetDownload(handle);
+	return d ? d->progress.load() : -1;
+}
+
+int bbDownloadError(int handle) {
+	auto d = GetDownload(handle);
+	return d ? (int)(d->error.load()) : 0;
+}
+
+int bbDownloadReceived(int handle) {
+	auto d = GetDownload(handle);
+	return d ? (int)((d->received.load() / 1024) > INT_MAX ? INT_MAX : d->received.load() / 1024) : 0;
+}
+
+int bbDownloadTotal(int handle) {
+	auto d = GetDownload(handle);
+	return d ? (int)((d->total.load() / 1024) > INT_MAX ? INT_MAX : d->total.load() / 1024) : 0;
+}
+
+int bbDownloadCancel(int handle) {
+	auto d = GetDownload(handle);
+	if (!d || d->status != 1) return false;
+	d->cancel = true;
+	return true;
+}
+
+int bbDownloadFree(int handle) {
+	std::shared_ptr<Download> d;
+
+	{
+		std::lock_guard<std::mutex> lock(downloadMutex);
+		auto it = downloads.find((uint32_t)(handle));
+		if (it == downloads.end() || it->second->status == 1) return false;
+		d = it->second;
+		downloads.erase(it);
+	}
+
+	if (d->worker.joinable()) d->worker.join();
+	return true;
+}
+
 
 int bbHttpStatus(BBStr* url) {
 	HINTERNET hInternet = InternetOpenA("Blitz3D", INTERNET_OPEN_TYPE_PRECONFIG, NULL, NULL, 0);
@@ -564,5 +729,12 @@ void sockets_link(void(*rtSym)(const char*, void*)) {
 	rtSym("$ParseDomainTXT$txt$name", bbParseDomainTXT);
 
 	rtSym("%DownloadFile$url$file", bbDownloadFile);
+	rtSym("%DownloadStatus%download", bbDownloadStatus);
+	rtSym("%DownloadTotal%download", bbDownloadTotal);
+	rtSym("%DownloadCancel%download", bbDownloadCancel);
+	rtSym("%DownloadReceived%download", bbDownloadReceived);
+	rtSym("$DownloadError%download", bbDownloadError);
+	rtSym("%DownloadFree%download", bbDownloadFree);
+	rtSym("%DownloadProgress%download", bbDownloadProgress);
 	rtSym("%HttpStatus$url", bbHttpStatus);
 }
