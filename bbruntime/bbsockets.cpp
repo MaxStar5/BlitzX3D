@@ -2,6 +2,7 @@
 #include "bbsockets.h"
 #include <wininet.h>
 #include <WinDNS.h>
+#include <initializer_list>
 #include "../MultiLang/MultiLang.h"
 #include "../gxruntime/gxutf8.h"
 
@@ -528,6 +529,7 @@ struct Download {
 
 static std::mutex downloadMutex;
 static std::unordered_map<uint32_t, std::shared_ptr<Download>> downloads;
+static std::atomic<uint32_t> nextHandle{ 1 };
 
 static std::shared_ptr<Download> GetDownload(int handle) {
 	std::lock_guard<std::mutex> lock(downloadMutex);
@@ -587,7 +589,7 @@ static void DownloadWorker(std::shared_ptr<Download> d, std::string url, std::st
 			if (fwrite(buffer, 1, bytes, stream) != bytes) { error = ERROR_WRITE_FAULT; valid = false; break; }
 
 			d->received = received += bytes;
-			if (total) d->progress = (int)(received >= total ? 100 : (received / total) * 100 + ((received % total) * 100) / total);
+			if (total) d->progress = received >= total ? 100 : static_cast<int>((static_cast<long double>(received) * 100) / total);
 		}
 
 		if (fclose(stream)) { error = ERROR_WRITE_FAULT; valid = false; }
@@ -607,31 +609,44 @@ static void DownloadWorker(std::shared_ptr<Download> d, std::string url, std::st
 	if (success) d->progress = 100;
 
 	d->error = error;
-	d->status = success ? 2 : d->cancel ? -2 : -1;
+	d->status = success ? 2 : (d->cancel.load() ? -2 : -1);
 }
 
 int bbDownloadFile(BBStr* url, BBStr* file) {
 	if (!url || !file) { delete url; delete file; return 0; }
+	if (url->rfind("http://", 0) != 0 && url->rfind("https://", 0) != 0) { delete url; delete file; return 0; }
 
 	uint32_t handle = 0;
+	bool inserted = false;
 
 	try {
+		std::string u = *url, f = *file;
+		delete url; delete file;
+		url = file = nullptr;
+
+		if (u.empty() || f.empty()) return 0;
+
 		auto d = std::make_shared<Download>();
-		handle = (uint32_t)(d.get());
+		handle = nextHandle.fetch_add(1);
+		if (!handle || handle > INT_MAX) return 0;
 
 		{
 			std::lock_guard<std::mutex> lock(downloadMutex);
-			if (!downloads.emplace(handle, d).second) { delete url; delete file; return 0; }
+			if (!downloads.emplace(handle, d).second) return 0;
+			inserted = true;
 		}
 
-		d->worker = std::thread(DownloadWorker, d, std::string(url->c_str()), std::string(file->c_str()));
-		delete url; delete file;
+		d->worker = std::thread(DownloadWorker, d, u, f);
 		return (int)(handle);
 	}
 	catch (...) {
-		std::lock_guard<std::mutex> lock(downloadMutex);
-		if (handle) downloads.erase(handle);
 		delete url; delete file;
+
+		if (inserted) {
+			std::lock_guard<std::mutex> lock(downloadMutex);
+			if (handle) downloads.erase(handle);
+		}
+		
 		return 0;
 	}
 }
