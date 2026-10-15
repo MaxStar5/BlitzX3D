@@ -748,7 +748,7 @@ void sockets_link(void(*rtSym)(const char*, void*)) {
 	rtSym("%DownloadTotal%download", bbDownloadTotal);
 	rtSym("%DownloadCancel%download", bbDownloadCancel);
 	rtSym("%DownloadReceived%download", bbDownloadReceived);
-	rtSym("$DownloadError%download", bbDownloadError);
+	rtSym("%DownloadError%download", bbDownloadError);
 	rtSym("%DownloadFree%download", bbDownloadFree);
 	rtSym("%DownloadProgress%download", bbDownloadProgress);
 	rtSym("%HttpStatus$url", bbHttpStatus);
