@@ -110,6 +110,10 @@ private:
 	void drawFuncList();
 	void drawOutput();
 	void drawFindReplace();
+	static int InputTextFindCallback(ImGuiInputTextCallbackData* data);
+	static int InputTextReplaceCallback(ImGuiInputTextCallbackData* data);
+	int onFindInputCallback(ImGuiInputTextCallbackData* data);
+	int onReplaceInputCallback(ImGuiInputTextCallbackData* data);
 	void drawMenus();
 	void drawCommandLine();
 	void drawStylize();
@@ -137,6 +141,9 @@ private:
 	char replaceBuf[512] = {};
 	bool findFocusPending = false;
 	bool findFocusReplace = false;
+	int findFocusRetry = 0;
+	bool findSelectPending = false;
+	bool replaceSelectPending = false;
 	bool findAllFiles = false;
 	std::string findStatus;
 	int requestedIndex = -1;

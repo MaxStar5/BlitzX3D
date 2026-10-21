@@ -1066,11 +1066,35 @@ void App::drawOutput() {
 	ImGui::End();
 }
 
+int App::InputTextFindCallback(ImGuiInputTextCallbackData* data) {
+	return static_cast<App*>(data->UserData)->onFindInputCallback(data);
+}
+
+int App::InputTextReplaceCallback(ImGuiInputTextCallbackData* data) {
+	return static_cast<App*>(data->UserData)->onReplaceInputCallback(data);
+}
+
+int App::onFindInputCallback(ImGuiInputTextCallbackData* data) {
+	if (data->EventFlag == ImGuiInputTextFlags_CallbackAlways && findSelectPending) {
+		data->SelectAll();
+		findSelectPending = false;
+	}
+	return 0;
+}
+
+int App::onReplaceInputCallback(ImGuiInputTextCallbackData* data) {
+	if (data->EventFlag == ImGuiInputTextFlags_CallbackAlways && replaceSelectPending) {
+		data->SelectAll();
+		replaceSelectPending = false;
+	}
+	return 0;
+}
+
 void App::drawFindReplace() {
 	if (!showFind && !showReplace) return;
 	int flags = ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoDocking;
 	ImGui::SetNextWindowPos(ImVec2(windowW / 2.0f - 200, 40), ImGuiCond_Appearing);
-	if (findFocusPending) ImGui::SetNextWindowFocus();
+	if (findFocusPending || findFocusRetry > 0) ImGui::SetNextWindowFocus();
 	if (ImGui::Begin("Find / Replace", &showFind, flags)) {
 		ImGui::BringWindowToDisplayFront(ImGui::GetCurrentWindow());
 		ImGuiIO& fio = ImGui::GetIO();
@@ -1082,16 +1106,19 @@ void App::drawFindReplace() {
 			strncpy(replaceBuf, replaceStr.c_str(), sizeof(replaceBuf) - 1);
 			replaceBuf[sizeof(replaceBuf) - 1] = '\0';
 			findFocusPending = false;
+			findFocusRetry = 4;
+		}
+		if (findFocusRetry > 0) {
 			focusFind = !findFocusReplace;
 			focusReplace = findFocusReplace;
-			findFocusReplace = false;
 			ImGui::SetWindowFocus();
 		}
-		ImGuiInputTextFlags findFlags = ImGuiInputTextFlags_EnterReturnsTrue;
+		ImGuiInputTextFlags findFlags = ImGuiInputTextFlags_EnterReturnsTrue | ImGuiInputTextFlags_CallbackAlways;
 		if (focusFind) findFlags |= ImGuiInputTextFlags_AutoSelectAll;
 		ImGui::SetNextItemWidth(300);
 		if (focusFind) ImGui::SetKeyboardFocusHere();
-		bool findEnter = ImGui::InputText("Find text", findBuf, sizeof(findBuf), findFlags);
+		bool findEnter = ImGui::InputText("Find text", findBuf, sizeof(findBuf), findFlags, InputTextFindCallback, this);
+		bool findActive = ImGui::IsItemActive();
 		ImGui::SameLine();
 		if (ImGui::Button("Find Next")) doFind = true;
 		if (findEnter) {
@@ -1100,15 +1127,23 @@ void App::drawFindReplace() {
 		ImGui::Checkbox("Match case", &matchCase);
 		ImGui::Checkbox("Search all open files", &findAllFiles);
 		ImGui::SameLine();
-		ImGuiInputTextFlags replaceFlags = ImGuiInputTextFlags_EnterReturnsTrue;
+		ImGuiInputTextFlags replaceFlags = ImGuiInputTextFlags_EnterReturnsTrue | ImGuiInputTextFlags_CallbackAlways;
 		if (focusReplace) replaceFlags |= ImGuiInputTextFlags_AutoSelectAll;
 		ImGui::SetNextItemWidth(300);
 		if (focusReplace) ImGui::SetKeyboardFocusHere();
-		bool replaceEnter = ImGui::InputText("Replace text", replaceBuf, sizeof(replaceBuf), replaceFlags);
+		bool replaceEnter = ImGui::InputText("Replace text", replaceBuf, sizeof(replaceBuf), replaceFlags, InputTextReplaceCallback, this);
+		bool replaceActive = ImGui::IsItemActive();
 		ImGui::SameLine();
 		if (ImGui::Button("Replace")) doReplace = true;
 		if (replaceEnter) doReplace = true;
 		if (ImGui::Button("Replace All")) doReplaceAll = true;
+
+		if (findFocusRetry > 0) {
+			if ((focusFind && findActive) || (focusReplace && replaceActive))
+				findFocusRetry = 0;
+			else if (--findFocusRetry <= 0)
+				findSelectPending = replaceSelectPending = false;
+		}
 
 		if (ImGui::IsWindowFocused() && ImGui::IsKeyPressed(ImGuiKey_Escape)) {
 			showFind = showReplace = false;
@@ -1757,6 +1792,8 @@ void App::editFind() {
 	showFind = true;
 	findFocusReplace = false;
 	findFocusPending = true;
+	findSelectPending = true;
+	replaceSelectPending = false;
 	findStatus.clear();
 }
 
@@ -1774,6 +1811,8 @@ void App::editReplace() {
 		findFocusReplace = false;
 	}
 	findFocusPending = true;
+	findSelectPending = !findFocusReplace;
+	replaceSelectPending = findFocusReplace;
 	findStatus.clear();
 }
 

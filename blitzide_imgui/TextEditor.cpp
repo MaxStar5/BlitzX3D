@@ -1349,15 +1349,36 @@ void TextEditor::HandleMouseInputs()
 	}
 
 	if (ImGui::IsWindowHovered() && ImGui::IsMouseClicked(2))
+	{
 		mMiddleScroll = true;
+		mMiddleScrollOrigin = ImGui::GetMousePos();
+	}
 	if (mMiddleScroll)
 	{
 		if (ImGui::IsMouseDown(2))
 		{
 			io.WantCaptureMouse = true;
 			ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeAll);
-			ImGui::SetScrollX(ImGui::GetScrollX() - io.MouseDelta.x);
-			ImGui::SetScrollY(ImGui::GetScrollY() - io.MouseDelta.y);
+
+			ImVec2 mouse = ImGui::GetMousePos();
+			float dx = mouse.x - mMiddleScrollOrigin.x;
+			float dy = mouse.y - mMiddleScrollOrigin.y;
+			const float deadZone = mCharAdvance.y;
+			const float speed = 0.05f;
+			float scrollX = 0.0f, scrollY = 0.0f;
+			if (dx > deadZone)
+				scrollX = (dx - deadZone) * speed;
+			else if (dx < -deadZone)
+				scrollX = (dx + deadZone) * speed;
+			if (dy > deadZone)
+				scrollY = (dy - deadZone) * speed;
+			else if (dy < -deadZone)
+				scrollY = (dy + deadZone) * speed;
+
+			if (scrollX != 0.0f)
+				ImGui::SetScrollX(ImGui::GetScrollX() + scrollX);
+			if (scrollY != 0.0f)
+				ImGui::SetScrollY(ImGui::GetScrollY() + scrollY);
 		}
 		else
 		{

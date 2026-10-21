@@ -427,6 +427,7 @@ private:
 
 	bool mDraggingSelection = false;
 	bool mMiddleScroll = false;
+	ImVec2 mMiddleScrollOrigin{ 0.0f, 0.0f };
 
 	static const int kAutocompleteMinPrefix = 1;
 	static const int kAutocompleteMaxMatches = 128;
