@@ -44,7 +44,7 @@ public:
             origHeight = origH;
         }
         saveOrigPixels();
-        savePixels();
+        saveState();
     }
     ~bbImage()
     {
@@ -92,10 +92,25 @@ public:
     {
         gx_graphics->freeCanvas(frames[n]);
         frames[n] = c;
-        savePixels();
+        saveState();
         drawScaleX = 1.0f;
         drawScaleY = 1.0f;
         resetTForm();
+    }
+    void saveState()
+    {
+        savePixels();
+        handleX.resize(frames.size());
+        handleY.resize(frames.size());
+        maskARGB.resize(frames.size());
+        frameHasMask.resize(frames.size());
+        for (int k = 0; k < (int)frames.size(); ++k)
+        {
+            gxCanvas* c = frames[k];
+            c->getHandle(&handleX[k], &handleY[k]);
+            frameHasMask[k] = c->hasMask();
+            maskARGB[k] = c->getMask();
+        }
     }
     void savePixels()
     {
@@ -146,13 +161,10 @@ public:
                 for (int x = 0; x < w; ++x)
                     c->setPixelFast(x, y, pixelData[k][y * w + x]);
             c->unlock();
-            // preserve handle and mask from old canvas
-            int hx, hy;
-            frames[k]->getHandle(&hx, &hy);
-            c->setHandle(hx, hy);
-            c->copyMaskFrom(frames[k]);
+            // restore handle and mask captured before the old device was torn down
+            c->setHandle(handleX[k], handleY[k]);
+            if (frameHasMask[k]) c->setMask(maskARGB[k]);
             frames[k] = c;
-            gx_graphics->adoptCanvas(c);
         }
     }
 private:
@@ -160,6 +172,9 @@ private:
     std::vector<std::vector<uint32_t>> pixelData;
     std::vector<std::vector<uint32_t>> origPixelData;
     std::vector<int> widths, heights;
+    std::vector<int> handleX, handleY;
+    std::vector<unsigned> maskARGB;
+    std::vector<bool> frameHasMask;
 };
 
 static int gx_driver;	//Current graphics driver index.
@@ -767,6 +782,7 @@ void bbBufferDirty(gxCanvas* c)
 
 static void graphics(int w, int h, int d, int flags) {
     // MessageBoxA(NULL, "graphics(): entered", "Debug", MB_OK);
+    for (bbImage* img : image_set) img->saveState();
     freeGraphics(false);
     // MessageBoxA(NULL, "graphics(): after freeGraphics", "Debug", MB_OK);
     gx_runtime->closeGraphics(gx_graphics);
@@ -1152,6 +1168,16 @@ void bbEndScrollRect()
     gx_canvas->setViewport(st.viewport.left, st.viewport.top,
         st.viewport.right - st.viewport.left, st.viewport.bottom - st.viewport.top);
     gx_canvas->setOrigin(st.origin_x, st.origin_y);
+}
+
+bool bbInScrollRect(int* origin_x, int* origin_y)
+{
+    if (scroll_rect_stack.empty()) return false;
+    int ox, oy;
+    gx_canvas->getOrigin(&ox, &oy);
+    if (origin_x) *origin_x = ox;
+    if (origin_y) *origin_y = oy;
+    return true;
 }
 
 void bbColor(int r, int g, int b, int a)
@@ -2062,6 +2088,7 @@ void bbResizeImageFast(bbImage* i, float w, float h)
     if (ih < 1) ih = 1;
     i->drawScaleX = (float)iw / (float)cw;
     i->drawScaleY = (float)ih / (float)ch;
+    i->resetTForm();
 }
 
 static unsigned sampleOrigPixel(const std::vector<uint32_t>& src, int srcW, int srcH, float sx, float sy)
