@@ -2,6 +2,7 @@
 #include "codegen_llvm.h"
 
 #include <algorithm>
+#include <vector>
 
 static bool isFloatOp(int op) {
 	switch (op) {
@@ -37,6 +38,29 @@ static std::string llvmEscape(const std::string& s) {
 		else { r += '\\'; r += hex[c >> 4]; r += hex[c & 15]; }
 	}
 	return r;
+}
+
+static bool getShift(int n, int& shift) {
+#ifdef NOOPTS
+	return false;
+#endif
+
+	for (shift = 0; shift < 32; ++shift) {
+		if ((int)(1u << shift) == n) return true;
+	}
+	return false;
+}
+
+static bool isArgMove(TNode* n) {
+	return n && n->op == IR_MOVE && n->r && n->r->op == IR_MEM &&
+		n->r->l && n->r->l->op == IR_ARG;
+}
+
+// flatten SEQ left to right regardlesss of its shape
+static void gatherSeq(TNode* c, std::vector<TNode*>& out) {
+	if (!c) return;
+	if (c->op == IR_SEQ) { gatherSeq(c->l, out); gatherSeq(c->r, out); }
+	else out.push_back(c);
 }
 
 Codegen_llvm::Codegen_llvm(std::ostream& out, bool debug) :Codegen(out, debug) {
@@ -195,6 +219,11 @@ Codegen_llvm::Val Codegen_llvm::eval(TNode* t, Kind want) {
 Codegen_llvm::Val Codegen_llvm::binInt(const std::string& op, TNode* l, TNode* r) {
 	std::string a = eval(l, K_INT).v;
 	std::string b = eval(r, K_INT).v;
+	if (op == "shl" || op == "lshr" || op == "ashr") {
+		std::string m = newTmp();
+		emitInstr(m + " = and i32 " + b + ", 31");
+		b = m;
+	}
 	std::string t = newTmp();
 	emitInstr(t + " = " + op + " i32 " + a + ", " + b);
 	return Val(t, K_INT);
@@ -243,36 +272,31 @@ Codegen_llvm::Val Codegen_llvm::floatArith(const std::string& op, TNode* l, TNod
 }
 
 std::vector<TNode*> Codegen_llvm::collectArgs(TNode* t, int& arity) {
-	std::vector<std::pair<int, TNode*> > tmp;
-	TNode* c = t->r;
-	while (c) {
-		if (c->op == IR_SEQ) {
-			TNode* s = c->l;
-			if (s && s->op == IR_MOVE && s->r && s->r->op == IR_MEM && s->r->l && s->r->l->op == IR_ARG)
-				tmp.push_back(std::make_pair(s->r->l->iconst, s->l));
-			c = c->r;
-		}
-		else if (c->op == IR_MOVE && c->r && c->r->op == IR_MEM && c->r->l && c->r->l->op == IR_ARG) {
-			tmp.push_back(std::make_pair(c->r->l->iconst, c->l));
-			break;
-		}
-		else break;
-	}
-	std::sort(tmp.begin(), tmp.end());
+	std::vector<TNode*> items;
+	gatherSeq(t->r, items);
+	int n = 0;
+	for (size_t k = 0; k < items.size(); ++k) if (isArgMove(items[k])) ++n;
 	arity = t->iconst / 4;
-	if ((int)tmp.size() > arity) arity = (int)tmp.size();
-	std::vector<TNode*> r;
-	for (size_t k = 0; k < tmp.size(); ++k) r.push_back(tmp[k].second);
-	return r;
+	if (n > arity) arity = n;
+	return items;
 }
 
 Codegen_llvm::Val Codegen_llvm::genCall(TNode* t, Kind want) {
 	bool f = t->op == IR_FCALL;
 	int arity = 0;
-	std::vector<TNode*> args = collectArgs(t, arity);
+	std::vector<TNode*> items = collectArgs(t, arity);
 
+	// eval in tree order & place by ooooooffset
+	std::vector<std::pair<int, std::string> > slots;
+	for (size_t k = 0; k < items.size(); ++k) {
+		if (isArgMove(items[k]))
+			slots.push_back(std::make_pair(items[k]->r->l->iconst, eval(items[k]->l, K_INT).v));
+		else
+			munch(items[k]);
+	}
+	std::sort(slots.begin(), slots.end());
 	std::vector<std::string> av;
-	for (size_t k = 0; k < args.size(); ++k) av.push_back(eval(args[k], K_INT).v);
+	for (size_t k = 0; k < slots.size(); ++k) av.push_back(slots[k].second);
 
 	std::string ret = f ? "float" : "i32";
 	std::string argstr;
@@ -477,11 +501,42 @@ Codegen_llvm::Val Codegen_llvm::gen(TNode* t, Kind want) {
 	case IR_ADD: return binInt("add", t->l, t->r);
 	case IR_SUB: return binInt("sub", t->l, t->r);
 	case IR_MUL: return binInt("mul", t->l, t->r);
-	case IR_DIV: return binInt("sdiv", t->l, t->r);
+	// x86 uses sar here so this floors
+	// why? https://c.tenor.com/HQnlICvegz0AAAAd/tenor.gif
+	case IR_DIV: {
+		int sh;
+		if (t->r->op == IR_CONST && getShift(t->r->iconst, sh)) {
+			std::string a = eval(t->l, K_INT).v;
+			std::string r = newTmp();
+			emitInstr(r + " = ashr i32 " + a + ", " + std::to_string(sh));
+			return Val(r, K_INT);
+		}
+		return binInt("sdiv", t->l, t->r);
+	}
+
 	case IR_MOD: return binInt("srem", t->l, t->r);
-	case IR_AND: return binInt("and", t->l, t->r);
-	case IR_OR:
-	case IR_LOR: return binInt("or", t->l, t->r);
+	case IR_AND:
+	case IR_LOR: {
+		bool isAnd = t->op == IR_AND;
+		std::string a = eval(t->l, K_INT).v;
+		std::string c = newTmp();
+		emitInstr(c + " = icmp " + (isAnd ? "eq" : "ne") + " i32 " + a + ", 0");
+		std::string from = curBlock;
+		std::string rhs = newBlock(), end = newBlock();
+		emitTerm("br i1 " + c + ", label %" + end + ", label %" + rhs);
+		startBlock(rhs);
+		std::string b = eval(t->r, K_INT).v;
+		std::string v = newTmp();
+		emitInstr(v + " = " + (isAnd ? "and" : "or") + " i32 " + a + ", " + b);
+		std::string rhsEnd = curBlock;
+		emitTerm("br label %" + end);
+		startBlock(end);
+		std::string res = newTmp();
+		emitInstr(res + " = phi i32 [ " + a + ", %" + from + " ], [ " + v + ", %" + rhsEnd + " ]");
+		return Val(res, K_INT);
+	}
+
+	case IR_OR: return binInt("or", t->l, t->r);
 	case IR_XOR: return binInt("xor", t->l, t->r);
 	case IR_SHL: return binInt("shl", t->l, t->r);
 	case IR_SHR: return binInt("lshr", t->l, t->r);
@@ -494,10 +549,11 @@ Codegen_llvm::Val Codegen_llvm::gen(TNode* t, Kind want) {
 	case IR_SETLE: return cmpInt("sle", t->l, t->r);
 	case IR_SETGE: return cmpInt("sge", t->l, t->r);
 
+	// fistp rounds, doesn't truncate
 	case IR_CAST: {
 		std::string f = eval(t->l, K_FLOAT).v;
 		std::string r = newTmp();
-		emitInstr(r + " = fptosi float " + f + " to i32");
+		emitInstr(r + " = call i32 @llvm.lrint.i32.f32(float " + f + ")");
 		return Val(r, K_INT);
 	}
 
@@ -528,7 +584,7 @@ Codegen_llvm::Val Codegen_llvm::gen(TNode* t, Kind want) {
 	case IR_FSGN: {
 		std::string x = eval(t->l, K_FLOAT).v;
 		std::string z = newTmp();
-		emitInstr(z + " = fcmp oeq float " + x + ", 0.000000e+00");
+		emitInstr(z + " = fcmp ueq float " + x + ", 0.000000e+00");
 		std::string ln = newTmp();
 		emitInstr(ln + " = fcmp olt float " + x + ", 0.000000e+00");
 		std::string s = newTmp();
@@ -545,11 +601,12 @@ Codegen_llvm::Val Codegen_llvm::gen(TNode* t, Kind want) {
 		return Val(r, K_FLOAT);
 	}
 
-	case IR_FSETEQ: return cmpFloat("oeq", t->l, t->r);
+	// NaN true for eq/lt/le, false for ne/gt/ge
+	case IR_FSETEQ: return cmpFloat("ueq", t->l, t->r);
 	case IR_FSETNE: return cmpFloat("one", t->l, t->r);
-	case IR_FSETLT: return cmpFloat("olt", t->l, t->r);
+	case IR_FSETLT: return cmpFloat("ult", t->l, t->r);
 	case IR_FSETGT: return cmpFloat("ogt", t->l, t->r);
-	case IR_FSETLE: return cmpFloat("ole", t->l, t->r);
+	case IR_FSETLE: return cmpFloat("ule", t->l, t->r);
 	case IR_FSETGE: return cmpFloat("oge", t->l, t->r);
 
 	default:
@@ -717,6 +774,8 @@ void Codegen_llvm::emitDataBlob() {
 void Codegen_llvm::finalize() {
 	if (finalized) return;
 	finalized = true;
+
+	out << "declare i32 @llvm.lrint.i32.f32(float)\n";
 
 	for (std::map<std::string, std::pair<bool, int> >::iterator it = externFuncs.begin(); it != externFuncs.end(); ++it) {
 		const std::string& name = it->first;
