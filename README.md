@@ -2,7 +2,10 @@
   <img width="1920" height="600" alt="banner" src="https://github.com/user-attachments/assets/b02c6fe2-f50d-480f-92ef-936bd5d42227" />
 </p>
 
-BlitzX3D is a community-maintained fork of Blitz3D TSS, originally based on Blitz3D. It focuses on maintaining and extending the Blitz3D engine while preserving compatibility with existing projects and libraries.
+BlitzX3D is a community-maintained fork of Blitz3D TSS, originally based on Blitz3D. It focuses on maintaining and extending the Blitz3D engine while attempting to preserve compatibility with existing projects and libraries.
+
+> [!WARNING]
+> Old userlibs are not guaranteed to work and will not be supported.
 
 ### Support
 
