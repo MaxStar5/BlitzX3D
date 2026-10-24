@@ -577,6 +577,7 @@ void App::menuBar() {
 		bool optsChanged = false;
 		if (ImGui::MenuItem("Debug", nullptr, &prefs.prg_debug)) {}
 		if (ImGui::MenuItem("No LAA", nullptr, &prefs.prg_nolaa)) {}
+		if (ImGui::MenuItem("LLVM Backend", nullptr, &prefs.prg_llvm)) {}
 		if (ImGui::MenuItem("No Auto Declaration ", nullptr, optNoAutoDecl)) optsChanged = true;
 		if (ImGui::MenuItem("Experimental Syntax", nullptr, optExperimental)) optsChanged = true;
 		ImGui::Separator();
@@ -2265,6 +2266,7 @@ void App::build(bool exec, bool publish) {
 	if (prefs.prg_debug) args.push_back("-d");
 	if (prefs.prg_dumpkeys) args.push_back("-k");
 	if (prefs.prg_nolaa) args.push_back("-nlaa");
+	if (prefs.prg_llvm) args.push_back("-llvm");
 	if (co.noautodecl) args.push_back("-noautodecl");
 	if (co.experimental) args.push_back("-experimental");
 

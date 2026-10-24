@@ -45,7 +45,7 @@ static void showInfo() {
 }
 
 static void showUsage() {
-	std::cout << "Usage: blitzcc [-h|-q|+q|-c|-d|-k|+k|-nlaa|-noautodecl|-experimental|-v|-x86|-o exefile] [sourcefile.bb]" << std::endl;
+	std::cout << "Usage: blitzcc [-h|-q|+q|-c|-d|-k|+k|-nlaa|-noautodecl|-experimental|-v|-llvm|-x86|-o exefile] [sourcefile.bb]" << std::endl;
 }
 
 static void showHelp() {
@@ -61,6 +61,7 @@ static void showHelp() {
 	std::cout << "-nlaa      : disables large address awareness for the output executable" << std::endl;
 	std::cout << "-noautodecl: disables auto declaration of undeclared variables" << std::endl;
 	std::cout << "-experimental: enables experimental language syntax" << std::endl;
+	std::cout << "-llvm : use the experimental LLVM backend" << std::endl;
 	std::cout << "-x86       : use the x86 backend instead of the default LLVM backend" << std::endl;
 	std::cout << "-o exefile : generate executable" << std::endl;
 }
@@ -214,7 +215,7 @@ int _cdecl main(int argc, char* argv[]) {
 	bool nolaa = false;
 
 	bool encrypt = false;
-	bool llvmbackend = true;
+	bool llvmbackend = false;
 
 
 	for (int k = 1; k < argc; ++k) {
