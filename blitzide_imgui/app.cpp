@@ -416,18 +416,15 @@ void App::frame() {
 	setupDockLayout();
 	ImGui::DockSpaceOverViewport(ImHashStr("BlitzX3DDockSpaceV5"));
 
-	ImGuiIO& kio = ImGui::GetIO();
-	bool ctrl = kio.KeyCtrl;
-	bool shift = kio.KeyShift;
-	if (ctrl && ImGui::IsKeyPressed(ImGuiKey_F)) editFind();
-	if (ctrl && ImGui::IsKeyPressed(ImGuiKey_H)) editReplace();
-	if (ImGui::IsKeyPressed(ImGuiKey_F3)) editFindNext(shift);
-	if (ctrl && ImGui::IsKeyPressed(ImGuiKey_S)) { if (currentIndex >= 0) fileSave(currentIndex); }
-	if (ctrl && ImGui::IsKeyPressed(ImGuiKey_N)) fileNew();
-	if (ctrl && ImGui::IsKeyPressed(ImGuiKey_O)) fileOpen();
-	if (ctrl && ImGui::IsKeyPressed(ImGuiKey_F5, false)) programCompile();
-	if (!ctrl && ImGui::IsKeyPressed(ImGuiKey_F5, false)) programExecute();
-	(void)shift;
+	if (ImGui::Shortcut(ImGuiMod_Ctrl | ImGuiKey_F, ImGuiInputFlags_RouteGlobal)) editFind();
+	if (ImGui::Shortcut(ImGuiMod_Ctrl | ImGuiKey_H, ImGuiInputFlags_RouteGlobal)) editReplace();
+	if (ImGui::Shortcut(ImGuiMod_Shift | ImGuiKey_F3, ImGuiInputFlags_RouteGlobal) || ImGui::Shortcut(ImGuiKey_F3, ImGuiInputFlags_RouteGlobal)) editFindNext(ImGui::IsKeyDown(ImGuiMod_Shift));
+	if (ImGui::Shortcut(ImGuiMod_Ctrl | ImGuiKey_S, ImGuiInputFlags_RouteGlobal)) { if (currentIndex >= 0) fileSave(currentIndex); }
+	if (ImGui::Shortcut(ImGuiMod_Ctrl | ImGuiKey_N, ImGuiInputFlags_RouteGlobal)) fileNew();
+	if (ImGui::Shortcut(ImGuiMod_Ctrl | ImGuiKey_O, ImGuiInputFlags_RouteGlobal)) fileOpen();
+	if (ImGui::Shortcut(ImGuiMod_Ctrl | ImGuiKey_W, ImGuiInputFlags_RouteGlobal)) { if (currentIndex >= 0) fileClose(currentIndex); }
+	if (ImGui::Shortcut(ImGuiMod_Ctrl | ImGuiKey_F5, ImGuiInputFlags_RouteGlobal)) programCompile();
+	if (ImGui::Shortcut(ImGuiKey_F5, ImGuiInputFlags_RouteGlobal)) programExecute();
 
 	if (keywordsLoaded) {
 		keywordsLoaded = false;
@@ -1116,12 +1113,15 @@ void App::drawFindReplace() {
 		}
 		ImGuiInputTextFlags findFlags = ImGuiInputTextFlags_EnterReturnsTrue | ImGuiInputTextFlags_CallbackAlways;
 		if (focusFind) findFlags |= ImGuiInputTextFlags_AutoSelectAll;
-		ImGui::SetNextItemWidth(300);
+		ImGui::SetNextItemWidth(400);
 		if (focusFind) ImGui::SetKeyboardFocusHere();
 		bool findEnter = ImGui::InputTextWithHint("##findinput", "Find text...", findBuf, sizeof(findBuf), findFlags, InputTextFindCallback, this);
 		bool findActive = ImGui::IsItemActive();
+		float rightAlignedButtonWidth = 110.0f; // im not responsible if scaling makes texts go out of bounds, blame snoe.
+		if (ImGui::Button("Find Previous", ImVec2(rightAlignedButtonWidth, 0))) doFindPrev = true;
 		ImGui::SameLine();
-		if (ImGui::Button("Find Next")) doFind = true;
+		ImGui::SetCursorPosX(ImGui::GetCursorPosX() + ImGui::GetContentRegionAvail().x - rightAlignedButtonWidth);
+		if (ImGui::Button("Find Next", ImVec2(rightAlignedButtonWidth, 0))) doFind = true;
 		if (findEnter) {
 			if (fio.KeyShift) doFindPrev = true; else doFind = true;
 		}
@@ -1130,14 +1130,15 @@ void App::drawFindReplace() {
 		ImGui::SeparatorText("Replace");
 		ImGuiInputTextFlags replaceFlags = ImGuiInputTextFlags_EnterReturnsTrue | ImGuiInputTextFlags_CallbackAlways;
 		if (focusReplace) replaceFlags |= ImGuiInputTextFlags_AutoSelectAll;
-		ImGui::SetNextItemWidth(300);
+		ImGui::SetNextItemWidth(400);
 		if (focusReplace) ImGui::SetKeyboardFocusHere();
 		bool replaceEnter = ImGui::InputTextWithHint("##replaceinput", "Replace with...", replaceBuf, sizeof(replaceBuf), replaceFlags, InputTextReplaceCallback, this);
 		bool replaceActive = ImGui::IsItemActive();
-		ImGui::SameLine();
-		if (ImGui::Button("Replace")) doReplace = true;
+		if (ImGui::Button("Replace", ImVec2(rightAlignedButtonWidth, 0))) doReplace = true;
 		if (replaceEnter) doReplace = true;
-		if (ImGui::Button("Replace All")) doReplaceAll = true;
+		ImGui::SameLine();
+		ImGui::SetCursorPosX(ImGui::GetCursorPosX() + ImGui::GetContentRegionAvail().x - rightAlignedButtonWidth);
+		if (ImGui::Button("Replace All", ImVec2(rightAlignedButtonWidth, 0))) doReplaceAll = true;
 
 		if (findFocusRetry > 0) {
 			if ((focusFind && findActive) || (focusReplace && replaceActive))
