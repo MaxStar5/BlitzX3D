@@ -183,6 +183,12 @@
       <CallingConvention Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">Cdecl</CallingConvention>
       <CallingConvention Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">Cdecl</CallingConvention>
     </ClCompile>
+    <ClCompile Include="codegen_llvm\llvm_obj.cpp">
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">NotUsing</PrecompiledHeader>
+      <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">NotUsing</PrecompiledHeader>
+      <CallingConvention Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">Cdecl</CallingConvention>
+      <CallingConvention Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">Cdecl</CallingConvention>
+    </ClCompile>
     <ClCompile Include="decl.cpp" />
     <ClCompile Include="declnode.cpp" />
     <ClCompile Include="environ.cpp" />
@@ -213,6 +219,7 @@
     <ClInclude Include="codegen_x86\tile.h" />
     <ClInclude Include="codegen_llvm\codegen_llvm.h" />
     <ClInclude Include="codegen_llvm\llvm_jit.h" />
+    <ClInclude Include="codegen_llvm\llvm_obj.h" />
     <ClInclude Include="decl.h" />
     <ClInclude Include="declnode.h" />
     <ClInclude Include="environ.h" />

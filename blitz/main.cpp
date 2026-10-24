@@ -23,6 +23,7 @@
 #include "../compiler/codegen_x86/codegen_x86.h"
 #include "../compiler/codegen_llvm/codegen_llvm.h"
 #include "../compiler/codegen_llvm/llvm_jit.h"
+#include "../compiler/codegen_llvm/llvm_obj.h"
 #include "../bbruntime_dll/bbruntime_dll.h"
 
 #undef environ
@@ -110,7 +111,7 @@ static void printErrors(const std::vector<Ex>& errors) {
 }
 
 static void deploySidecarDlls(const std::string& out_file, bool quiet, bool veryquiet) {
-	static const char* dlls[] = { "bass.dll", "FreeImage.dll" };
+	static const char* dlls[] = { "bass.dll", "FreeImage.dll", "freetype.dll" };
 
 	size_t n = out_file.find_last_of("/\\");
 	std::string dir = (n == std::string::npos) ? "" : out_file.substr(0, n);
@@ -284,11 +285,6 @@ int _cdecl main(int argc, char* argv[]) {
 		}
 	}
 
-	if (out_file.size() && llvmbackend) {
-		// TODO TODO TODO LLVM cannot emit executables yet
-		llvmbackend = false;
-	}
-
 	std::ifstream debugFile; debugFile.open("debug.txt", std::ios_base::in);
 	if (debugFile.good()) {
 		char* tmpBuf = new char[1024];
@@ -385,12 +381,32 @@ int _cdecl main(int argc, char* argv[]) {
 			// the cooler assemble
 			std::string ir(qbuf.data(), qbuf.size());
 			std::string lerr;
-			llvmEntry = llvm_load_module(ir, llvmResolveSymbol, runtimeModule, lerr);
-			if (!llvmEntry) {
-				delete prog;
-				delete environ;
-				closeLibs();
-				err("LLVM backend error: " + lerr);
+
+			if (out_file.size()) {
+				std::string obj;
+				if (!llvm_emit_object(ir, obj, lerr)) {
+					delete prog;
+					delete environ;
+					closeLibs();
+					err("LLVM backend error: " + lerr);
+				}
+
+				module = linkerLib->createModule();
+				if (!llvm_object_to_module(obj, module, lerr)) {
+					delete prog;
+					delete environ;
+					closeLibs();
+					err("LLVM backend error: " + lerr);
+				}
+			}
+			else {
+				llvmEntry = llvm_load_module(ir, llvmResolveSymbol, runtimeModule, lerr);
+				if (!llvmEntry) {
+					delete prog;
+					delete environ;
+					closeLibs();
+					err("LLVM backend error: " + lerr);
+				}
 			}
 		}
 		else {

@@ -168,7 +168,8 @@
       <DelayLoadDLLs>d3dx9_43.dll;%(DelayLoadDLLs)</DelayLoadDLLs>
     </Link>
     <PostBuildEvent>
-      <Command>copy /Y "$(ProjectDir)..\bass\bin\bass.dll" "$(OutDir)bass.dll"</Command>
+      <Command>copy /Y "$(ProjectDir)..\bass\bin\bass.dll" "$(OutDir)bass.dll"
+copy /Y "$(ProjectDir)..\freetype\objs\$(Platform)\$(Configuration)\freetype.dll" "$(OutDir)freetype.dll"</Command>
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemGroup>
