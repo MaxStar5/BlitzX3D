@@ -37,6 +37,7 @@ Need help, have a question, or found a problem?
 * [**SCP – Containment Breach Multiplayer v1.3R**](https://store.steampowered.com/app/1782380/SCP_Containment_Breach_Multiplayer/)
 * [**SCP – Containment Breach Ultimate Edition Reborn 1.6**](https://github.com/Jabka666/scpcb-ue-my/tree/1.5.x)
 * [**SCP – Terror Hunt**](https://www.moddb.com/mods/scp-terror-hunt-mod)
+* [**SCP – Janitorial Work**](https://www.moddb.com/mods/scp-janitorial-work)
 * [**SCP – Containment Breach Amended**](https://www.moddb.com/mods/scp-amended1)
 * [**SCP – Treachery**](https://www.moddb.com/mods/treachery)
 * [**SCP – Chaos Containment**](https://www.moddb.com/mods/scp-chaos-containment)
