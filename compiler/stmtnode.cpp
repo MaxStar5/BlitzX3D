@@ -452,7 +452,7 @@ void ReturnNode::semant(Environ* e) {
 				expr = new NullConstNode();
 			}
 			else {
-				expr = new IntConstNode(0);
+				expr = new IntConstNode(0, e->returnType);
 			}
 		}
 		expr = expr->semant(e);

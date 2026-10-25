@@ -121,8 +121,9 @@ void VarDeclNode::semant(Environ* e) {
 
 void VarDeclNode::translate(Codegen* g) {
     if (kind & DECL_GLOBAL) {
-        g->align_data(4);
-        g->i_data(0, "_v" + ident);
+        if (sem_var->sem_type == Type::byte_type) { g->align_data(1); g->b_data(0, "_v" + ident); }
+        else if(sem_var->sem_type == Type::short_type) { g->align_data(2);  g->w_data(0, "_v" + ident); }
+        else { g->align_data(4);  g->i_data(0, "_v" + ident); }
     }
     if (expr) g->code(sem_var->store(g, expr->translate(g)));
 }

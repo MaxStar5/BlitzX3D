@@ -8,6 +8,12 @@ static const int NUM_REGS = 6;
 static const std::string regs[] =
 { "???","eax","ecx","edx","edi","esi","ebx" };
 
+static const std::string regs8[] = 
+{ "???", "al", "cl", "dl", "", "", "bl" };
+
+static const std::string regs16[] = 
+{ "???", "ax", "cx", "dx", "di", "si", "bx" };
+
 //array of 'used' flags
 static bool regUsed[NUM_REGS + 1];
 
@@ -155,7 +161,10 @@ int Tile::eval(int want) {
 	int i;
 	while((i = as->find("%l")) != std::string::npos) as->replace(i, 2, regs[want_l]);
 	while((i = as->find("%r")) != std::string::npos) as->replace(i, 2, regs[want_r]);
-
+	while ((i = as->find("%b")) != std::string::npos) as->replace(i, 2, regs8[want_l]);
+	while ((i = as->find("%B")) != std::string::npos) as->replace(i, 2, regs8[want_r]);
+	while ((i = as->find("%w")) != std::string::npos) as->replace(i, 2, regs16[want_l]);
+	while ((i = as->find("%W")) != std::string::npos) as->replace(i, 2, regs16[want_r]);
 	codeFrags.push_back(*as);
 
 	freeReg(got_r);
@@ -265,6 +274,18 @@ void Codegen_x86::i_data(int i, const std::string& l) {
 	if(l.size()) dataFrags.push_back(l);
 	char buff[32]; itoa(i, buff, 10);
 	dataFrags.push_back(std::string("\t.dd\t") + buff + '\n');
+}
+
+void Codegen_x86::b_data(char i, const std::string& l) {
+	if (l.size()) dataFrags.push_back(l);
+	char buff[32]; itoa(i, buff, 10);
+	dataFrags.push_back(std::string("\t.db\t") + buff + '\n');
+}
+
+void Codegen_x86::w_data(short i, const std::string& l) {
+	if (l.size()) dataFrags.push_back(l);
+	char buff[32]; itoa(i, buff, 10);
+	dataFrags.push_back(std::string("\t.dw\t") + buff + '\n');
 }
 
 void Codegen_x86::s_data(const std::string& s, const std::string& l) {

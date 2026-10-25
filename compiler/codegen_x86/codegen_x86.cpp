@@ -47,7 +47,7 @@ static bool matchMEM(TNode* t, std::string& s) {
 	return false;
 #endif
 
-	if(t->op != IR_MEM) return false;
+	if(t->op != IR_MEM && t->op != IR_MEM8 && t->op != IR_MEM16) return false;
 	t = t->l;
 	switch(t->op) {
 		case IR_GLOBAL:s = "[" + t->sconst + "]"; return true;
@@ -366,10 +366,23 @@ Tile* Codegen_x86::munch(TNode* t) {
 			}
 			break;
 		case IR_MOVE:
+			std::string size, reg;
+
+			switch (t->r->op) {
+			case IR_MEM8:
+				size = "byte "; reg = "%b";
+				break;
+			case IR_MEM16:
+				size = "word "; reg = "%w";
+				break;
+			default:
+				size = ""; reg = "%l";
+				break;
+			}
 			if(matchMEM(t->r, s)) {
 				std::string c;
 				if(matchCONST(t->l, c)) {
-					q = new Tile("\tmov\t" + s + "," + c + "\n");
+					q = new Tile("\tmov\t" + size + s + "," + c + "\n");
 				}
 				else if(t->l->op == IR_ADD || t->l->op == IR_SUB) {
 					TNode* p = 0;
@@ -382,14 +395,14 @@ Tile* Codegen_x86::munch(TNode* t) {
 							case IR_SUB:op = "\tsub\t"; break;
 						}
 						if(matchCONST(p, c)) {
-							q = new Tile(op + s + "," + c + "\n");
+							q = new Tile(op + size + s + "," + c + "\n");
 						}
 						else {
-							q = new Tile(op + s + ",%l\n", munchReg(p));
+							q = new Tile(op + size + s + "," + reg + "\n", munchReg(p));
 						}
 					}
 				}
-				if(!q) q = new Tile("\tmov\t" + s + ",%l\n", munchReg(t->l));
+				if(!q) q = new Tile("\tmov\t" + size + s + "," + reg + "\n", munchReg(t->l));
 			}
 			break;
 	}
@@ -423,7 +436,23 @@ Tile* Codegen_x86::munchReg(TNode* t) {
 			break;
 		case IR_MOVE:
 			//MUST BE MOVE TO MEM!
-			if(matchMEM(t->r, s)) {
+			if (t->r->op == IR_MEM8) {
+				if (matchMEM(t->r, s)) {
+					q = new Tile("\tmov\tbyte " + s + ",%b\n", munchReg(t->l));
+				}
+				else {
+					q = new Tile("\tmov\tbyte [%r],%b\n", munchReg(t->l), munchReg(t->r->l));
+				}
+			}
+			else if (t->r->op == IR_MEM16) {
+				if (matchMEM(t->r, s)) {
+					q = new Tile("\tmov\tword " + s + ",%w\n", munchReg(t->l));
+				}
+				else {
+					q = new Tile("\tmov\tword [%r],%w\n", munchReg(t->l), munchReg(t->r->l));
+				}
+			}
+			else if(matchMEM(t->r, s)) {
 				q = new Tile("\tmov\t" + s + ",%l\n", munchReg(t->l));
 			}
 			else if(t->r->op == IR_MEM) {
@@ -436,6 +465,23 @@ Tile* Codegen_x86::munchReg(TNode* t) {
 			}
 			else {
 				q = new Tile("\tmov\t%l,[%l]\n", munchReg(t->l));
+			}
+			break;
+		case IR_MEM8:
+			if (matchMEM(t, s)) {
+				q = new Tile("\tmovzx\t%l,byte " + s + "\n");
+			}
+			else {
+				q = new Tile("\tmovzx\t%l,byte [%l]\n", munchReg(t->l));
+			}
+			break;
+
+		case IR_MEM16:
+			if (matchMEM(t, s)) {
+				q = new Tile("\tmovzx\t%l,word " + s + "\n");
+			}
+			else {
+				q = new Tile("\tmovzx\t%l,word [%l]\n", munchReg(t->l));
 			}
 			break;
 		case IR_SEQ:

@@ -44,7 +44,7 @@ ConstNode* Node::constValue(Type* ty) {
 	ConstType* c = ty->constType();
 	if(!c) return 0;
 	ty = c->valueType;
-	if(ty == Type::int_type) return new IntConstNode(c->intValue);
+	if(ty == Type::int_type || ty == Type::byte_type || ty == Type::short_type) return new IntConstNode(c->intValue, ty);
 	if(ty == Type::float_type) return new FloatConstNode(c->floatValue);
 	if(ty == Type::null_type) return new NullConstNode();
 	return new StringConstNode(c->stringValue);
@@ -252,6 +252,14 @@ TNode* Node::local(int offset) {
 
 TNode* Node::arg(int offset) {
 	return new TNode(IR_ARG, 0, 0, offset);
+}
+
+TNode* Node::mem8(TNode* ref) {
+	return new TNode(IR_MEM8, ref, 0);
+}
+
+TNode* Node::mem16(TNode* ref) {
+	return new TNode(IR_MEM16, ref, 0);
 }
 
 TNode* Node::mem(TNode* ref) {

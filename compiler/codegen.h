@@ -6,7 +6,7 @@
 enum {
 	IR_JUMP, IR_JUMPT, IR_JUMPF, IR_JUMPGE,
 
-	IR_SEQ, IR_MOVE, IR_MEM, IR_LOCAL, IR_GLOBAL, IR_ARG, IR_CONST,
+	IR_SEQ, IR_MOVE, IR_MEM8, IR_MEM16, IR_MEM, IR_LOCAL, IR_GLOBAL, IR_ARG, IR_CONST,
 
 	IR_JSR, IR_RET, IR_AND, IR_OR, IR_LOR, IR_XOR, IR_SHL, IR_SHR, IR_SAR,
 
@@ -43,6 +43,8 @@ public:
 	virtual void leave(TNode* cleanup, int pop_sz) = 0;
 	virtual void label(const std::string& l) = 0;
 	virtual void i_data(int i, const std::string& l = "") = 0;
+	virtual void b_data(char i, const std::string& l = "") = 0;
+	virtual void w_data(short i, const std::string& l = "") = 0;
 	virtual void s_data(const std::string& s, const std::string& l = "") = 0;
 	virtual void p_data(const std::string& p, const std::string& l = "") = 0;
 	virtual void align_data(int n) = 0;
