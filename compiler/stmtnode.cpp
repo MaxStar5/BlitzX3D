@@ -473,6 +473,8 @@ void ReturnNode::translate(Codegen* g) {
 		g->code(new TNode(IR_FRETURN, t, 0, returnLabel));
 	}
 	else {
+		if (expr->sem_type == Type::byte_type) { t = new TNode(IR_BITAND, t, iconst(0xFF)); }
+		else if (expr->sem_type = Type::short_type) { t = new TNode(IR_BITAND, t, iconst(0xFFFF)); }
 		g->code(new TNode(IR_RETURN, t, 0, returnLabel));
 	}
 }

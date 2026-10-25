@@ -140,6 +140,9 @@ Tile* Codegen_x86::munchLogical(TNode* t) {
 	std::string s, s1, s2;
 	Tile* l, * r, * q;
 	switch(t->op) {
+		case IR_BITAND:
+			s = "\tand\t%l,%r\n";
+			break;
 		case IR_AND:
 			s1 = "\tand\t%l,%l\n\tjz\t" + t->sconst + "\n";
 			s2 = "\tand\t%l,%r\n" + t->sconst;
@@ -509,7 +512,7 @@ Tile* Codegen_x86::munchReg(TNode* t) {
 		case IR_NEG:case IR_ABS:case IR_SGN:case IR_POWTWO:
 			q = munchUnary(t);
 			break;
-		case IR_AND:case IR_OR:case IR_LOR:case IR_XOR:
+		case IR_AND:case IR_OR:case IR_LOR:case IR_XOR:case IR_BITAND:
 			q = munchLogical(t);
 			break;
 		case IR_ADD:case IR_SUB:case IR_MUL:case IR_DIV:case IR_MOD:
