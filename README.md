@@ -64,6 +64,20 @@ the AGPL-3.0 License (see LICENSE).
 
 ---
 
+---
+
+## Contributing & AI use
+
+Contributions are welcome, but please read [CONTRIBUTING.md](CONTRIBUTING.md) first.
+AI-generated PRs, issues, and descriptions are not accepted.
+
+> [!NOTE]
+> This repository uses an AI code review bot on some pull requests. Its
+> comments are advisory, and they do not handle the merging.
+> See [CONTRIBUTING.md](CONTRIBUTING.md#the-automated-review).
+
+---
+
 ## How to Build
 
 ### Prepare
