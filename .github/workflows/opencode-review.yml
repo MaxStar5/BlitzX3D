@@ -23,8 +23,8 @@ jobs:
       - name: opencode-review
         uses: Barmore-Genc/opencode-pr-reviewer@d34c66bc5c72cb84b6b7c1572c2752b16fdfe339 # v1
         with:
-          model: deepseek/deepseek-v4-pro
+          model: opencode-go/deepseek-v4.1-flash
           pr-number: ${{ github.event.pull_request.number }}
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+          OPENCODE_API_KEY: ${{ secrets.OPENCODE_API_KEY }}
