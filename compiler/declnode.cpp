@@ -210,7 +210,16 @@ void StructDeclNode::proto(DeclSeq* d, Environ* e) {
 
 void StructDeclNode::semant(Environ* e) {
     fields->proto(sem_type->fields, e);
-    for (int k = 0; k < sem_type->fields->size(); ++k) sem_type->fields->decls[k]->offset = k * 4;
+
+    for (int k = 0; k < sem_type->fields->size(); ++k) {
+        Decl* field = sem_type->fields->decls[k];
+
+        field->offset = offset;
+
+        if (field->type == Type::byte_type) offset += 1;
+        else if (field->type == Type::short_type) offset += 2;
+        else offset += 4;
+    }
 }
 
 void StructDeclNode::translate(Codegen* g) {
@@ -235,6 +244,7 @@ void StructDeclNode::translate(Codegen* g) {
 
     //number of fields
     g->i_data(sem_type->fields->size());
+    g->i_data(offset);
 
     //type of each field
     for (k = 0; k < sem_type->fields->size(); ++k) {
@@ -244,11 +254,24 @@ void StructDeclNode::translate(Codegen* g) {
         if (type == Type::int_type) t = "__bbIntType";
         else if (type == Type::float_type) t = "__bbFltType";
         else if (type == Type::string_type) t = "__bbStrType";
+        else if (type == Type::byte_type) t = "__bbByteType";
+        else if (type == Type::short_type) t = "__bbShoType";
         else if (StructType* s = type->structType()) t = "_t" + s->ident;
         else if (VectorType* v = type->vectorType()) t = v->label;
         g->p_data(t);
     }
 
+    int _offset;
+
+    for (int k = 0; k < sem_type->fields->size(); ++k) {
+        Decl* field = sem_type->fields->decls[k];
+
+        g->i_data(_offset);
+
+        if (field->type == Type::byte_type) _offset += 1;
+        else if (field->type == Type::short_type) _offset += 2;
+        else _offset += 4;
+    }
 }
 
 //////////////////////
@@ -321,6 +344,8 @@ void VectorDeclNode::translate(Codegen* g) {
     if (type == Type::int_type) t = "__bbIntType";
     else if (type == Type::float_type) t = "__bbFltType";
     else if (type == Type::string_type) t = "__bbStrType";
+    else if (type == Type::byte_type) t = "__bbByteType";
+    else if (type == Type::short_type) t = "__bbShoType";
     else if (StructType* s = type->structType()) t = "_t" + s->ident;
     else if (VectorType* v = type->vectorType()) t = v->label;
     g->p_data(t);

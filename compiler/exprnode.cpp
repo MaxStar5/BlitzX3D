@@ -882,7 +882,15 @@ ExprNode* TypeFieldNode::semant(Environ* e) {
 	Decl* field = st->fields->findDecl(fieldIdent);
 	if (!field) ex(MultiLang::type_field_not_found);
 
-	sem_index = field->offset / 4;
+	sem_index = 0;
+
+	for (int i = 0; i < st->fields->size(); ++i) {
+		if (st->fields->decls[i] == field) {
+			sem_index = i;
+			break;
+		}
+	}
+	// if sem_index is still somehow 0 then gl with the crashes
 	sem_type = Type::int_type;
 	return this;
 }
