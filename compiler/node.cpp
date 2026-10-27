@@ -83,7 +83,11 @@ TNode* Node::createVars(Environ* e) {
 		if(d->type->vectorType()) continue;
 		if(!t) t = new TNode(IR_CONST, 0, 0, 0);
 		TNode* p = new TNode(IR_LOCAL, 0, 0, d->offset);
-		p = new TNode(IR_MEM, p, 0);
+
+		if (d->type == Type::byte_type) p = new TNode(IR_MEM8, p, 0);
+		else if (d->type == Type::short_type) p = new TNode(IR_MEM16, p, 0);
+		else p = new TNode(IR_MEM, p, 0);
+
 		t = new TNode(IR_MOVE, t, p);
 	}
 	//initialize vectors

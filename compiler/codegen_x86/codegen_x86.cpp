@@ -402,10 +402,14 @@ Tile* Codegen_x86::munch(TNode* t) {
 						}
 						else {
 							q = new Tile(op + size + s + "," + reg + "\n", munchReg(p));
+							if (t->r->op == IR_MEM8) q->allowed_l = REG_MASK_BYTE;
 						}
 					}
 				}
-				if(!q) q = new Tile("\tmov\t" + size + s + "," + reg + "\n", munchReg(t->l));
+				if (!q) { 
+					q = new Tile("\tmov\t" + size + s + "," + reg + "\n", munchReg(t->l)); 
+					if (t->r->op == IR_MEM8) q->allowed_l = REG_MASK_BYTE; 
+				}
 			}
 			break;
 	}
@@ -446,6 +450,8 @@ Tile* Codegen_x86::munchReg(TNode* t) {
 				else {
 					q = new Tile("\tmov\tbyte [%r],%b\n", munchReg(t->l), munchReg(t->r->l));
 				}
+
+				q->allowed_l = REG_MASK_BYTE;
 			}
 			else if (t->r->op == IR_MEM16) {
 				if (matchMEM(t->r, s)) {

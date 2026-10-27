@@ -101,7 +101,11 @@ TNode* ArrayVarNode::translate(Codegen* g) {
 		}
 		else t = e;
 	}
-	t = add(mem(global("_a" + ident)), mul(t, iconst(4)));
+	int size = 4;
+	if (sem_type == Type::byte_type) size = 1;
+	else if (sem_type == Type::short_type) size = 2;
+
+	t = add(mem(global("_a" + ident)), mul(t, iconst(size)));
 	return t;
 }
 
@@ -146,6 +150,9 @@ void VectorVarNode::semant(Environ* e) {
 
 TNode* VectorVarNode::translate(Codegen* g) {
 	int sz = 4;
+	if (sem_type == Type::byte_type) sz = 1;
+	else if (sem_type == Type::short_type) sz = 2;
+
 	TNode* t = 0;
 	for(int k = 0; k < exprs->size(); ++k) {
 		TNode* p;
