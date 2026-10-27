@@ -186,6 +186,14 @@ Type* Node::tagType(const std::string& tag, Environ* e) {
 	return t;
 }
 
+int Node::typeSize(Type* t) {
+	if(!t) return 4;
+	if(t == Type::byte_type) return 1;
+	if(t == Type::short_type) return 2;
+	if(t == Type::int_type || t == Type::float_type) return 4;
+	return targetPtrSize;
+}
+
 ////////////////////////////////
 // Generate a fresh ASM label //
 ////////////////////////////////

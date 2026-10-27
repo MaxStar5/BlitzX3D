@@ -8,10 +8,19 @@
 //////////////////////////////////
 TNode* VarNode::load(Codegen* g) {
 	TNode* t = translate(g);
-	if(sem_type == Type::string_type) return call("__bbStrLoad", t);
+	if(sem_type == Type::string_type) {
+		TNode* r = call("__bbStrLoad", t);
+		r->vkind = VK_PTR;
+		return r;
+	}
+	if(sem_type->structType() || sem_type->vectorType() || sem_type == Type::pointer_type) {
+		TNode* r = mem(t);
+	 	r->vkind = VK_PTR;
+		return r;
+	}
 	if (sem_type == Type::byte_type) return mem8(t);
-	if (sem_type == Type::short_type) return mem16(t);
-	return mem(t);
+	else if (sem_type == Type::short_type) return mem16(t);
+	else return mem(t);
 }
 
 TNode* VarNode::store(Codegen* g, TNode* n) {
@@ -88,24 +97,25 @@ void ArrayVarNode::semant(Environ* e) {
 }
 
 TNode* ArrayVarNode::translate(Codegen* g) {
+	int ps = g->ptrSize();
+	int es = Node::typeSize(sem_type);
 	TNode* t = 0;
 	for(int k = 0; k < exprs->size(); ++k) {
 		TNode* e = exprs->exprs[k]->translate(g);
 		if(k) {
-			TNode* s = mem(add(global("_a" + ident), iconst(k * 4 + 8)));
+			TNode* s = mem(add(global("_a" + ident), iconst((k - 1) * 4 + ps + 8)));
 			e = add(t, mul(e, s));
 		}
 		if(g->debug) {
-			TNode* s = mem(add(global("_a" + ident), iconst(k * 4 + 12)));
+			TNode* s = mem(add(global("_a" + ident), iconst(k * 4 + ps + 8)));
 			t = jumpge(e, s, "__bbArrayBoundsEx");
 		}
 		else t = e;
 	}
-	int size = 4;
-	if (sem_type == Type::byte_type) size = 1;
-	else if (sem_type == Type::short_type) size = 2;
-
-	t = add(mem(global("_a" + ident)), mul(t, iconst(size)));
+	TNode* base = mem(global("_a" + ident));
+	base->vkind = VK_PTR;
+	t = add(base, mul(t, iconst(es)));
+	t->vkind = VK_PTR;
 	return t;
 }
 
@@ -125,6 +135,7 @@ TNode* FieldVarNode::translate(Codegen* g) {
 	TNode* t = expr->translate(g);
 	t = call("__bbObjLoad", t);
 	t = call("__bbFieldPtrAdd", t, iconst(sem_field->offset));
+	t->vkind = VK_PTR;
 	return t;
 }
 
@@ -149,10 +160,7 @@ void VectorVarNode::semant(Environ* e) {
 }
 
 TNode* VectorVarNode::translate(Codegen* g) {
-	int sz = 4;
-	if (sem_type == Type::byte_type) sz = 1;
-	else if (sem_type == Type::short_type) sz = 2;
-
+	int sz = Node::typeSize(vec_type->elementType);
 	TNode* t = 0;
 	for(int k = 0; k < exprs->size(); ++k) {
 		TNode* p;
@@ -170,5 +178,7 @@ TNode* VectorVarNode::translate(Codegen* g) {
 		sz = sz * vec_type->sizes[k];
 		t = t ? add(t, p) : p;
 	}
-	return add(t, expr->translate(g));
+	TNode* r = add(t, expr->translate(g));
+	r->vkind = VK_PTR;
+	return r;
 }

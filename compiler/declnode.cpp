@@ -213,12 +213,12 @@ void StructDeclNode::semant(Environ* e) {
 
     for (int k = 0; k < sem_type->fields->size(); ++k) {
         Decl* field = sem_type->fields->decls[k];
+        int sz = Node::typeSize(field->type);
+        int al = sz < targetPtrSize ? sz : targetPtrSize;
 
+        offset = (offset + al - 1) / al * al;
         field->offset = offset;
-
-        if (field->type == Type::byte_type) offset += 1;
-        else if (field->type == Type::short_type) offset += 2;
-        else offset += 4;
+        offset += sz;
     }
 }
 
