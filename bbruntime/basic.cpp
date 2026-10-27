@@ -183,7 +183,12 @@ void _bbDimArray(BBArray* array) {
 		array->scales[k] *= array->scales[k - 1];
 	}
 	int size = array->scales[array->dims - 1];
-	array->data = bbCalloc(size, 4);
+
+	int sizebyte = 4;
+	if (array->elementType == BBTYPE_BYTE) sizebyte = 1;
+	if (array->elementType == BBTYPE_SHORT) sizebyte = 2;
+
+	array->data = bbCalloc(size, sizebyte);
 }
 
 void _bbArrayBoundsEx(const char* function) {

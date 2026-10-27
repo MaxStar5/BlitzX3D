@@ -113,8 +113,13 @@ void DimNode::semant(Environ* e) {
 void DimNode::translate(Codegen* g) {
 	TNode* t;
 	g->code(call("__bbUndimArray", global("_a" + ident)));
+
+	int offset = 4;
+	if (sem_type == Type::byte_type) offset = 1;
+	if (sem_type == Type::short_type) offset = 2;
+
 	for(int k = 0; k < exprs->size(); ++k) {
-		t = add(global("_a" + ident), iconst(k * 4 + 12));
+		t = add(global("_a" + ident), iconst(k * offset + 12));
 		t = move(exprs->exprs[k]->translate(g), mem(t));
 		g->code(t);
 	}
@@ -124,9 +129,11 @@ void DimNode::translate(Codegen* g) {
 
 	int et;
 	Type* ty = sem_type->arrayType()->elementType;
-	if(ty == Type::int_type) et = 1;
-	else if(ty == Type::float_type) et = 2;
-	else if(ty == Type::string_type) et = 3;
+	if (ty == Type::int_type) et = 1;
+	else if (ty == Type::float_type) et = 2;
+	else if (ty == Type::string_type) et = 3;
+	else if (ty == Type::byte_type) et = 7;
+	else if (ty == Type::short_type) et = 8;
 	else et = 5;
 
 	g->align_data(4);
