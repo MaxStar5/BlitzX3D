@@ -540,8 +540,8 @@ static std::shared_ptr<Download> GetDownload(int handle) {
 static void DownloadWorker(std::shared_ptr<Download> d, std::string url, std::string file) {
 	HINTERNET session = nullptr, request = nullptr;
 	FILE* stream = nullptr;
-	DWORD error;
-	bool success;
+	DWORD error = 0;
+	bool success = false;
 	std::string temp = file + ".part." + std::to_string((uint32_t)(d.get()));
 
 	do {
